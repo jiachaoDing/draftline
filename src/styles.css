@@ -857,20 +857,17 @@ kbd {
   font-size: 10px;
   padding: 0 10px;
 }
-.code-panel textarea {
+.code-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.code-editor {
   flex: 1;
+  min-height: 0;
+  min-width: 0;
   width: 100%;
-  border: 0;
-  outline: none;
-  font-family: "Cascadia Code", Consolas, monospace;
-  padding: 20px;
-  background: #fbfcff;
-  color: #54709e;
-  font-size: 11px;
-  line-height: 1.75;
-  white-space: pre;
-  overflow: auto;
-  resize: none;
+  overflow: hidden;
 }
 .code-note {
   display: flex;

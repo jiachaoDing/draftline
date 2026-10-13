@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ArrowDownToLine,
   ArrowLeft,
@@ -41,6 +49,7 @@ import { EXAMPLE } from "./lib/example";
 import { pushHistory, type History } from "./lib/history";
 import { requestDrawing } from "./lib/api";
 import { previewStream } from "./lib/stream-preview";
+import { formatDrawingSource } from "./lib/format-source";
 import type {
   ChatMessage,
   Drawing,
@@ -49,6 +58,8 @@ import type {
   ModelConfig,
   Snapshot,
 } from "./lib/contracts";
+
+const CodeEditor = lazy(() => import("./components/CodeEditor"));
 
 const initialConfig: ModelConfig = (() => {
   try {
@@ -138,6 +149,7 @@ export default function App() {
   const [exportOpen, setExportOpen] = useState(false);
   const [tab, setTab] = useState<"drawing" | "code">("drawing");
   const [code, setCode] = useState(drawing.html);
+  const [formattingCode, setFormattingCode] = useState(false);
   const [help, setHelp] = useState(false);
   const preview = useRef<PreviewHandle>(null);
   const abort = useRef<AbortController | null>(null);
@@ -206,8 +218,41 @@ export default function App() {
     } catch {
       tell("Browser storage is full. Export your drawing to keep it.", true);
     }
-    setCode(drawing.html);
   }, [drawing, tell]);
+  useEffect(() => {
+    let cancelled = false;
+    const source = drawing.html;
+    setCode(source);
+    formatDrawingSource(source).then(
+      (formatted) => {
+        if (!cancelled)
+          setCode((current) => (current === source ? formatted : current));
+      },
+      () => {
+        if (!cancelled)
+          tell(
+            "Source could not be formatted. You can still edit and apply it.",
+            true,
+          );
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [drawing, tell]);
+
+  async function formatCode() {
+    const source = code;
+    setFormattingCode(true);
+    try {
+      const formatted = await formatDrawingSource(source);
+      setCode((current) => (current === source ? formatted : current));
+    } catch (error) {
+      tell(`Could not format source. ${(error as Error).message}`, true);
+    } finally {
+      setFormattingCode(false);
+    }
+  }
   useEffect(() => {
     chatEnd.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, busy]);
@@ -267,7 +312,9 @@ export default function App() {
   useEffect(() => {
     const keyboard = (event: KeyboardEvent) => {
       if (
-        (event.target as HTMLElement).closest("input,textarea,dialog") ||
+        (event.target as HTMLElement).closest(
+          "input,textarea,dialog,[contenteditable]",
+        ) ||
         busy ||
         pending
       )
@@ -854,31 +901,47 @@ export default function App() {
                   <span>
                     <Code2 size={16} /> Drawing source
                   </span>
-                  <button
-                    className="button small primary"
-                    disabled={busy}
-                    onClick={() => {
-                      const candidate = {
-                        title: drawing.title,
-                        html: code,
-                        summary: "Source code updated.",
-                        notes: drawing.notes,
-                      };
-                      pendingRef.current = candidate;
-                      setPending(candidate);
-                      setBusy(true);
-                      setTab("drawing");
-                    }}
-                  >
-                    Apply code <Check size={13} />
-                  </button>
+                  <div className="code-actions">
+                    <button
+                      className="button small"
+                      disabled={busy || formattingCode}
+                      onClick={formatCode}
+                    >
+                      {formattingCode ? "Formatting…" : "Format"}
+                    </button>
+                    <button
+                      className="button small primary"
+                      disabled={busy || formattingCode}
+                      onClick={() => {
+                        const candidate = {
+                          title: drawing.title,
+                          html: code,
+                          summary: "Source code updated.",
+                          notes: drawing.notes,
+                        };
+                        pendingRef.current = candidate;
+                        setPending(candidate);
+                        setBusy(true);
+                        setTab("drawing");
+                      }}
+                    >
+                      Apply code <Check size={13} />
+                    </button>
+                  </div>
                 </div>
-                <textarea
-                  aria-label="Drawing source code"
-                  spellCheck={false}
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                />
+                <Suspense
+                  fallback={
+                    <div className="code-editor" role="status">
+                      Loading editor…
+                    </div>
+                  }
+                >
+                  <CodeEditor
+                    value={code}
+                    onChange={setCode}
+                    disabled={busy || formattingCode}
+                  />
+                </Suspense>
                 <div className="code-note">
                   <ShieldCheck size={13} /> HTML, SVG & synchronous JavaScript
                   run inside the drawing sandbox.

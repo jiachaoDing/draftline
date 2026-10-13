@@ -20,7 +20,7 @@ OpenAI uses `https://api.openai.com/v1`. For [NewAPI](https://github.com/Quantum
 3. Click a shape or dimension, then describe a change. Clear selection for a whole-drawing edit. Use the hand tool to pan and the wheel or buttons to zoom.
 4. Export geometry only or a finished drawing with dimensions, title block, and technical notes. Layer visibility changes only the preview; export uses the original drawing.
 
-Keyboard shortcuts: `V` select, `H` pan, `Ctrl/Cmd Z` undo, `Ctrl/Cmd Shift Z` redo, `Escape` clear selection, `Enter` send, `Shift Enter` newline. Drawing source can also be edited in the **Code** tab.
+Keyboard shortcuts: `V` select, `H` pan, `Ctrl/Cmd Z` undo, `Ctrl/Cmd Shift Z` redo, `Escape` clear selection, `Enter` send, `Shift Enter` newline. In the **Code** tab, CodeMirror 6 provides HTML/SVG and embedded JavaScript/CSS highlighting, line numbers, automatic word wrapping, indentation, search and editor undo/redo. Prettier automatically formats each committed drawing's source with two-space indentation and line breaks. Use **Format** to tidy a draft and **Apply code** to validate it in the drawing sandbox and update the preview. Formatting errors retain the draft; invalid drawings retain the current preview. Editor shortcuts apply to the source while the editor has focus.
 
 ## Streaming AI interaction
 
@@ -51,6 +51,7 @@ Playwright uses installed Microsoft Edge by default. Set `PLAYWRIGHT_CHANNEL=chr
 | Responsibility                         | Reused implementation                                                                 |
 | -------------------------------------- | ------------------------------------------------------------------------------------- |
 | UI and build                           | React, Vite, Lucide                                                                   |
+| Source editing and formatting           | [CodeMirror 6](https://codemirror.net/), [Prettier standalone](https://prettier.io/docs/browser) |
 | AI requests and custom API URLs        | [Official OpenAI JavaScript SDK](https://github.com/openai/openai-node) on the server |
 | Stream framing and incremental display | Hono SSE, eventsource-parser, partial-json                                            |
 | Portable API routing and body limits   | [Hono](https://github.com/honojs/hono), its Node adapter and body-limit middleware    |

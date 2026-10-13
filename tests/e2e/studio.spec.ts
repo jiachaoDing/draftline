@@ -196,6 +196,11 @@ test("sketch → clarification → generated code → targeted edit → undo/red
     await page.evaluate(() => localStorage.getItem("sandbox-leak")),
   ).toBeNull();
   expect(leakedRequests).toEqual([]);
+  await page.getByRole("button", { name: "Code", exact: true }).click();
+  await expect(page.locator(".cm-line").first()).toHaveText("<!doctype html>");
+  await expect(page.locator(".cm-line").nth(1)).toHaveText("<html>");
+  await expect(page.locator(".cm-line").nth(2)).toHaveText("  <body>");
+  await page.getByRole("button", { name: "Drawing", exact: true }).click();
   expect(
     requests.some((r) => JSON.stringify(r).includes("image_url")),
   ).toBeTruthy();
@@ -319,6 +324,55 @@ test("code editor executes synchronous SVG JavaScript and isolates parent access
     "data-sandbox",
     "isolated",
   );
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(frame.locator("#plate-outline")).toHaveAttribute("width", "120");
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  await expect(frame.locator("#plate-outline")).toHaveAttribute("width", "125");
+});
+
+test("source editor highlights, wraps and formats drafts with its own undo history", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Code", exact: true }).click();
+  const editor = page.getByLabel("Drawing source code");
+  await expect(page.locator(".cm-lineNumbers")).toBeVisible();
+  await expect(page.locator(".cm-content")).toHaveCSS(
+    "white-space",
+    "break-spaces",
+  );
+  expect(await page.locator(".cm-line span").count()).toBeGreaterThan(0);
+  const source =
+    "<html><body><svg><text>Ø10 mm</text></svg><script>const n=1;console.log(n);</script></body></html>";
+  await editor.press("ControlOrMeta+a");
+  await page.keyboard.insertText(source);
+  await page.getByRole("button", { name: "Format", exact: true }).click();
+  await expect(editor).toContainText("const n = 1;");
+  await expect(page.locator(".cm-line").first()).toHaveText("<html>");
+  await editor.press("ControlOrMeta+z");
+  await expect(page.locator(".cm-line")).toHaveCount(1);
+  await expect(editor).toHaveText(source);
+  await editor.press("ControlOrMeta+Shift+Z");
+  await expect(editor).toContainText("const n = 1;");
+  await expect(
+    page.getByRole("button", { name: "Undo", exact: true }),
+  ).toBeDisabled();
+  await editor.press("ControlOrMeta+a");
+  await page.keyboard.insertText("<svg><g></svg>");
+  await page.getByRole("button", { name: "Format", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "Could not format source",
+  );
+  await expect(editor).toHaveText("<svg><g></svg>");
+  await page.getByRole("button", { name: "Apply code" }).click();
+  await expect(page.getByRole("alert")).toContainText("SVG with id drawing");
+  await expect(
+    page
+      .frameLocator('iframe[title="Technical drawing preview"]')
+      .locator("#hole-top-left"),
+  ).toHaveAttribute("r", "5");
+  await page.getByRole("button", { name: "Code", exact: true }).click();
+  await expect(editor).toHaveText("<svg><g></svg>");
 });
 
 test("mobile layout keeps core controls within viewport", async ({ page }) => {
@@ -340,6 +394,22 @@ test("mobile layout keeps core controls within viewport", async ({ page }) => {
   expect(
     (await page.locator(".drawing-workspace").boundingBox())?.width,
   ).toBeLessThanOrEqual(390);
+  await page.getByRole("button", { name: "Code", exact: true }).click();
+  const editor = page.getByLabel("Drawing source code");
+  await editor.fill(`<svg><text>${"x".repeat(1500)}</text></svg>`);
+  await expect(
+    page.getByRole("button", { name: "Format", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Apply code" })).toBeVisible();
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(390);
+  expect(
+    await page
+      .locator(".cm-scroller")
+      .evaluate((node) => node.scrollWidth - node.clientWidth),
+  ).toBeLessThanOrEqual(1);
+  await page.getByRole("button", { name: "Drawing", exact: true }).click();
   await page.getByRole("button", { name: "Model settings" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
 });
