@@ -12,6 +12,10 @@ export const notesSchema = z
   .default([]);
 export const resultSchema = z.discriminatedUnion("kind", [
   z.object({
+    kind: z.literal("message"),
+    message: z.string().min(1).max(8000),
+  }),
+  z.object({
     kind: z.literal("clarification"),
     question: z.string().min(1).max(2000),
   }),
@@ -52,7 +56,14 @@ export type ElementInfo = {
   attributes: Record<string, string>;
 };
 export type Snapshot = { svg: string; elements: ElementInfo[] };
-export type ChatMessage = { role: "user" | "assistant"; text: string };
+export type ChatMessage = {
+  role: "user" | "assistant";
+  text: string;
+  id?: string;
+  status?: "streaming" | "validating" | "complete" | "cancelled" | "error";
+  code?: string;
+  received?: number;
+};
 
 export const drawingRequestSchema = z.object({
   config: configSchema,

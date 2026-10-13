@@ -28,8 +28,10 @@ export default function ModelSettings({ config, onSave, onClose }: Props) {
     null,
   );
   const dialog = useRef<HTMLDialogElement>(null);
+  const abort = useRef<AbortController | null>(null);
   useEffect(() => {
     dialog.current?.showModal();
+    return () => abort.current?.abort();
   }, []);
   const field = (name: keyof ModelConfig, value: string) => {
     setDraft({ ...draft, [name]: value });
@@ -38,24 +40,37 @@ export default function ModelSettings({ config, onSave, onClose }: Props) {
   const connect = async (action: "discover" | "test") => {
     setBusy(action);
     setStatus(null);
+    const controller = new AbortController();
+    abort.current = controller;
     try {
       if (action === "discover") {
-        const result = await discoverModels(draft);
+        const result = await discoverModels(draft, controller.signal);
         setModels(result.models);
         setStatus({
           ok: true,
           text: `${result.models.length} models found. Choose a vision-capable model for sketches.`,
         });
       } else {
-        await testConnection(draft);
+        let reply = "";
+        await testConnection(draft, controller.signal, (text) => {
+          if (controller.signal.aborted) return;
+          reply += text;
+          setStatus({ ok: true, text: `Model reply: ${reply}` });
+        });
         setStatus({
           ok: true,
           text: "Connected. Your selected model responded successfully.",
         });
       }
     } catch (error) {
-      setStatus({ ok: false, text: (error as Error).message });
+      setStatus({
+        ok: false,
+        text: controller.signal.aborted
+          ? "Connection test stopped."
+          : (error as Error).message,
+      });
     } finally {
+      if (abort.current === controller) abort.current = null;
       setBusy("");
     }
   };
@@ -190,10 +205,14 @@ export default function ModelSettings({ config, onSave, onClose }: Props) {
         </p>
         {status && (
           <div
-            className={`connection-status ${status.ok ? "success" : "error"}`}
+            className={`connection-status ${busy === "test" ? "pending" : status.ok ? "success" : "error"}`}
             role="status"
           >
-            {status.ok && <Check size={16} />}
+            {busy === "test" ? (
+              <Loader2 size={16} className="spin" />
+            ) : (
+              status.ok && <Check size={16} />
+            )}
             {status.text}
           </div>
         )}
@@ -209,15 +228,20 @@ export default function ModelSettings({ config, onSave, onClose }: Props) {
           <button
             type="button"
             className="button secondary"
-            disabled={!!busy || !draft.apiKey || !draft.model || !draft.baseURL}
-            onClick={() => connect("test")}
+            disabled={
+              busy === "discover" ||
+              (!busy && (!draft.apiKey || !draft.model || !draft.baseURL))
+            }
+            onClick={() =>
+              busy === "test" ? abort.current?.abort() : connect("test")
+            }
           >
             {busy === "test" ? (
               <Loader2 size={15} className="spin" />
             ) : (
               <PlugZap size={15} />
             )}{" "}
-            Test connection
+            {busy === "test" ? "Cancel test" : "Test connection"}
           </button>
           <button type="submit" className="button primary" disabled={!!busy}>
             Save settings <Check size={15} />

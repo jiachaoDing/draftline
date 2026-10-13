@@ -22,6 +22,7 @@ import {
   Settings2,
   ShieldCheck,
   Sparkles,
+  Square,
   Undo2,
   X,
 } from "lucide-react";
@@ -39,6 +40,7 @@ import {
 import { EXAMPLE } from "./lib/example";
 import { pushHistory, type History } from "./lib/history";
 import { requestDrawing } from "./lib/api";
+import { previewStream } from "./lib/stream-preview";
 import type {
   ChatMessage,
   Drawing,
@@ -118,8 +120,8 @@ export default function App() {
     presentation: true,
   });
   const previewHTML = useMemo(
-    () => pending?.html || svgToHTML(presentationSVG(drawing.svg, drawing)),
-    [pending, drawing],
+    () => svgToHTML(presentationSVG(drawing.svg, drawing)),
+    [drawing],
   );
   const [mode, setMode] = useState<"select" | "pan">("select");
   const [zoom, setZoom] = useState(100);
@@ -139,6 +141,7 @@ export default function App() {
   const [help, setHelp] = useState(false);
   const preview = useRef<PreviewHandle>(null);
   const abort = useRef<AbortController | null>(null);
+  const activeReply = useRef<string | null>(null);
   const chatEnd = useRef<HTMLDivElement>(null);
   const exporting = useRef<HTMLDivElement>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
@@ -160,6 +163,36 @@ export default function App() {
     setClarification(null);
     setTab("drawing");
   }, []);
+  const finishReply = useCallback(
+    (status: ChatMessage["status"], text?: string, keepCode = false) => {
+      const id = activeReply.current;
+      if (id)
+        setMessages((messages) =>
+          messages.map((message) =>
+            message.id === id
+              ? {
+                  ...message,
+                  status,
+                  text: text ?? message.text,
+                  code: keepCode ? message.code : undefined,
+                }
+              : message,
+          ),
+        );
+      if (status !== "validating") activeReply.current = null;
+    },
+    [],
+  );
+  const cancelGeneration = () => {
+    if (abort.current) abort.current.abort();
+    else if (pendingRef.current) {
+      pendingRef.current = null;
+      setPending(null);
+      setBusy(false);
+      finishReply("cancelled", undefined, true);
+      tell("Generation stopped.");
+    }
+  };
   useEffect(() => {
     try {
       localStorage.setItem(
@@ -274,10 +307,11 @@ export default function App() {
           html: svgToHTML(snapshot.svg),
         });
         setBusy(false);
+        finishReply("complete");
         tell("Drawing is ready. Click an element to refine it.");
       }
     },
-    [commit, tell],
+    [commit, finishReply, tell],
   );
   const onPreviewError = useCallback(
     (text: string) => {
@@ -285,6 +319,19 @@ export default function App() {
         pendingRef.current = null;
         setPending(null);
         setBusy(false);
+        const id = activeReply.current;
+        setMessages((messages) =>
+          messages.map((message) =>
+            message.id === id
+              ? {
+                  ...message,
+                  status: "error",
+                  text: `${message.text}\n\nThe drawing could not be applied. ${text}`,
+                }
+              : message,
+          ),
+        );
+        activeReply.current = null;
       }
       tell(text, true);
     },
@@ -292,6 +339,7 @@ export default function App() {
   );
 
   async function runAI(input: DrawingRequest) {
+    if (abort.current || pendingRef.current) return;
     if (!config.apiKey || !config.model) {
       setSettings(true);
       tell("Connect an AI model to start drawing.");
@@ -302,17 +350,53 @@ export default function App() {
     setClarification(null);
     const controller = new AbortController();
     abort.current = controller;
+    const replyId = crypto.randomUUID();
+    activeReply.current = replyId;
+    setMessages((messages) => [
+      ...messages,
+      { id: replyId, role: "assistant", text: "", status: "streaming" },
+    ]);
+    let source = "";
+    let updateFrame: number | undefined;
+    const flush = (retainReceivedText = false) => {
+      updateFrame = undefined;
+      if (
+        (!retainReceivedText && controller.signal.aborted) ||
+        abort.current !== controller
+      )
+        return;
+      const partial = previewStream(source);
+      setMessages((messages) =>
+        messages.map((message) =>
+          message.id === replyId
+            ? {
+                ...message,
+                text: partial.text || message.text,
+                code: partial.code ? partial.code.slice(-8000) : message.code,
+                received: source.length,
+              }
+            : message,
+        ),
+      );
+    };
     try {
       const result = await requestDrawing(
         { ...input, config },
         controller.signal,
+        (text) => {
+          source += text;
+          if (updateFrame === undefined)
+            updateFrame = requestAnimationFrame(() => flush());
+        },
       );
-      if (result.kind === "clarification") {
+      if (updateFrame !== undefined) cancelAnimationFrame(updateFrame);
+      flush();
+      controller.signal.throwIfAborted();
+      if (result.kind === "message") {
+        finishReply("complete", result.message);
+      } else if (result.kind === "clarification") {
         setClarification(input);
-        setMessages((m) => [
-          ...m,
-          { role: "assistant", text: result.question },
-        ]);
+        finishReply("complete", result.question);
       } else if (result.kind === "patch") {
         if (!input.selectedId)
           throw new Error(
@@ -326,14 +410,14 @@ export default function App() {
           summary: result.summary,
           notes: drawing.notes,
         });
-        setMessages((m) => [...m, { role: "assistant", text: result.summary }]);
+        finishReply("complete", result.summary);
         tell("Selected element updated.");
       } else {
         if (input.mode === "edit" && input.selectedId)
           throw new Error(
             "The model tried to replace the whole drawing during a selected edit. Clear selection for a whole-drawing edit.",
           );
-        setMessages((m) => [...m, { role: "assistant", text: result.summary }]);
+        finishReply("validating", result.summary);
         const candidate = {
           title: result.title,
           html: result.html,
@@ -346,17 +430,29 @@ export default function App() {
         setSelectedId(null);
       }
     } catch (error) {
-      if ((error as Error).name !== "AbortError") {
+      if (updateFrame !== undefined) cancelAnimationFrame(updateFrame);
+      flush(true);
+      if (clarification) setClarification(input);
+      if ((error as Error).name === "AbortError") {
+        finishReply("cancelled", undefined, true);
+        tell("Generation stopped. Your drawing is unchanged.");
+      } else {
         tell((error as Error).message, true);
-        setMessages((m) => [
-          ...m,
-          {
-            role: "assistant",
-            text: `I couldn’t apply that change. ${(error as Error).message}`,
-          },
-        ]);
+        setMessages((messages) =>
+          messages.map((message) =>
+            message.id === replyId
+              ? {
+                  ...message,
+                  status: "error",
+                  text: `${message.text}\n\n${(error as Error).message}`,
+                }
+              : message,
+          ),
+        );
+        if (activeReply.current === replyId) activeReply.current = null;
       }
     } finally {
+      if (updateFrame !== undefined) cancelAnimationFrame(updateFrame);
       if (abort.current === controller) {
         if (!pendingRef.current) setBusy(false);
         abort.current = null;
@@ -403,8 +499,9 @@ export default function App() {
     setChatInput("");
     setMessages((m) => [...m, { role: "user", text }]);
     const context = messages
+      .filter((message) => !message.status || message.status === "complete")
       .slice(-10)
-      .map((m) => ({ ...m, text: m.text.slice(0, 8000) }));
+      .map((m) => ({ role: m.role, text: m.text.slice(0, 8000) }));
     if (clarification)
       runAI({
         ...clarification,
@@ -739,12 +836,12 @@ export default function App() {
               <Preview
                 ref={preview}
                 html={previewHTML}
-                onSnapshot={onSnapshot}
+                onSnapshot={(snapshot) => setElements(snapshot.elements)}
                 onSelection={(id) => {
                   if (id === null || elements.some((el) => el.id === id))
                     setSelectedId(id);
                 }}
-                onError={onPreviewError}
+                onError={(text) => tell(text, true)}
                 onZoom={setZoom}
                 selectedId={selectedId}
                 layers={layers}
@@ -794,18 +891,9 @@ export default function App() {
                 <span>
                   {pending
                     ? "Checking your drawing…"
-                    : "Turning your idea into geometry…"}
+                    : "Receiving AI response…"}
                 </span>
-                {!pending && (
-                  <button
-                    onClick={() => {
-                      abort.current?.abort();
-                      setBusy(false);
-                    }}
-                  >
-                    Cancel
-                  </button>
-                )}
+                <button onClick={cancelGeneration}>Cancel</button>
               </div>
             )}
             <div className="canvas-hint">
@@ -889,7 +977,42 @@ export default function App() {
                     <Sparkles size={12} />
                   </div>
                 )}
-                <div>{message.text}</div>
+                <div className="message-content">
+                  <span className="message-text">
+                    {message.text ||
+                      (message.status === "streaming"
+                        ? "Connecting to your model…"
+                        : message.status === "cancelled"
+                          ? "Generation stopped."
+                          : "")}
+                  </span>
+                  {message.status === "streaming" && message.text && (
+                    <span className="stream-cursor" aria-hidden="true" />
+                  )}
+                  {message.code && (
+                    <details
+                      className="stream-code"
+                      open={message.status === "streaming"}
+                    >
+                      <summary>
+                        <Code2 size={12} /> Receiving drawing code ·{" "}
+                        {message.received?.toLocaleString()} characters
+                      </summary>
+                      <pre>{message.code}</pre>
+                    </details>
+                  )}
+                  {message.status && message.status !== "complete" && (
+                    <small className={`reply-status ${message.status}`}>
+                      {message.status === "streaming"
+                        ? "Streaming response"
+                        : message.status === "validating"
+                          ? "Checking the completed drawing"
+                          : message.status === "cancelled"
+                            ? "Stopped"
+                            : "Response incomplete — drawing unchanged"}
+                    </small>
+                  )}
+                </div>
               </div>
             ))}
             {messages.length === 1 && (
@@ -914,7 +1037,7 @@ export default function App() {
                 <span />{" "}
                 {pending
                   ? "Validating geometry"
-                  : "Thinking through your drawing"}
+                  : "Receiving your model’s response"}
               </div>
             )}
             <div ref={chatEnd} />
@@ -991,12 +1114,14 @@ export default function App() {
                   )}
                 </span>
                 <button
-                  aria-label="Send drawing instruction"
-                  disabled={busy || !chatInput.trim()}
-                  onClick={sendChat}
+                  aria-label={
+                    busy ? "Stop generation" : "Send drawing instruction"
+                  }
+                  disabled={!busy && !chatInput.trim()}
+                  onClick={busy ? cancelGeneration : sendChat}
                 >
                   {busy ? (
-                    <Loader2 size={15} className="spin" />
+                    <Square size={13} fill="currentColor" />
                   ) : (
                     <Send size={15} />
                   )}
@@ -1018,6 +1143,21 @@ export default function App() {
           </div>
         </aside>
       </main>
+      {pending && (
+        <div className="validation-preview" aria-hidden="true">
+          <Preview
+            title="Drawing validation sandbox"
+            html={pending.html}
+            onSnapshot={onSnapshot}
+            onSelection={() => {}}
+            onError={onPreviewError}
+            onZoom={() => {}}
+            selectedId={null}
+            layers={{ geometry: true, dimensions: true, presentation: true }}
+            mode="select"
+          />
+        </div>
+      )}
       {notice && (
         <div
           className={`toast ${notice.error ? "error" : ""}`}

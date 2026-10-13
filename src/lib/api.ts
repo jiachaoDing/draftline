@@ -1,4 +1,5 @@
 import type { AIResult, DrawingRequest, ModelConfig } from "./contracts";
+import { streamPost, type DeltaHandler } from "./stream";
 
 async function post<T>(
   path: string,
@@ -22,9 +23,21 @@ async function post<T>(
   if (!response.ok) throw new Error(result.error || "Request failed.");
   return result as T;
 }
-export const requestDrawing = (input: DrawingRequest, signal: AbortSignal) =>
-  post<AIResult>("/api/draw", input, signal);
-export const discoverModels = (config: ModelConfig) =>
-  post<{ models: string[] }>("/api/models", config);
-export const testConnection = (config: ModelConfig) =>
-  post<{ ok: boolean }>("/api/test", config);
+export const requestDrawing = (
+  input: DrawingRequest,
+  signal: AbortSignal,
+  onDelta: DeltaHandler,
+) => streamPost<AIResult>("/api/draw", input, signal, onDelta);
+export const discoverModels = (config: ModelConfig, signal?: AbortSignal) =>
+  post<{ models: string[] }>("/api/models", config, signal);
+export const testConnection = (
+  config: ModelConfig,
+  signal?: AbortSignal,
+  onDelta?: DeltaHandler,
+) =>
+  streamPost<{ ok: boolean; model: string }>(
+    "/api/test",
+    config,
+    signal,
+    onDelta,
+  );

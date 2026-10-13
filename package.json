@@ -14,9 +14,11 @@
   "dependencies": {
     "@hono/node-server": "2.1.4",
     "dompurify": "3.4.17",
+    "eventsource-parser": "4.1.2",
     "hono": "4.13.13",
     "lucide-react": "1.55.0",
     "openai": "7.32.0",
+    "partial-json": "0.1.7",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "svg-pan-zoom": "3.6.2",

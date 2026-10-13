@@ -1,10 +1,18 @@
 import { test, expect } from "@playwright/test";
 import { createServer, type Server } from "node:http";
 import { EXAMPLE_SVG } from "../../src/lib/example";
+import {
+  completeResponse,
+  openCompletion,
+  contentChunk,
+  finishCompletion,
+} from "../helpers/provider-stream";
 
 let provider: Server;
 let baseURL: string;
 let requests: Record<string, unknown>[] = [];
+let releaseStream: () => void;
+let upstreamCancelled = false;
 test.beforeAll(async () => {
   provider = createServer(async (req, res) => {
     let data = "";
@@ -28,6 +36,51 @@ test.beforeAll(async () => {
     requests.push(input);
     const content = input.messages.at(-1).content;
     const instruction = typeof content === "string" ? content : content[0].text;
+    if (instruction.includes("streaming conversation test")) {
+      openCompletion(res);
+      contentChunk(res, '{"kind":"message","message":"This plate');
+      await new Promise<void>((resolve) => {
+        releaseStream = resolve;
+      });
+      if (!res.destroyed) {
+        contentChunk(res, ' has four holes."}');
+        finishCompletion(res);
+      }
+      return;
+    }
+    if (instruction.includes("streaming drawing test")) {
+      openCompletion(res);
+      contentChunk(
+        res,
+        JSON.stringify({
+          kind: "drawing",
+          title: "Streaming test plate",
+          summary: "Preparing a revised plate.",
+          notes: [],
+          html: `${EXAMPLE_SVG}<script>document.getElementById('hole-top-left').setAttribute('r','9')</script>`,
+        }),
+      );
+      await new Promise<void>((resolve) => {
+        releaseStream = resolve;
+      });
+      if (!res.destroyed) finishCompletion(res);
+      return;
+    }
+    if (instruction.includes("cancel streaming test")) {
+      upstreamCancelled = false;
+      res.once("close", () => {
+        upstreamCancelled = true;
+      });
+      openCompletion(res);
+      contentChunk(res, '{"kind":"message","message":"Working on your update');
+      return;
+    }
+    if (instruction.includes("disconnect streaming test")) {
+      openCompletion(res);
+      contentChunk(res, '{"kind":"message","message":"Partial reply"}');
+      res.end();
+      return;
+    }
     let output: unknown;
     if (instruction === "Reply with OK.") output = "OK";
     else if (instruction.includes("Selected element: hole-top-left"))
@@ -64,24 +117,9 @@ test.beforeAll(async () => {
           : [],
         html: `${EXAMPLE_SVG}<script>document.getElementById('hole-top-left').setAttribute('r','6');document.querySelector('#dim-hole text').textContent='Ø12; 3 × Ø10';try { parent.localStorage.setItem('sandbox-leak','failed'); } catch { document.getElementById('drawing').setAttribute('data-isolated','true'); } fetch('https://example.com/sandbox-leak').catch(()=>{});</script>`,
       };
-    res.end(
-      JSON.stringify({
-        id: "fixture",
-        object: "chat.completion",
-        created: 0,
-        model: "vision-test",
-        choices: [
-          {
-            index: 0,
-            message: {
-              role: "assistant",
-              content:
-                typeof output === "string" ? output : JSON.stringify(output),
-            },
-            finish_reason: "stop",
-          },
-        ],
-      }),
+    completeResponse(
+      res,
+      typeof output === "string" ? output : JSON.stringify(output),
     );
   });
   await new Promise<void>((resolve) =>
@@ -327,7 +365,120 @@ test("sandbox blocks external navigation and retains the previous drawing", asyn
     { timeout: 8000 },
   );
   await expect(
-    page.frameLocator("iframe").locator("#hole-top-left"),
+    page
+      .frameLocator('iframe[title="Technical drawing preview"]')
+      .locator("#hole-top-left"),
   ).toHaveAttribute("r", "5");
   expect(leaked).toEqual([]);
+});
+
+async function connectModel(page: import("@playwright/test").Page) {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Model settings" }).click();
+  await page.getByLabel("Base URL", { exact: true }).fill(baseURL);
+  await page.getByLabel("API key", { exact: true }).fill("browser-test-key");
+  await page.getByLabel("Model", { exact: true }).fill("vision-test");
+  await page.getByRole("button", { name: "Save settings" }).click();
+}
+
+test("ordinary chat is visible before the provider completes its stream", async ({
+  page,
+}) => {
+  await connectModel(page);
+  await page
+    .getByLabel("Ask AI to edit drawing")
+    .fill("streaming conversation test");
+  await page.getByRole("button", { name: "Send drawing instruction" }).click();
+  await expect(page.getByText("This plate", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Stop generation" }),
+  ).toBeEnabled();
+  await expect(
+    page
+      .frameLocator('iframe[title="Technical drawing preview"]')
+      .locator("#hole-top-left"),
+  ).toHaveAttribute("r", "5");
+  releaseStream();
+  await expect(
+    page.getByText("This plate has four holes.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Send drawing instruction" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Undo", exact: true }),
+  ).toBeDisabled();
+});
+
+test("received HTML remains plain text until completion and sandbox validation", async ({
+  page,
+}) => {
+  await connectModel(page);
+  await page
+    .getByLabel("Ask AI to edit drawing")
+    .fill("streaming drawing test");
+  await page.getByRole("button", { name: "Send drawing instruction" }).click();
+  await expect(
+    page.getByText("Preparing a revised plate.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".stream-code pre")).toContainText(
+    "setAttribute('r','9')",
+  );
+  const frame = page.frameLocator('iframe[title="Technical drawing preview"]');
+  await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "5");
+  await expect(
+    page.locator('iframe[title="Drawing validation sandbox"]'),
+  ).toHaveCount(0);
+  releaseStream();
+  await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "9");
+  await expect(
+    page.getByRole("button", { name: "Undo", exact: true }),
+  ).toBeEnabled();
+  expect(requests.every((request) => request.stream === true)).toBe(true);
+});
+
+test("stop generation closes the provider connection and keeps the drawing", async ({
+  page,
+}) => {
+  await connectModel(page);
+  await page.getByLabel("Ask AI to edit drawing").fill("cancel streaming test");
+  await page.getByRole("button", { name: "Send drawing instruction" }).click();
+  await expect(
+    page.getByText("Working on your update", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Stop generation" }).click();
+  await expect(page.getByText("Stopped", { exact: true })).toBeVisible();
+  await expect.poll(() => upstreamCancelled).toBe(true);
+  await expect(
+    page
+      .frameLocator('iframe[title="Technical drawing preview"]')
+      .locator("#hole-top-left"),
+  ).toHaveAttribute("r", "5");
+  await expect(
+    page.getByRole("button", { name: "Undo", exact: true }),
+  ).toBeDisabled();
+});
+
+test("a prematurely ended stream shows a connection error without applying partial results", async ({
+  page,
+}) => {
+  await connectModel(page);
+  await page
+    .getByLabel("Ask AI to edit drawing")
+    .fill("disconnect streaming test");
+  await page.getByRole("button", { name: "Send drawing instruction" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "ended the stream before completion",
+  );
+  await expect(
+    page.getByText("Response incomplete — drawing unchanged", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .frameLocator('iframe[title="Technical drawing preview"]')
+      .locator("#hole-top-left"),
+  ).toHaveAttribute("r", "5");
+  await expect(
+    page.getByRole("button", { name: "Undo", exact: true }),
+  ).toBeDisabled();
 });

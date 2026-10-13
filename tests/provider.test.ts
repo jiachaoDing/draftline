@@ -1,14 +1,30 @@
 // @vitest-environment node
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createServer, type Server } from "node:http";
 import { createApp } from "../server/app";
 import { normalizeBaseURL, parseAIResult } from "../server/provider";
+import { readAIStream } from "../src/lib/stream";
+import {
+  completeResponse,
+  contentChunk,
+  finishCompletion,
+  openCompletion,
+} from "./helpers/provider-stream";
+import type { AIResult } from "../src/lib/contracts";
 
 let server: Server;
 let baseURL: string;
 let responseContent =
   '{"kind":"clarification","question":"What is the plate width in mm?"}';
 const app = createApp(true);
+let releaseDelayed: () => void;
+let cancelled: Promise<void>;
+let upstreamRequests: Array<{ stream?: boolean }> = [];
+beforeEach(() => {
+  responseContent =
+    '{"kind":"clarification","question":"What is the plate width in mm?"}';
+  upstreamRequests = [];
+});
 beforeAll(async () => {
   server = createServer(async (req, res) => {
     if (req.headers.authorization !== "Bearer test-only-key") {
@@ -26,28 +42,49 @@ beforeAll(async () => {
           object: "list",
         }),
       );
-    else
-      res.end(
-        JSON.stringify({
-          id: "test",
-          object: "chat.completion",
-          created: 0,
-          model: "vision-test",
-          choices: [
-            {
-              index: 0,
-              message: { role: "assistant", content: responseContent },
-              finish_reason: "stop",
-            },
-          ],
-        }),
-      );
+    else {
+      const input = JSON.parse(body);
+      upstreamRequests.push(input);
+      const instruction = JSON.stringify(input.messages);
+      if (instruction.includes("delayed reply")) {
+        openCompletion(res);
+        contentChunk(res, '{"kind":"message","message":"Hello');
+        await new Promise<void>((resolve) => {
+          releaseDelayed = resolve;
+        });
+        contentChunk(res, ' streaming world"}');
+        finishCompletion(res);
+      } else if (instruction.includes("abort reply")) {
+        cancelled = new Promise((resolve) => res.once("close", resolve));
+        openCompletion(res);
+        contentChunk(res, '{"kind":"message","message":"Still working');
+      } else if (instruction.includes("disconnect reply")) {
+        openCompletion(res);
+        contentChunk(res, '{"kind":"message","message":"Looks complete"}');
+        res.end();
+      } else if (instruction.includes("provider error")) {
+        openCompletion(res);
+        contentChunk(res, '{"kind":"message","message":"Working');
+        res.end(
+          `data: ${JSON.stringify({ error: { message: "private test-only-key provider detail" } })}\n\n`,
+        );
+      } else if (instruction.includes("token limit")) {
+        openCompletion(res);
+        contentChunk(res, '{"kind":"message","message":"Complete JSON"}');
+        finishCompletion(res, "length");
+      } else completeResponse(res, responseContent);
+    }
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   baseURL = `http://127.0.0.1:${(server.address() as { port: number }).port}/v1`;
 });
 afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));
-const call = (path: string, body: unknown, origin?: string) =>
+const call = (
+  path: string,
+  body: unknown,
+  origin?: string,
+  signal?: AbortSignal,
+) =>
   app.request(`http://app.test${path}`, {
     method: "POST",
     headers: {
@@ -55,6 +92,7 @@ const call = (path: string, body: unknown, origin?: string) =>
       ...(origin ? { Origin: origin } : {}),
     },
     body: JSON.stringify(body),
+    signal,
   });
 const config = () => ({
   baseURL,
@@ -72,17 +110,26 @@ describe("OpenAI-compatible server integration", () => {
     expect(response.headers.get("cache-control")).toBe("no-store");
   });
   it("tests the selected model and returns structured clarification", async () => {
-    expect((await call("/api/test", config())).status).toBe(200);
+    expect(await readAIStream(await call("/api/test", config()))).toEqual({
+      ok: true,
+      model: "vision-test",
+    });
     const response = await call("/api/draw", {
       config: config(),
       mode: "generate",
       instruction: "Draw a plate",
       history: [],
     });
-    expect(await response.json()).toEqual({
+    expect(await readAIStream(response)).toEqual({
       kind: "clarification",
       question: "What is the plate width in mm?",
     });
+    expect(upstreamRequests.every((request) => request.stream === true)).toBe(
+      true,
+    );
+    expect(response.headers.get("cache-control")).toBe(
+      "no-store, no-transform",
+    );
   });
   it("handles authentication failure without returning credentials", async () => {
     const response = await call("/api/models", {
@@ -115,8 +162,80 @@ describe("OpenAI-compatible server integration", () => {
       mode: "generate",
       instruction: "Draw a plate",
     });
-    expect(response.status).toBe(502);
-    expect(await response.text()).toContain("invalid JSON");
+    expect(response.status).toBe(200);
+    await expect(readAIStream(response)).rejects.toThrow("invalid JSON");
+  });
+  it("delivers model tokens before the upstream response finishes", async () => {
+    const response = await call("/api/draw", {
+      config: config(),
+      mode: "generate",
+      instruction: "delayed reply",
+    });
+    let received = "";
+    let signalFirst: () => void;
+    const first = new Promise<void>((resolve) => {
+      signalFirst = resolve;
+    });
+    let completed = false;
+    const result = readAIStream<AIResult>(response, (text) => {
+      received += text;
+      signalFirst();
+    }).then((result) => {
+      completed = true;
+      return result;
+    });
+    await first;
+    expect(received).toContain("Hello");
+    expect(completed).toBe(false);
+    releaseDelayed();
+    expect(await result).toEqual({
+      kind: "message",
+      message: "Hello streaming world",
+    });
+  });
+  it("cancels the actual upstream connection", async () => {
+    const controller = new AbortController();
+    const response = await call(
+      "/api/draw",
+      { config: config(), mode: "generate", instruction: "abort reply" },
+      undefined,
+      controller.signal,
+    );
+    let firstToken: () => void;
+    const first = new Promise<void>((resolve) => {
+      firstToken = resolve;
+    });
+    const result = readAIStream(response, () => firstToken()).catch(
+      (error) => error,
+    );
+    await first;
+    controller.abort();
+    await cancelled;
+    expect(await result).toBeInstanceOf(Error);
+  });
+  it("rejects premature EOF and token limits even when the JSON is complete", async () => {
+    for (const instruction of ["disconnect reply", "token limit"]) {
+      const response = await call("/api/draw", {
+        config: config(),
+        mode: "generate",
+        instruction,
+      });
+      await expect(readAIStream(response)).rejects.toThrow(
+        instruction === "token limit" ? "token limit" : "before completion",
+      );
+    }
+  });
+  it("sanitizes errors received inside an already-started provider stream", async () => {
+    const response = await call("/api/draw", {
+      config: config(),
+      mode: "generate",
+      instruction: "provider error",
+    });
+    const error = await readAIStream<never>(response).catch(
+      (error) => error as Error,
+    );
+    expect(error.message).toContain("interrupted");
+    expect(error.message).not.toContain("test-only-key");
   });
 });
 

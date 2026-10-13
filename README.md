@@ -22,6 +22,16 @@ OpenAI uses `https://api.openai.com/v1`. For [NewAPI](https://github.com/Quantum
 
 Keyboard shortcuts: `V` select, `H` pan, `Ctrl/Cmd Z` undo, `Ctrl/Cmd Shift Z` redo, `Escape` clear selection, `Enter` send, `Shift Enter` newline. Drawing source can also be edited in the **Code** tab.
 
+## Streaming AI interaction
+
+Ordinary conversation, missing-dimension clarification, drawing generation, selected-element edits, and model connection tests all use one end-to-end streaming transport. The official SDK requests Chat Completions with `stream: true`; Hono forwards each content delta immediately as SSE. Provider URL and model selection work with OpenAI-compatible and NewAPI endpoints. See [official OpenAI streaming documentation](https://developers.openai.com/api/docs/guides/streaming-responses).
+
+The browser reads SSE with `eventsource-parser` and decodes display-only partial JSON with `partial-json`. Human-readable answers appear progressively as actual network content arrives. Generated HTML/SVG and patches appear as plain text while receiving. A terminal successful model completion and validated response are required before applying an edit. Complete generated HTML is executed and checked in a hidden isolated preview; only the verified SVG is committed to the visible canvas and undo history.
+
+**Stop generation** cancels the browser request and its upstream model connection. Connection testing also supports streaming replies and cancellation. Interrupted connections, provider errors, malformed responses, token-limit truncation, and invalid SVG leave the current drawing intact and show an error. Partial or cancelled messages stay visible but are excluded from subsequent model history. Requests are not automatically replayed.
+
+The server sends a heartbeat every 15 seconds and limits upstream inactivity to 120 seconds. The browser detects a connection that sends no bytes for 45 seconds; heartbeat bytes keep an active connection alive. Streaming responses use `Cache-Control: no-store, no-transform` and `X-Accel-Buffering: no`.
+
 ## Build and verify
 
 ```powershell
@@ -38,17 +48,18 @@ Playwright uses installed Microsoft Edge by default. Set `PLAYWRIGHT_CHANNEL=chr
 
 ## Libraries and architecture
 
-| Responsibility                       | Reused implementation                                                                 |
-| ------------------------------------ | ------------------------------------------------------------------------------------- |
-| UI and build                         | React, Vite, Lucide                                                                   |
-| AI requests and custom API URLs      | [Official OpenAI JavaScript SDK](https://github.com/openai/openai-node) on the server |
-| Portable API routing and body limits | [Hono](https://github.com/honojs/hono), its Node adapter and body-limit middleware    |
-| SVG and HTML sanitization            | [DOMPurify](https://github.com/cure53/DOMPurify)                                      |
-| SVG zoom, pan and fit                | [svg-pan-zoom](https://github.com/bumbu/svg-pan-zoom)                                 |
-| Request and response contracts       | Zod                                                                                   |
-| Unit and browser checks              | Vitest, jsdom, Playwright                                                             |
+| Responsibility                         | Reused implementation                                                                 |
+| -------------------------------------- | ------------------------------------------------------------------------------------- |
+| UI and build                           | React, Vite, Lucide                                                                   |
+| AI requests and custom API URLs        | [Official OpenAI JavaScript SDK](https://github.com/openai/openai-node) on the server |
+| Stream framing and incremental display | Hono SSE, eventsource-parser, partial-json                                            |
+| Portable API routing and body limits   | [Hono](https://github.com/honojs/hono), its Node adapter and body-limit middleware    |
+| SVG and HTML sanitization              | [DOMPurify](https://github.com/cure53/DOMPurify)                                      |
+| SVG zoom, pan and fit                  | [svg-pan-zoom](https://github.com/bumbu/svg-pan-zoom)                                 |
+| Request and response contracts         | Zod                                                                                   |
+| Unit and browser checks                | Vitest, jsdom, Playwright                                                             |
 
-`server/app.ts` forwards user-configured credentials to the chosen provider and returns a validated drawing, clarification, or patch response. `server/prompts.ts` contains the drawing contract. `src/lib/sandbox.ts` supplies the isolated preview and interaction bridge. `src/lib/drawing.ts` validates scale and layers, enforces patch boundaries, and serializes export. `src/lib/presentation.ts` lays out sheet information using native SVG and browser font measurement. React holds a bounded 30-revision undo history, including user-supplied manufacturing notes.
+`server/app.ts` forwards user-configured credentials to the chosen provider. `server/stream.ts` handles streaming, cancellation, timeouts, error redaction and final response validation for every AI route. `src/lib/stream.ts` provides the shared browser transport, and `src/lib/stream-preview.ts` decodes partial responses for text display. `server/prompts.ts` contains the drawing contract. `src/lib/sandbox.ts` supplies the isolated preview and interaction bridge. `src/lib/drawing.ts` validates scale and layers, enforces patch boundaries, and serializes export. `src/lib/presentation.ts` lays out sheet information using native SVG and browser font measurement. React holds a bounded 30-revision undo history, including user-supplied manufacturing notes.
 
 There is no custom CAD kernel. Native SVG represents paths, circles, curves and holes. JavaScript may construct SVG elements; after execution, a sanitized SVG snapshot becomes the stable, editable drawing source.
 

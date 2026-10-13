@@ -135,6 +135,74 @@
   border-radius: 8px 8px 0 8px;
   padding: 10px 12px;
 }
+.message-content {
+  min-width: 0;
+  flex: 1;
+}
+.stream-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 12px;
+  margin-left: 3px;
+  vertical-align: middle;
+  background: #7798d1;
+  animation: pulse 1s infinite;
+}
+.reply-status {
+  display: block;
+  margin-top: 7px;
+  font-size: 8px;
+  color: #91a4bf;
+}
+.reply-status.error {
+  color: #b17a66;
+}
+.reply-status.cancelled {
+  color: #a0a8b5;
+}
+.stream-code {
+  margin-top: 9px;
+  white-space: normal;
+  border: 1px solid #e2e9f5;
+  border-radius: 5px;
+  background: #f8faff;
+}
+.stream-code summary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  padding: 7px 8px;
+  font-size: 8px;
+  color: #8196b7;
+}
+.stream-code pre {
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 9px;
+  line-height: 1.55;
+  margin: 0;
+  padding: 9px;
+  border-top: 1px solid #e5ebf6;
+  max-height: 150px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #6b82a7;
+}
+.validation-preview {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 800px;
+  height: 600px;
+  pointer-events: none;
+  visibility: hidden;
+}
+.validation-preview iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
 .suggestions {
   margin: 10px 0 0 30px;
 }

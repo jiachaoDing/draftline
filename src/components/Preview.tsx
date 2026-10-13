@@ -11,6 +11,7 @@ import type { Snapshot } from "../lib/contracts";
 
 export type PreviewHandle = { send: (type: string, payload?: unknown) => void };
 type Props = {
+  title?: string;
   html: string;
   onSnapshot: (snapshot: Snapshot) => void;
   onSelection: (id: string | null) => void;
@@ -103,7 +104,7 @@ export const Preview = forwardRef<PreviewHandle, Props>(
     return (
       <iframe
         ref={frame}
-        title="Technical drawing preview"
+        title={props.title || "Technical drawing preview"}
         sandbox="allow-scripts"
         referrerPolicy="no-referrer"
         srcDoc={srcDoc}
