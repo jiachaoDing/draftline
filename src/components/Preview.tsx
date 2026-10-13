@@ -17,7 +17,7 @@ type Props = {
   onError: (message: string) => void;
   onZoom: (zoom: number) => void;
   selectedId: string | null;
-  layers: { geometry: boolean; dimensions: boolean };
+  layers: { geometry: boolean; dimensions: boolean; presentation: boolean };
   mode: "select" | "pan";
 };
 export const Preview = forwardRef<PreviewHandle, Props>(

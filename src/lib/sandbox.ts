@@ -55,7 +55,7 @@ export function buildSandbox(html: string, channel: string) {
       if (type === 'zoom') payload > 0 ? controller.zoomIn() : controller.zoomOut();
       if (type === 'fit') { controller.resize(); controller.fit(); controller.center(); }
       if (type === 'mode') { mode = payload; mode === 'pan' ? controller.enablePan() : controller.disablePan(); document.body.dataset.mode = mode; }
-      if (type === 'layers') ['geometry','dimensions'].forEach(id => { const n = svg.querySelector('[id="'+id+'"]'); if(n) n.setAttribute('display', payload[id] ? 'inline' : 'none'); });
+      if (type === 'layers') ['geometry','dimensions','presentation'].forEach(id => { const n = svg.querySelector('[id="'+id+'"]'); if(n) n.setAttribute('display', payload[id] ? 'inline' : 'none'); });
       if (type === 'select') { if (selected) selected.removeAttribute('data-selected'); selected = [...svg.querySelectorAll('[id]')].find(n => n.id === payload); if(selected) selected.setAttribute('data-selected','true'); }
       if (type === 'snapshot') rawSnapshot();
     });
@@ -74,7 +74,7 @@ export function buildSandbox(html: string, channel: string) {
         if(mode !== 'select' || (start && Math.hypot(e.clientX-start[0], e.clientY-start[1]) > 5)) return;
         let node = e.target.closest('[id]');
         const dim = e.target.closest('#dimensions > g[id]'); if(dim) node=dim;
-        if (!node || ['drawing','geometry','dimensions'].includes(node.id) || !node.closest('[data-layer]')) node = null;
+        if (!node || ['drawing','geometry','dimensions','presentation'].includes(node.id) || !node.closest('[data-layer]')) node = null;
         if(selected) selected.removeAttribute('data-selected'); selected=node;
         if(node) node.setAttribute('data-selected','true');
         send('selection', node?.id || null);

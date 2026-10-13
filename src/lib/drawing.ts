@@ -1,5 +1,10 @@
 import DOMPurify from "dompurify";
 import type { AIResult, ElementInfo } from "./contracts";
+import {
+  addPresentation,
+  removePresentation,
+  type SheetInfo,
+} from "./presentation";
 
 const SHAPES = "path,circle,ellipse,rect,line,polygon,polyline";
 export function sanitizeSVG(source: string): SVGSVGElement {
@@ -69,6 +74,13 @@ export function validateSVG(svg: SVGSVGElement) {
   }
   const geometry = [...svg.children].find((n) => n.id === "geometry");
   const dimensions = [...svg.children].find((n) => n.id === "dimensions");
+  const presentation = [...svg.children].find((n) => n.id === "presentation");
+  if (
+    presentation &&
+    (presentation.localName !== "g" ||
+      presentation.getAttribute("data-layer") !== "presentation")
+  )
+    throw new Error("Sheet information must use its own presentation group.");
   if (
     svg.id !== "drawing" ||
     geometry?.localName !== "g" ||
@@ -86,7 +98,8 @@ export function validateSVG(svg: SVGSVGElement) {
       (n) =>
         !["defs", "title", "desc"].includes(n.localName) &&
         n !== geometry &&
-        n !== dimensions,
+        n !== dimensions &&
+        n !== presentation,
     )
   )
     throw new Error("All drawing elements must belong to a drawing layer.");
@@ -121,7 +134,12 @@ export function validateSVG(svg: SVGSVGElement) {
 }
 
 export function cleanDrawing(source: string) {
-  return serialize(validateSVG(sanitizeSVG(source)));
+  return serialize(
+    validateSVG(removePresentation(validateSVG(sanitizeSVG(source)))),
+  );
+}
+export function presentationSVG(source: string, info: SheetInfo = {}) {
+  return serialize(addPresentation(validateSVG(sanitizeSVG(source)), info));
 }
 export function serialize(svg: Element) {
   return new XMLSerializer().serializeToString(svg);
@@ -158,7 +176,10 @@ export function applyPatches(
   const selected = [...svg.querySelectorAll("[id]")].find(
     (el) => el.id === selectedId,
   );
-  if (!selected || ["drawing", "geometry", "dimensions"].includes(selectedId))
+  if (
+    !selected ||
+    ["drawing", "geometry", "dimensions", "presentation"].includes(selectedId)
+  )
     throw new Error(
       "Select a drawing element before applying a targeted edit.",
     );
@@ -210,11 +231,15 @@ export function applyPatches(
   return serialize(validateSVG(svg));
 }
 
-export function exportSVG(source: string, annotations: boolean) {
-  const svg = validateSVG(sanitizeSVG(source));
+export function exportSVG(
+  source: string,
+  annotations: boolean,
+  info: SheetInfo = {},
+) {
+  const svg = validateSVG(removePresentation(validateSVG(sanitizeSVG(source))));
+  if (annotations) addPresentation(svg, info);
   if (!annotations) svg.querySelector("#dimensions")?.remove();
   svg.querySelectorAll("[data-layer],[data-for],[data-label]").forEach((el) => {
-    el.removeAttribute("data-layer");
     el.removeAttribute("data-for");
     el.removeAttribute("data-label");
   });

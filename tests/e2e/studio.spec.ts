@@ -59,6 +59,9 @@ test.beforeAll(async () => {
         kind: "drawing",
         title: "Generated test plate",
         summary: "Generated the plate with a Ø12 top-left hole.",
+        notes: instruction.includes("Material:")
+          ? ["Material: 3 mm stainless steel.", "Deburr edges."]
+          : [],
         html: `${EXAMPLE_SVG}<script>document.getElementById('hole-top-left').setAttribute('r','6');document.querySelector('#dim-hole text').textContent='Ø12; 3 × Ø10';try { parent.localStorage.setItem('sandbox-leak','failed'); } catch { document.getElementById('drawing').setAttribute('data-isolated','true'); } fetch('https://example.com/sandbox-leak').catch(()=>{});</script>`,
       };
     res.end(
@@ -128,7 +131,9 @@ test("sketch → clarification → generated code → targeted edit → undo/red
   await expect(page.getByAltText("Uploaded sketch")).toBeVisible();
   await page
     .getByLabel("Drawing instructions")
-    .fill("Draw this plate with missing width.");
+    .fill(
+      "Draw this plate with missing width. Material: 3 mm stainless steel. Deburr edges.",
+    );
   await page
     .getByRole("button", { name: "Generate drawing", exact: true })
     .click();
@@ -140,6 +145,12 @@ test("sketch → clarification → generated code → targeted edit → undo/red
     .fill("120 mm wide, 80 mm high.");
   await page.getByRole("button", { name: "Send drawing instruction" }).click();
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "6");
+  await expect(frame.locator("#presentation")).toContainText(
+    "Material: 3 mm stainless steel.",
+  );
+  await expect(frame.locator('#presentation [data-field="scale"]')).toHaveText(
+    "1:1",
+  );
   await expect(
     page.getByText("Generated test plate", { exact: true }),
   ).toBeVisible();
@@ -167,6 +178,11 @@ test("sketch → clarification → generated code → targeted edit → undo/red
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "7");
   await page.getByLabel("Show dimensions").uncheck();
   await expect(frame.locator("#dimensions")).toHaveAttribute("display", "none");
+  await page.getByLabel("Show presentation").uncheck();
+  await expect(frame.locator("#presentation")).toHaveAttribute(
+    "display",
+    "none",
+  );
   await page.getByRole("button", { name: "Zoom in", exact: true }).click();
   await page.getByRole("button", { name: "Pan tool", exact: true }).click();
   await expect(frame.locator("body")).toHaveAttribute("data-mode", "pan");
@@ -182,6 +198,7 @@ test("sketch → clarification → generated code → targeted edit → undo/red
   expect(exported).toContain('viewBox="-22 -22 164 124"');
   expect(exported).toContain('r="7"');
   expect(exported).not.toContain('id="dimensions"');
+  expect(exported).not.toContain('id="presentation"');
   expect(exported).not.toMatch(
     /script|svg-pan-zoom|data-selected|browser-test-key/,
   );
@@ -194,6 +211,10 @@ test("sketch → clarification → generated code → targeted edit → undo/red
   for await (const chunk of annotatedStream!) dimensioned += chunk.toString();
   expect(dimensioned).toContain('id="dimensions"');
   expect(dimensioned).toContain("Ø14");
+  expect(dimensioned).toContain('id="presentation"');
+  expect(dimensioned).toContain("Material: 3 mm stainless steel.");
+  expect(dimensioned).toContain("Deburr edges.");
+  expect(dimensioned).toContain(">1:1</text>");
   expect(dimensioned).not.toContain('display="none"');
   const stored = await page.evaluate(() =>
     JSON.stringify({ ...localStorage, ...sessionStorage }),
@@ -201,6 +222,9 @@ test("sketch → clarification → generated code → targeted edit → undo/red
   expect(stored).not.toContain("browser-test-key");
   await page.reload();
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "7");
+  await expect(frame.locator("#presentation")).toContainText(
+    "Material: 3 mm stainless steel.",
+  );
   await page.getByRole("button", { name: "Model settings" }).click();
   await expect(page.getByLabel("API key", { exact: true })).toHaveValue("");
 });

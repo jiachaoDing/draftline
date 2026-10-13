@@ -18,7 +18,7 @@ OpenAI uses `https://api.openai.com/v1`. For [NewAPI](https://github.com/Quantum
 1. Upload, drop, or paste a PNG/JPEG/WebP sketch up to 8 MB, or describe a part using dimensions. **Try an example** loads a real sketch and explicit measurements.
 2. Generate the drawing. If the model asks for a measurement, reply in the assistant panel to continue the same request.
 3. Click a shape or dimension, then describe a change. Clear selection for a whole-drawing edit. Use the hand tool to pan and the wheel or buttons to zoom.
-4. Export geometry only or include annotations. Layer visibility changes only the preview; export uses the original drawing.
+4. Export geometry only or a finished drawing with dimensions, title block, and technical notes. Layer visibility changes only the preview; export uses the original drawing.
 
 Keyboard shortcuts: `V` select, `H` pan, `Ctrl/Cmd Z` undo, `Ctrl/Cmd Shift Z` redo, `Escape` clear selection, `Enter` send, `Shift Enter` newline. Drawing source can also be edited in the **Code** tab.
 
@@ -48,7 +48,7 @@ Playwright uses installed Microsoft Edge by default. Set `PLAYWRIGHT_CHANNEL=chr
 | Request and response contracts       | Zod                                                                                   |
 | Unit and browser checks              | Vitest, jsdom, Playwright                                                             |
 
-`server/app.ts` forwards user-configured credentials to the chosen provider and returns a validated drawing, clarification, or patch response. `server/prompts.ts` contains the drawing contract. `src/lib/sandbox.ts` supplies the isolated preview and interaction bridge. `src/lib/drawing.ts` validates scale and layers, enforces patch boundaries, and serializes export. React holds a bounded 30-revision undo history.
+`server/app.ts` forwards user-configured credentials to the chosen provider and returns a validated drawing, clarification, or patch response. `server/prompts.ts` contains the drawing contract. `src/lib/sandbox.ts` supplies the isolated preview and interaction bridge. `src/lib/drawing.ts` validates scale and layers, enforces patch boundaries, and serializes export. `src/lib/presentation.ts` lays out sheet information using native SVG and browser font measurement. React holds a bounded 30-revision undo history, including user-supplied manufacturing notes.
 
 There is no custom CAD kernel. Native SVG represents paths, circles, curves and holes. JavaScript may construct SVG elements; after execution, a sanitized SVG snapshot becomes the stable, editable drawing source.
 
@@ -56,6 +56,7 @@ There is no custom CAD kernel. Native SVG represents paths, circles, curves and 
 
 - Root: `<svg id="drawing" width="Wmm" height="Hmm" viewBox="x y W H">`. One coordinate unit equals one millimeter. Page size includes annotation margins.
 - Two direct SVG groups: `geometry` with `data-layer="geometry"`, and `dimensions` with `data-layer="dimensions"`.
+- A separate derived `presentation` group contains a bottom title block and technical notes. It uses the drawing title, mm units and 1:1 physical scale. Only explicitly supplied manufacturing requirements are added as notes, alongside a concise instruction to use stated dimensions. Text wraps and sections stack on narrow sheets. The page extends below the drawing while preserving every geometry coordinate. Geometry-only exports retain the original page bounds.
 - All geometry shapes have unique stable IDs. Dimension groups have stable IDs and `data-for` references to related geometry IDs.
 - Selected edits replace only that element and its related dimension groups, retain identities, and preserve unrelated geometry. Whole-drawing changes are permitted when selection is cleared.
 - The model is instructed to ask for essential missing dimensions and choose a minimum sufficient set of annotations. Structure and physical scale are validated by the app; satisfying the requested geometric relationships remains the model's responsibility.

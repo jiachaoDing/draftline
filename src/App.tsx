@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownToLine,
   ArrowLeft,
@@ -33,6 +33,7 @@ import {
   cleanDrawing,
   downloadFile,
   exportSVG,
+  presentationSVG,
   svgToHTML,
 } from "./lib/drawing";
 import { EXAMPLE } from "./lib/example";
@@ -74,6 +75,15 @@ function initialDrawing() {
         title: saved.title.slice(0, 120),
         html: svgToHTML(svg),
         summary: "Restored from this browser.",
+        notes: Array.isArray(saved.notes)
+          ? saved.notes
+              .filter(
+                (note: unknown): note is string => typeof note === "string",
+              )
+              .slice(0, 6)
+              .map((note: string) => note.trim().slice(0, 400))
+              .filter(Boolean)
+          : [],
       };
     }
   } catch {
@@ -102,7 +112,15 @@ export default function App() {
   const [elements, setElements] = useState<ElementInfo[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = elements.find((el) => el.id === selectedId);
-  const [layers, setLayers] = useState({ geometry: true, dimensions: true });
+  const [layers, setLayers] = useState({
+    geometry: true,
+    dimensions: true,
+    presentation: true,
+  });
+  const previewHTML = useMemo(
+    () => pending?.html || svgToHTML(presentationSVG(drawing.svg, drawing)),
+    [pending, drawing],
+  );
   const [mode, setMode] = useState<"select" | "pan">("select");
   const [zoom, setZoom] = useState(100);
   const [messages, setMessages] = useState<ChatMessage[]>([welcome]);
@@ -146,7 +164,11 @@ export default function App() {
     try {
       localStorage.setItem(
         "draftline-drawing",
-        JSON.stringify({ title: drawing.title, svg: drawing.svg }),
+        JSON.stringify({
+          title: drawing.title,
+          svg: drawing.svg,
+          notes: drawing.notes || [],
+        }),
       );
     } catch {
       tell("Browser storage is full. Export your drawing to keep it.", true);
@@ -302,6 +324,7 @@ export default function App() {
           svg,
           html: svgToHTML(svg),
           summary: result.summary,
+          notes: drawing.notes,
         });
         setMessages((m) => [...m, { role: "assistant", text: result.summary }]);
         tell("Selected element updated.");
@@ -315,6 +338,7 @@ export default function App() {
           title: result.title,
           html: result.html,
           summary: result.summary,
+          notes: result.notes,
         };
         pendingRef.current = candidate;
         setPending(candidate);
@@ -365,6 +389,7 @@ export default function App() {
       mode: "generate",
       instruction: text,
       image: sketch?.data,
+      notes: [],
       history: [],
     });
   };
@@ -393,6 +418,7 @@ export default function App() {
         instruction: text,
         svg: drawing.svg,
         selectedId: selectedId || undefined,
+        notes: drawing.notes || [],
         history: context,
       });
   };
@@ -424,7 +450,7 @@ export default function App() {
   const exportDrawing = (annotations: boolean) => {
     try {
       downloadFile(
-        exportSVG(drawing.svg, annotations),
+        exportSVG(drawing.svg, annotations, drawing),
         `${drawing.title.replace(/[^a-z0-9_-]/gi, "-").toLowerCase()}${annotations ? "-dimensioned" : ""}.svg`,
         "image/svg+xml;charset=utf-8",
       );
@@ -490,7 +516,8 @@ export default function App() {
                 <button onClick={() => exportDrawing(true)}>
                   <FileCode2 size={17} />
                   <span>
-                    With dimensions<small>Geometry + annotations</small>
+                    With dimensions
+                    <small>Dimensions, title & technical notes</small>
                   </span>
                   <ArrowRight size={14} />
                 </button>
@@ -592,29 +619,37 @@ export default function App() {
               <span>
                 <Layers2 size={15} /> Drawing layers
               </span>
-              <span className="layer-count">2</span>
+              <span className="layer-count">3</span>
             </div>
-            {(["geometry", "dimensions"] as const).map((layer) => (
-              <label key={layer} className="layer-row">
-                <span className={`layer-symbol ${layer}`} />
-                <span>
-                  {layer === "geometry" ? "Geometry" : "Dimensions"}
-                  <small>
+            {(["geometry", "dimensions", "presentation"] as const).map(
+              (layer) => (
+                <label key={layer} className="layer-row">
+                  <span className={`layer-symbol ${layer}`} />
+                  <span>
                     {layer === "geometry"
-                      ? "Profiles, holes & curves"
-                      : "Measurements & annotations"}
-                  </small>
-                </span>
-                <input
-                  aria-label={`Show ${layer}`}
-                  type="checkbox"
-                  checked={layers[layer]}
-                  onChange={(e) =>
-                    setLayers({ ...layers, [layer]: e.target.checked })
-                  }
-                />
-              </label>
-            ))}
+                      ? "Geometry"
+                      : layer === "dimensions"
+                        ? "Dimensions"
+                        : "Sheet information"}
+                    <small>
+                      {layer === "geometry"
+                        ? "Profiles, holes & curves"
+                        : layer === "dimensions"
+                          ? "Measurements & annotations"
+                          : "Title, units & technical notes"}
+                    </small>
+                  </span>
+                  <input
+                    aria-label={`Show ${layer}`}
+                    type="checkbox"
+                    checked={layers[layer]}
+                    onChange={(e) =>
+                      setLayers({ ...layers, [layer]: e.target.checked })
+                    }
+                  />
+                </label>
+              ),
+            )}
           </section>
           <div className="left-footer">
             <ShieldCheck size={16} />
@@ -703,7 +738,7 @@ export default function App() {
             <div className="drawing-paper">
               <Preview
                 ref={preview}
-                html={pending?.html || drawing.html}
+                html={previewHTML}
                 onSnapshot={onSnapshot}
                 onSelection={(id) => {
                   if (id === null || elements.some((el) => el.id === id))
@@ -730,6 +765,7 @@ export default function App() {
                         title: drawing.title,
                         html: code,
                         summary: "Source code updated.",
+                        notes: drawing.notes,
                       };
                       pendingRef.current = candidate;
                       setPending(candidate);

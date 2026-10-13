@@ -6,6 +6,10 @@ export const configSchema = z.object({
   model: z.string().max(200).default(""),
 });
 export type ModelConfig = z.infer<typeof configSchema>;
+export const notesSchema = z
+  .array(z.string().trim().min(1).max(400))
+  .max(6)
+  .default([]);
 export const resultSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("clarification"),
@@ -16,6 +20,7 @@ export const resultSchema = z.discriminatedUnion("kind", [
     title: z.string().min(1).max(120),
     summary: z.string().max(3000),
     html: z.string().min(1).max(600_000),
+    notes: notesSchema,
   }),
   z.object({
     kind: z.literal("patch"),
@@ -37,6 +42,7 @@ export type Drawing = {
   html: string;
   svg: string;
   summary: string;
+  notes?: string[];
 };
 export type ElementInfo = {
   id: string;
@@ -59,6 +65,7 @@ export const drawingRequestSchema = z.object({
     .optional(),
   svg: z.string().max(600_000).optional(),
   selectedId: z.string().max(200).optional(),
+  notes: notesSchema,
   history: z
     .array(
       z.object({

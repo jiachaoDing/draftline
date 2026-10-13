@@ -813,12 +813,14 @@
   }
   .layers-section {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 16px;
     padding: 12px 19px;
   }
   .layers-section .section-title {
     margin: 0;
+    width: 100%;
     white-space: nowrap;
   }
   .layers-section .section-title .layer-count {

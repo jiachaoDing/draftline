@@ -54,7 +54,7 @@ export function createApp(allowLocal = false) {
     const content: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [
       {
         type: "text",
-        text: `${input.instruction}\n${input.svg ? `Current SVG:\n${input.svg}\nSelected element: ${input.selectedId || "none; whole-drawing edit permitted"}` : ""}`,
+        text: `${input.instruction}\n${input.svg ? `Current SVG:\n${input.svg}\nSelected element: ${input.selectedId || "none; whole-drawing edit permitted"}` : ""}\nExisting user-supplied manufacturing notes: ${JSON.stringify(input.notes)}`,
       },
     ];
     if (input.image)

@@ -583,6 +583,13 @@ kbd {
   position: absolute;
   inset: 0 3px;
 }
+.layer-symbol.presentation:after {
+  content: "";
+  position: absolute;
+  inset: 6px 5px;
+  border-top: 1px solid #8b99b2;
+  border-bottom: 1px solid #8b99b2;
+}
 .left-footer {
   margin-top: auto;
   padding: 22px 23px;
