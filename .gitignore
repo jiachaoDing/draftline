@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.generated/
+.env*
+!.env.example
+playwright-report/
+test-results/
+*.tar.gz
+*.log
+.openai/workflow-*
