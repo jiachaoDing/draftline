@@ -11,14 +11,15 @@ npm ci
 npm run dev
 ```
 
-Open http://127.0.0.1:3000. The API runs on loopback port 3001. In **Model settings**, enter your OpenAI-compatible Base URL, API key, and model. Discover models or type a model ID, then test the connection. Use an image-capable model for sketches.
+Open http://127.0.0.1:3000. The API runs on loopback port 3001. In **Model settings**, enter your OpenAI-compatible Base URL and API key, then discover models. Click the Model field or its arrow to browse the full list, type to filter, and select with the mouse or keyboard. Custom model IDs can also be typed and saved directly. Test the connection before drawing. Use an image-capable model for sketches.
 
 OpenAI uses `https://api.openai.com/v1`. For [NewAPI](https://github.com/QuantumNous/new-api), use your instance's HTTPS URL including its API prefix, usually `/v1`. An empty URL path is normalized to `/v1`; custom prefixes are preserved. Development also accepts HTTP endpoints on localhost, useful for testing a local compatible provider. The production server accepts public HTTPS endpoints.
 
-1. Upload, drop, or paste a PNG/JPEG/WebP sketch up to 8 MB, or describe a part using dimensions. **Try an example** loads a real sketch and explicit measurements.
-2. Generate the drawing. If the model asks for a measurement, reply in the assistant panel to continue the same request.
-3. Click a shape or dimension, then describe a change. Clear selection for a whole-drawing edit. Use the hand tool to pan and the wheel or buttons to zoom.
-4. Export geometry only or a finished drawing with dimensions, title block, and technical notes. Layer visibility changes only the preview; export uses the original drawing.
+1. Use **New Drawing** in the left sidebar to start with an empty canvas and a fresh conversation. The starter project contains an example drawing to explore.
+2. Describe a part and its dimensions in the right-side assistant. Attach, drop, or paste a PNG/JPEG/WebP reference up to 8 MB there. **Try an example** adds a real sketch and explicit measurements to the chat composer. Send to create the drawing; reply in the same chat if the model asks for a measurement.
+3. Click a shape or dimension, then describe a change in the assistant. Clear selection for a whole-drawing edit. Use the hand tool to pan and the wheel or buttons to zoom.
+4. Reopen drawings from the sidebar to continue their own conversation. Each project saves its drawing revisions, conversation, reference images, draft message, layer visibility and pending measurement clarification automatically in this browser. Use the pencil to rename a project and the trash button to delete it. Confirming deletion removes that drawing and conversation; deleting the last project opens a fresh drawing. Project navigation is available when the current AI request finishes or is stopped.
+5. Export geometry only or a finished drawing with dimensions, title block, and technical notes. Layer visibility changes only the preview; export uses the original drawing.
 
 Keyboard shortcuts: `V` select, `H` pan, `Ctrl/Cmd Z` undo, `Ctrl/Cmd Shift Z` redo, `Escape` clear selection, `Enter` send, `Shift Enter` newline. In the **Code** tab, CodeMirror 6 provides HTML/SVG and embedded JavaScript/CSS highlighting, line numbers, automatic word wrapping, indentation, search and editor undo/redo. Prettier automatically formats each committed drawing's source with two-space indentation and line breaks. Use **Format** to tidy a draft and **Apply code** to validate it in the drawing sandbox and update the preview. Formatting errors retain the draft; invalid drawings retain the current preview. Editor shortcuts apply to the source while the editor has focus.
 
@@ -42,7 +43,7 @@ npm run build
 npm start
 ```
 
-Playwright uses installed Microsoft Edge by default. Set `PLAYWRIGHT_CHANNEL=chromium` and install Playwright Chromium if Edge is unavailable. The browser suite starts a local OpenAI-compatible test service and exercises the actual SDK and server; it requires no paid credentials. It checks image input, model discovery and connection tests, missing-dimension clarification, generated JavaScript, selected-element changes, undo/redo, layer visibility, exports, local restoration, credential isolation, and mobile layout.
+Playwright uses installed Microsoft Edge by default. Set `PLAYWRIGHT_CHANNEL=chromium` and install Playwright Chromium if Edge is unavailable. The browser suite starts a local OpenAI-compatible test service and exercises the actual SDK and server; it requires no paid credentials. It checks image input, model discovery and connection tests, missing-dimension clarification, generated JavaScript, selected-element changes, undo/redo, layer visibility, exports, project context isolation, renaming and deletion, settings updates and clearing, storage failures, credential isolation and mobile layout. A persistent browser profile is closed and relaunched to verify drawing, conversation, draft, settings and 6 MB reference restoration across a full browser restart.
 
 `npm start` serves the production build on loopback port 3000 (`PORT` overrides it). `dist/server/index.js` also exports a Cloudflare-compatible Worker `fetch` handler. The build embeds the small frontend assets into that module so Node and Worker deployments serve the same application. `.openai/hosting.json` identifies its private Sites deployment.
 
@@ -51,12 +52,14 @@ Playwright uses installed Microsoft Edge by default. Set `PLAYWRIGHT_CHANNEL=chr
 | Responsibility                         | Reused implementation                                                                 |
 | -------------------------------------- | ------------------------------------------------------------------------------------- |
 | UI and build                           | React, Vite, Lucide                                                                   |
+| Accessible model selection             | [Headless UI Combobox](https://headlessui.com/react/combobox)                            |
 | Source editing and formatting           | [CodeMirror 6](https://codemirror.net/), [Prettier standalone](https://prettier.io/docs/browser) |
 | AI requests and custom API URLs        | [Official OpenAI JavaScript SDK](https://github.com/openai/openai-node) on the server |
 | Stream framing and incremental display | Hono SSE, eventsource-parser, partial-json                                            |
 | Portable API routing and body limits   | [Hono](https://github.com/honojs/hono), its Node adapter and body-limit middleware    |
 | SVG and HTML sanitization              | [DOMPurify](https://github.com/cure53/DOMPurify)                                      |
 | SVG zoom, pan and fit                  | [svg-pan-zoom](https://github.com/bumbu/svg-pan-zoom)                                 |
+| Local project persistence              | [idb](https://github.com/jakearchibald/idb) with IndexedDB                              |
 | Request and response contracts         | Zod                                                                                   |
 | Unit and browser checks                | Vitest, jsdom, Playwright                                                             |
 
@@ -76,7 +79,9 @@ There is no custom CAD kernel. Native SVG represents paths, circles, curves and 
 
 ## Credential and code isolation
 
-The API key lives only in parent-page React memory. The app saves provider URL/model and the latest sanitized SVG in browser local storage. Sketches and conversation history live in memory. Keys are sent to the app server and configured provider, excluded from prompts and responses, and never written to storage or logs. API responses use `Cache-Control: no-store`; requests have body limits and origin checks.
+**Model settings** saves the provider URL, API key and model in browser local storage and restores them on refresh or reopening. Save again to update them, or use **Clear saved settings** to remove all three and disconnect the model. The key field is masked by default. Credentials travel in request bodies to the app server and configured provider; they are excluded from drawing prompts, project records, exports, URLs and logs. Only save credentials on a browser profile you trust. API responses use `Cache-Control: no-store`; requests have body limits and origin checks.
+
+Projects use IndexedDB through [idb](https://github.com/jakearchibald/idb), keeping reference images outside local storage's small quota. Each project has its own bounded undo history and conversation context. Restored drawing sources are rebuilt from validated, sanitized SVG snapshots; interrupted responses are marked stopped and excluded from AI context. A saved measurement clarification resumes with the current model settings. Storage failures show a visible warning and unsaved status so users can export their work. Browser storage belongs to the current origin and profile; clearing site data removes saved projects and credentials.
 
 Generated code runs in an [iframe sandbox](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe) with only `allow-scripts`, giving it an opaque origin. Its CSP uses nonced inline scripts and blocks network connections, external images, fonts, workers, child frames, objects, forms and base URL changes. The parent CSP restricts frame navigation to the app origin. Frame messages are checked by source and an individual preview channel; the bridge provides drawing commands and sanitized SVG snapshots, never credentials. SVG sanitization also removes scripts, event attributes, foreign objects, CSS and external references from patches and exports.
 

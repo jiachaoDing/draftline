@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  Combobox,
+  ComboboxButton,
+  ComboboxInput,
+  ComboboxOption,
+  ComboboxOptions,
+  Portal,
+} from "@headlessui/react";
+import {
   Check,
   ChevronDown,
   ExternalLink,
@@ -18,10 +26,22 @@ type Props = {
   config: ModelConfig;
   onSave: (config: ModelConfig) => void;
   onClose: () => void;
+  onClear: () => void;
 };
-export default function ModelSettings({ config, onSave, onClose }: Props) {
+export default function ModelSettings({
+  config,
+  onSave,
+  onClose,
+  onClear,
+}: Props) {
   const [draft, setDraft] = useState(config);
   const [models, setModels] = useState<string[]>([]);
+  const [modelQuery, setModelQuery] = useState("");
+  const modelButton = useRef<HTMLButtonElement>(null);
+  const query = modelQuery.trim();
+  const filteredModels = models.filter((model) =>
+    model.toLowerCase().includes(query.toLowerCase()),
+  );
   const [showKey, setShowKey] = useState(false);
   const [busy, setBusy] = useState("");
   const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(
@@ -184,23 +204,92 @@ export default function ModelSettings({ config, onSave, onClose }: Props) {
             Discover models
           </button>
         </div>
-        <div className="input-with-action">
-          <input
-            id="model-id"
-            required
-            list="model-list"
-            placeholder="Enter or select a model"
+        <Portal.Group target={dialog}>
+          <Combobox
             value={draft.model}
-            onChange={(e) => field("model", e.target.value)}
-          />
-          <ChevronDown size={15} />
-          <datalist id="model-list">
-            {models.map((model) => (
-              <option key={model} value={model} />
-            ))}
-          </datalist>
-        </div>
-        <p className="field-hint">
+            onChange={(model) => field("model", model || "")}
+            onClose={() => setModelQuery("")}
+            immediate
+            disabled={!!busy}
+          >
+            {({ open }) => (
+              <>
+                <div className="input-with-action model-combobox">
+                  <ComboboxInput
+                    id="model-id"
+                    required
+                    autoComplete="off"
+                    aria-describedby="model-hint"
+                    placeholder="Enter or select a model"
+                    displayValue={(model: string) => model}
+                    onChange={(e) => {
+                      setModelQuery(e.target.value);
+                      field("model", e.target.value);
+                    }}
+                    onClick={() => {
+                      if (!open) modelButton.current?.click();
+                    }}
+                  />
+                  <ComboboxButton
+                    ref={modelButton}
+                    className="model-toggle"
+                    aria-label="Show models"
+                    onClick={() => setModelQuery("")}
+                  >
+                    <ChevronDown size={15} aria-hidden="true" />
+                  </ComboboxButton>
+                </div>
+                <ComboboxOptions
+                  anchor={{ to: "bottom start", gap: 6, padding: 12 }}
+                  modal={false}
+                  className="model-options"
+                  aria-label="Models"
+                >
+                  {filteredModels.map((model) => (
+                    <ComboboxOption
+                      key={model}
+                      value={model}
+                      className="model-option"
+                    >
+                      <span>{model}</span>
+                      <Check
+                        size={14}
+                        className="model-selected"
+                        aria-hidden="true"
+                      />
+                    </ComboboxOption>
+                  ))}
+                  {query && !models.includes(query) && (
+                    <ComboboxOption
+                      value={query}
+                      className="model-option model-custom"
+                    >
+                      <span>
+                        Use “{query}”<small>Custom model ID</small>
+                      </span>
+                      <Check
+                        size={14}
+                        className="model-selected"
+                        aria-hidden="true"
+                      />
+                    </ComboboxOption>
+                  )}
+                  {!models.length && !query && (
+                    <p className="model-empty">
+                      Discover models above, or type a custom model ID.
+                    </p>
+                  )}
+                  {!!models.length && !filteredModels.length && (
+                    <p className="model-empty">
+                      No discovered models match your search.
+                    </p>
+                  )}
+                </ComboboxOptions>
+              </>
+            )}
+          </Combobox>
+        </Portal.Group>
+        <p className="field-hint" id="model-hint">
           Use a model with image input to interpret hand-drawn sketches.
         </p>
         {status && (
@@ -219,9 +308,9 @@ export default function ModelSettings({ config, onSave, onClose }: Props) {
         <div className="privacy-note">
           <ShieldCheck size={19} />
           <p>
-            Your key stays in this page’s memory and is sent only to the app
-            server and your provider. It is never saved, logged, or passed to
-            drawing code.
+            Settings, including your key, are saved in this browser. Requests
+            share them only with the app server and your provider. Drawing code
+            cannot access them. Clear saved settings below to remove them.
           </p>
         </div>
         <div className="dialog-actions">
@@ -247,6 +336,14 @@ export default function ModelSettings({ config, onSave, onClose }: Props) {
             Save settings <Check size={15} />
           </button>
         </div>
+        <button
+          type="button"
+          className="text-button clear-settings"
+          disabled={!!busy}
+          onClick={onClear}
+        >
+          Clear saved settings
+        </button>
         <a
           className="settings-help"
           href="https://github.com/QuantumNous/new-api"

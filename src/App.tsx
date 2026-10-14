@@ -13,7 +13,6 @@ import {
   ArrowRight,
   Check,
   ChevronDown,
-  ChevronRight,
   CircleHelp,
   Code2,
   FileCode2,
@@ -25,12 +24,14 @@ import {
   Minus,
   MousePointer2,
   Plus,
+  Pencil,
   Redo2,
   Send,
   Settings2,
   ShieldCheck,
   Sparkles,
   Square,
+  Trash2,
   Undo2,
   X,
 } from "lucide-react";
@@ -39,81 +40,54 @@ import SketchUpload, { type Sketch } from "./components/SketchUpload";
 import { Preview, type PreviewHandle } from "./components/Preview";
 import {
   applyPatches,
-  cleanDrawing,
   downloadFile,
   exportSVG,
   presentationSVG,
   svgToHTML,
 } from "./lib/drawing";
-import { EXAMPLE } from "./lib/example";
 import { pushHistory, type History } from "./lib/history";
 import { requestDrawing } from "./lib/api";
 import { previewStream } from "./lib/stream-preview";
 import { formatDrawingSource } from "./lib/format-source";
+import {
+  readConfig,
+  defaultConfig,
+  newProject,
+  loadProjects,
+  saveProject,
+  selectProject,
+  deleteProject,
+  welcome,
+  type Project,
+  type ProjectContext,
+} from "./lib/projects";
 import type {
   ChatMessage,
   Drawing,
-  DrawingRequest,
   ElementInfo,
-  ModelConfig,
   Snapshot,
 } from "./lib/contracts";
 
 const CodeEditor = lazy(() => import("./components/CodeEditor"));
 
-const initialConfig: ModelConfig = (() => {
-  try {
-    const stored = JSON.parse(localStorage.getItem("draftline-model") || "{}");
-    return {
-      baseURL:
-        typeof stored.baseURL === "string"
-          ? stored.baseURL
-          : "https://api.openai.com/v1",
-      model: typeof stored.model === "string" ? stored.model : "",
-      apiKey: "",
-    };
-  } catch {
-    return { baseURL: "https://api.openai.com/v1", model: "", apiKey: "" };
-  }
-})();
-function initialDrawing() {
-  try {
-    const saved = JSON.parse(
-      localStorage.getItem("draftline-drawing") || "null",
-    );
-    if (saved?.svg && typeof saved.title === "string") {
-      const svg = cleanDrawing(saved.svg);
-      return {
-        svg,
-        title: saved.title.slice(0, 120),
-        html: svgToHTML(svg),
-        summary: "Restored from this browser.",
-        notes: Array.isArray(saved.notes)
-          ? saved.notes
-              .filter(
-                (note: unknown): note is string => typeof note === "string",
-              )
-              .slice(0, 6)
-              .map((note: string) => note.trim().slice(0, 400))
-              .filter(Boolean)
-          : [],
-      };
-    }
-  } catch {
-    /* Invalid stored drawing is replaced by the example. */
-  }
-  return EXAMPLE;
-}
-const welcome: ChatMessage = {
-  role: "assistant",
-  text: "Start with a sketch and a few dimensions. I’ll turn them into a precise vector drawing, and ask if anything is unclear.",
-};
-
 export default function App() {
-  const [config, setConfig] = useState(initialConfig);
+  const [config, setConfig] = useState(readConfig);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [activeId, setActiveId] = useState("");
+  const [loaded, setLoaded] = useState(false);
+  const [saveStatus, setSaveStatus] = useState("Opening workspace…");
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [projectName, setProjectName] = useState("");
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [projectBusy, setProjectBusy] = useState(false);
+  const projectsRef = useRef(projects);
+  projectsRef.current = projects;
+  const activeProject = projects.find((project) => project.id === activeId);
+  const activeIdRef = useRef(activeId);
+  activeIdRef.current = activeId;
   const [settings, setSettings] = useState(false);
-  const [history, setHistory] = useState<History<Drawing>>(() => ({
-    items: [initialDrawing()],
+  const [history, setHistory] = useState<History<Drawing | null>>(() => ({
+    items: [null],
     index: 0,
   }));
   const drawing = history.items[history.index];
@@ -121,7 +95,6 @@ export default function App() {
   const pendingRef = useRef(pending);
   pendingRef.current = pending;
   const [sketch, setSketch] = useState<Sketch | null>(null);
-  const [instruction, setInstruction] = useState("");
   const [elements, setElements] = useState<ElementInfo[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = elements.find((el) => el.id === selectedId);
@@ -131,7 +104,7 @@ export default function App() {
     presentation: true,
   });
   const previewHTML = useMemo(
-    () => svgToHTML(presentationSVG(drawing.svg, drawing)),
+    () => (drawing ? svgToHTML(presentationSVG(drawing.svg, drawing)) : ""),
     [drawing],
   );
   const [mode, setMode] = useState<"select" | "pan">("select");
@@ -143,12 +116,12 @@ export default function App() {
     text: string;
     error?: boolean;
   } | null>(null);
-  const [clarification, setClarification] = useState<DrawingRequest | null>(
+  const [clarification, setClarification] = useState<ProjectContext | null>(
     null,
   );
   const [exportOpen, setExportOpen] = useState(false);
   const [tab, setTab] = useState<"drawing" | "code">("drawing");
-  const [code, setCode] = useState(drawing.html);
+  const [code, setCode] = useState("");
   const [formattingCode, setFormattingCode] = useState(false);
   const [help, setHelp] = useState(false);
   const preview = useRef<PreviewHandle>(null);
@@ -167,6 +140,206 @@ export default function App() {
       error ? 10000 : 4500,
     );
   }, []);
+
+  const openProject = useCallback((project: Project) => {
+    setActiveId(project.id);
+    setHistory(project.history);
+    setMessages(project.messages);
+    setSketch(project.sketch);
+    setChatInput(project.chatInput);
+    setClarification(project.clarification);
+    setLayers(project.layers);
+    setSelectedId(null);
+    setElements([]);
+    setMode("select");
+    setZoom(100);
+    setTab("drawing");
+    setExportOpen(false);
+    setRenaming(null);
+    setDeleting(null);
+    setNotice(null);
+  }, []);
+  const saveSequence = useRef(0);
+  const streamSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  const persist = useCallback(
+    async (project: Project) => {
+      const sequence = ++saveSequence.current;
+      setSaveStatus("Saving locally…");
+      try {
+        await saveProject(project);
+        if (sequence === saveSequence.current) setSaveStatus("Saved locally");
+      } catch {
+        if (sequence === saveSequence.current) setSaveStatus("Not saved");
+        tell(
+          "Browser storage is unavailable or full. Export your drawing to keep it, then free storage and reload.",
+          true,
+        );
+      }
+    },
+    [tell],
+  );
+  useEffect(() => {
+    let mounted = true;
+    loadProjects()
+      .then(({ projects, activeId, invalid }) => {
+        if (!mounted) return;
+        const available = projects.length ? projects : [newProject()];
+        projectsRef.current = available;
+        setProjects(available);
+        openProject(available.find((p) => p.id === activeId) || available[0]);
+        setLoaded(true);
+        if (invalid)
+          tell(
+            "Some saved projects could not be opened. Their stored data has been kept.",
+            true,
+          );
+      })
+      .catch(() => {
+        if (!mounted) return;
+        const project = newProject();
+        projectsRef.current = [project];
+        setProjects([project]);
+        openProject(project);
+        setLoaded(true);
+        tell(
+          "Browser storage is unavailable. Export drawings to keep your work.",
+          true,
+        );
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [openProject, tell]);
+  useEffect(() => {
+    if (!loaded) return;
+    const current = projectsRef.current.find((p) => p.id === activeId);
+    if (!current) return;
+    const project: Project = {
+      ...current,
+      history,
+      messages,
+      sketch,
+      chatInput,
+      clarification,
+      layers,
+      name: current.renamed ? current.name : drawing?.title || current.name,
+      updatedAt: Date.now(),
+    };
+    const next = projectsRef.current.map((p) =>
+      p.id === activeId ? project : p,
+    );
+    projectsRef.current = next;
+    setProjects(next);
+    if (
+      messages.at(-1)?.status === "streaming" &&
+      current.messages.at(-1)?.id === messages.at(-1)?.id
+    ) {
+      // Batch streamed deltas so large reference images are not cloned every frame.
+      if (streamSaveTimer.current === undefined) {
+        streamSaveTimer.current = setTimeout(() => {
+          streamSaveTimer.current = undefined;
+          const latest = projectsRef.current.find((p) => p.id === activeId);
+          if (latest) void persist(latest);
+        }, 400);
+      }
+    } else {
+      clearTimeout(streamSaveTimer.current);
+      streamSaveTimer.current = undefined;
+      void persist(project);
+    }
+  }, [
+    loaded,
+    activeId,
+    history,
+    messages,
+    sketch,
+    chatInput,
+    clarification,
+    layers,
+    drawing,
+    persist,
+  ]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    const flush = () => {
+      clearTimeout(streamSaveTimer.current);
+      streamSaveTimer.current = undefined;
+      const project = projectsRef.current.find(
+        (p) => p.id === activeIdRef.current,
+      );
+      if (project) void persist(project);
+    };
+    const hide = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", hide);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", hide);
+    };
+  }, [loaded, persist]);
+
+  async function changeProject(id?: string) {
+    if (busy || projectBusy || !loaded || id === activeId) return;
+    setProjectBusy(true);
+    const current = projectsRef.current.find((p) => p.id === activeId);
+    if (current) await persist(current);
+    const project = id
+      ? projectsRef.current.find((p) => p.id === id)
+      : newProject();
+    if (project) {
+      if (!id) {
+        const next = [project, ...projectsRef.current];
+        projectsRef.current = next;
+        setProjects(next);
+      }
+      openProject(project);
+      try {
+        await selectProject(project.id);
+      } catch {
+        setSaveStatus("Not saved");
+      }
+    }
+    setProjectBusy(false);
+  }
+  async function removeProject(id: string) {
+    if (busy || projectBusy) return;
+    setProjectBusy(true);
+    try {
+      await deleteProject(id);
+      const remaining = projectsRef.current.filter((p) => p.id !== id);
+      if (!remaining.length) remaining.push(newProject());
+      projectsRef.current = remaining;
+      setProjects(remaining);
+      if (activeId === id) {
+        openProject(remaining[0]);
+        await persist(remaining[0]);
+        await selectProject(remaining[0].id);
+      }
+      setDeleting(null);
+    } catch {
+      tell(
+        "The project could not be deleted from browser storage. Please try again.",
+        true,
+      );
+    }
+    setProjectBusy(false);
+  }
+  function renameProject(id: string) {
+    const name = projectName.trim().slice(0, 120);
+    if (!name) return;
+    const next = projectsRef.current.map((p) =>
+      p.id === id ? { ...p, name, renamed: true, updatedAt: Date.now() } : p,
+    );
+    projectsRef.current = next;
+    setProjects(next);
+    void persist(next.find((p) => p.id === id)!);
+    setRenaming(null);
+  }
 
   const commit = useCallback((next: Drawing) => {
     setHistory((h) => pushHistory(h, next));
@@ -206,23 +379,10 @@ export default function App() {
     }
   };
   useEffect(() => {
-    try {
-      localStorage.setItem(
-        "draftline-drawing",
-        JSON.stringify({
-          title: drawing.title,
-          svg: drawing.svg,
-          notes: drawing.notes || [],
-        }),
-      );
-    } catch {
-      tell("Browser storage is full. Export your drawing to keep it.", true);
-    }
-  }, [drawing, tell]);
-  useEffect(() => {
     let cancelled = false;
-    const source = drawing.html;
+    const source = drawing?.html || "";
     setCode(source);
+    if (!source) return;
     formatDrawingSource(source).then(
       (formatted) => {
         if (!cancelled)
@@ -259,6 +419,7 @@ export default function App() {
   useEffect(
     () => () => {
       abort.current?.abort();
+      clearTimeout(streamSaveTimer.current);
       clearTimeout(noticeTimer.current);
     },
     [],
@@ -279,7 +440,9 @@ export default function App() {
       if (file.size > 8 * 1024 * 1024)
         return tell("Your sketch must be smaller than 8 MB.", true);
       const reader = new FileReader();
+      const projectId = activeIdRef.current;
       reader.onload = () => {
+        if (activeIdRef.current !== projectId) return;
         setSketch({
           data: String(reader.result),
           name: file.name || "Pasted sketch",
@@ -385,7 +548,7 @@ export default function App() {
     [tell],
   );
 
-  async function runAI(input: DrawingRequest) {
+  async function runAI(input: ProjectContext) {
     if (abort.current || pendingRef.current) return;
     if (!config.apiKey || !config.model) {
       setSettings(true);
@@ -445,7 +608,7 @@ export default function App() {
         setClarification(input);
         finishReply("complete", result.question);
       } else if (result.kind === "patch") {
-        if (!input.selectedId)
+        if (!input.selectedId || !drawing)
           throw new Error(
             "The model returned a targeted edit without a selected element. Try again.",
           );
@@ -507,44 +670,28 @@ export default function App() {
     }
   }
 
-  const generate = () => {
-    if (!sketch && !instruction.trim())
-      return tell(
-        "Upload a sketch or describe a part with its dimensions.",
-        true,
-      );
-    if (!config.apiKey || !config.model) {
-      setSettings(true);
-      return;
-    }
-    const text =
-      instruction.trim() ||
-      "Convert this sketch into a precise technical drawing. Read the handwritten dimensions and ask for anything essential that is unclear.";
-    setMessages((m) => [
-      ...m,
-      {
-        role: "user",
-        text: `${sketch ? `Sketch: ${sketch.name}\n` : ""}${text}`,
-      },
-    ]);
-    runAI({
-      config,
-      mode: "generate",
-      instruction: text,
-      image: sketch?.data,
-      notes: [],
-      history: [],
-    });
-  };
   const sendChat = () => {
-    const text = chatInput.trim();
-    if (!text || busy) return;
+    const text =
+      chatInput.trim() ||
+      (sketch
+        ? "Use this reference sketch to create or refine the drawing. Read its dimensions and ask for anything essential that is unclear."
+        : "");
+    if (!text || busy || projectBusy || !loaded) return;
     if (!config.apiKey || !config.model) {
       setSettings(true);
       return;
     }
     setChatInput("");
-    setMessages((m) => [...m, { role: "user", text }]);
+    const previousReference = [...messages]
+      .reverse()
+      .find((m) => m.reference)?.reference;
+    const reference =
+      sketch &&
+      (sketch.data !== previousReference?.data ||
+        sketch.name !== previousReference?.name)
+        ? sketch
+        : undefined;
+    setMessages((m) => [...m, { role: "user", text, reference }]);
     const context = messages
       .filter((message) => !message.status || message.status === "complete")
       .slice(-10)
@@ -557,20 +704,23 @@ export default function App() {
       });
     else
       runAI({
-        config,
-        mode: "edit",
+        mode: drawing ? "edit" : "generate",
         instruction: text,
-        svg: drawing.svg,
+        image: sketch?.data,
+        svg: drawing?.svg,
         selectedId: selectedId || undefined,
-        notes: drawing.notes || [],
+        notes: drawing?.notes || [],
         history: context,
       });
   };
   const useExample = async () => {
+    const projectId = activeIdRef.current;
+    const draft = chatInput;
     try {
       const image = new Image();
       image.src = "/example-sketch.svg";
       await image.decode();
+      if (activeIdRef.current !== projectId) return;
       const canvas = document.createElement("canvas");
       canvas.width = image.width;
       canvas.height = image.height;
@@ -579,11 +729,11 @@ export default function App() {
         name: "mounting-plate-sketch.png",
         data: canvas.toDataURL("image/png"),
       });
-      setInstruction(
-        "120 × 80 mm plate, R8 corners. Four Ø10 holes; centers 20 mm from each edge.",
+      setChatInput((current) =>
+        current === draft
+          ? "120 × 80 mm plate, R8 corners. Four Ø10 holes; centers 20 mm from each edge."
+          : current,
       );
-      commit(EXAMPLE);
-      setMessages([welcome]);
       tell(
         "Example sketch loaded. Connect your model and generate your own drawing.",
       );
@@ -592,6 +742,7 @@ export default function App() {
     }
   };
   const exportDrawing = (annotations: boolean) => {
+    if (!drawing) return;
     try {
       downloadFile(
         exportSVG(drawing.svg, annotations, drawing),
@@ -609,6 +760,13 @@ export default function App() {
     setSelectedId(null);
     setClarification(null);
   };
+
+  if (!loaded)
+    return (
+      <div className="workspace-opening" role="status">
+        <Loader2 className="spin" size={24} /> Opening your workspace…
+      </div>
+    );
 
   return (
     <div className="app">
@@ -630,11 +788,14 @@ export default function App() {
         </a>
         <span className="header-divider" />
         <div className="project-name">
-          Drawing studio <span className="beta">BETA</span>
+          <span className="project-title" title={activeProject?.name}>
+            {activeProject?.name}
+          </span>{" "}
+          <span className="beta">BETA</span>
         </div>
         <div className="header-actions">
           <span className="saved-indicator">
-            <span /> Saved locally
+            <span /> {saveStatus}
           </span>
           <button
             className="button settings-button"
@@ -649,7 +810,7 @@ export default function App() {
           <div className="export-wrap" ref={exporting}>
             <button
               className="button primary"
-              disabled={busy}
+              disabled={busy || !drawing}
               onClick={() => setExportOpen(!exportOpen)}
             >
               <ArrowDownToLine size={16} /> Export SVG <ChevronDown size={14} />
@@ -684,79 +845,118 @@ export default function App() {
             <div className="eyebrow">
               <span /> YOUR WORKSPACE
             </div>
-            <h1>Sketch to precision.</h1>
-            <p>A rough idea. A drawing that adds up.</p>
+            <h1>Room for every idea.</h1>
+            <p>Your drawings, right where you left them.</p>
           </div>
-          <div className="workflow-steps">
-            <span className="active">
-              <b>1</b> Sketch
-            </span>
-            <ChevronRight size={12} />
-            <span>
-              <b>2</b> Refine
-            </span>
-            <ChevronRight size={12} />
-            <span>
-              <b>3</b> Export
-            </span>
-          </div>
-          <section className="sketch-section">
+          <section className="projects-section" aria-label="Drawing projects">
+            <button
+              className="button primary new-drawing"
+              disabled={busy || projectBusy}
+              onClick={() => void changeProject()}
+            >
+              <Plus size={16} /> New Drawing
+            </button>
             <div className="section-title">
-              <span>Reference sketch</span>
-              <span className="optional">OPTIONAL</span>
+              <span>Your drawings</span>
+              <span className="layer-count">{projects.length}</span>
             </div>
-            <SketchUpload
-              sketch={sketch}
-              onFile={loadFile}
-              onClear={() => {
-                setSketch(null);
-                setClarification(null);
-              }}
-              disabled={busy}
-            />
-            <div className="section-title instructions-label">
-              <label htmlFor="drawing-instructions">Drawing instructions</label>
-              <CircleHelp
-                size={14}
-                aria-label="Include dimensions in millimeters"
-              />
+            <div className="project-list">
+              {projects.map((project) => (
+                <div
+                  key={project.id}
+                  className={`project-row ${activeId === project.id ? "active" : ""}`}
+                >
+                  {renaming === project.id ? (
+                    <form
+                      className="project-rename"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        renameProject(project.id);
+                      }}
+                    >
+                      <input
+                        aria-label="Project name"
+                        autoFocus
+                        maxLength={120}
+                        value={projectName}
+                        onChange={(e) => setProjectName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") setRenaming(null);
+                        }}
+                      />
+                      <button
+                        className="icon-button"
+                        aria-label="Save project name"
+                        disabled={!projectName.trim()}
+                      >
+                        <Check size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-button"
+                        aria-label="Cancel rename"
+                        onClick={() => setRenaming(null)}
+                      >
+                        <X size={14} />
+                      </button>
+                    </form>
+                  ) : (
+                    <>
+                      <button
+                        className="project-open"
+                        aria-label={`Open drawing ${project.name}`}
+                        aria-current={
+                          activeId === project.id ? "true" : undefined
+                        }
+                        disabled={busy || projectBusy}
+                        onClick={() => void changeProject(project.id)}
+                      >
+                        <FileCode2 size={16} />
+                        <span>
+                          <strong title={project.name}>{project.name}</strong>
+                          <small>
+                            {project.history.items[project.history.index]
+                              ? "Vector drawing"
+                              : "Ready for your idea"}
+                          </small>
+                        </span>
+                      </button>
+                      <button
+                        className="icon-button project-action"
+                        aria-label={`Rename drawing ${project.name}`}
+                        disabled={busy || projectBusy}
+                        onClick={() => {
+                          setRenaming(project.id);
+                          setProjectName(project.name);
+                        }}
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        className="icon-button project-action"
+                        aria-label={`Delete drawing ${project.name}`}
+                        disabled={busy || projectBusy}
+                        onClick={() => setDeleting(project.id)}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </>
+                  )}
+                  {deleting === project.id && (
+                    <div className="project-delete" role="alert">
+                      <span>Delete this drawing and its conversation?</span>
+                      <button
+                        disabled={projectBusy}
+                        onClick={() => void removeProject(project.id)}
+                      >
+                        Delete
+                      </button>
+                      <button onClick={() => setDeleting(null)}>Keep</button>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
-            <textarea
-              id="drawing-instructions"
-              className="instruction-input"
-              rows={4}
-              value={instruction}
-              disabled={busy}
-              onChange={(e) => setInstruction(e.target.value)}
-              placeholder="Add dimensions or describe your part…&#10;For example, a 100 × 60 mm plate with two Ø8 holes."
-            />
-            <div className="units-note">
-              <span>All dimensions in millimeters</span>
-              <span className="unit-tag">mm</span>
-            </div>
-            <button
-              className="button primary generate-button"
-              onClick={generate}
-              disabled={busy}
-            >
-              {busy ? (
-                <Loader2 size={17} className="spin" />
-              ) : (
-                <Sparkles size={17} />
-              )}
-              {busy ? "Creating your drawing…" : "Generate drawing"}
-              {!busy && <ArrowRight size={16} />}
-            </button>
-            <button
-              className="example-button"
-              onClick={useExample}
-              disabled={busy}
-            >
-              Just exploring?{" "}
-              <span>
-                Try an example <ArrowRight size={12} />
-              </span>
-            </button>
           </section>
           <section className="layers-section">
             <div className="section-title">
@@ -872,28 +1072,46 @@ export default function App() {
           </div>
           <div className={`canvas ${tab === "code" ? "show-code" : ""}`}>
             <div className="canvas-document-heading">
-              <span>{drawing.title}</span>
+              <span>{drawing?.title || activeProject?.name}</span>
               <span className="document-chip">
-                {drawing.summary.startsWith("Example")
-                  ? "EXAMPLE DRAWING"
-                  : "VECTOR DRAWING"}
+                {!drawing
+                  ? "NEW DRAWING"
+                  : drawing.summary.startsWith("Example")
+                    ? "EXAMPLE DRAWING"
+                    : "VECTOR DRAWING"}
               </span>
             </div>
             <div className="drawing-paper">
-              <Preview
-                ref={preview}
-                html={previewHTML}
-                onSnapshot={(snapshot) => setElements(snapshot.elements)}
-                onSelection={(id) => {
-                  if (id === null || elements.some((el) => el.id === id))
-                    setSelectedId(id);
-                }}
-                onError={(text) => tell(text, true)}
-                onZoom={setZoom}
-                selectedId={selectedId}
-                layers={layers}
-                mode={mode}
-              />
+              {drawing ? (
+                <Preview
+                  key={activeId}
+                  ref={preview}
+                  html={previewHTML}
+                  onSnapshot={(snapshot) => setElements(snapshot.elements)}
+                  onSelection={(id) => {
+                    if (id === null || elements.some((el) => el.id === id))
+                      setSelectedId(id);
+                  }}
+                  onError={(text) => tell(text, true)}
+                  onZoom={setZoom}
+                  selectedId={selectedId}
+                  layers={layers}
+                  mode={mode}
+                />
+              ) : (
+                <div className="empty-canvas">
+                  <div className="assistant-mark">
+                    <Sparkles size={24} />
+                  </div>
+                  <h2>A fresh page for your next idea.</h2>
+                  <p>
+                    Describe your part or attach a sketch
+                    <br />
+                    in the drawing assistant to get started.
+                  </p>
+                  <span>Precise vectors · millimeter scale</span>
+                </div>
+              )}
             </div>
             {tab === "code" && (
               <div className="code-panel">
@@ -914,10 +1132,13 @@ export default function App() {
                       disabled={busy || formattingCode}
                       onClick={() => {
                         const candidate = {
-                          title: drawing.title,
+                          title:
+                            drawing?.title ||
+                            activeProject?.name ||
+                            "Untitled drawing",
                           html: code,
                           summary: "Source code updated.",
-                          notes: drawing.notes,
+                          notes: drawing?.notes,
                         };
                         pendingRef.current = candidate;
                         setPending(candidate);
@@ -964,7 +1185,9 @@ export default function App() {
               <span>
                 {selected
                   ? `${selected.label} selected`
-                  : "Click any element to refine it with AI"}
+                  : drawing
+                    ? "Click any element to refine it with AI"
+                    : "Your drawing starts in the assistant"}
               </span>
             </div>
             <div className="zoom-controls">
@@ -1019,20 +1242,22 @@ export default function App() {
             </div>
           </div>
           <div className="assistant-content">
-            <div className="assistant-intro">
-              <div className="intro-art">
-                <span />
-                <span />
-                <span />
-                <Sparkles size={18} />
+            {messages.length === 1 && (
+              <div className="assistant-intro">
+                <div className="intro-art">
+                  <span />
+                  <span />
+                  <span />
+                  <Sparkles size={18} />
+                </div>
+                <h3>Your idea, engineered.</h3>
+                <p>
+                  Describe a part or a change in plain language.
+                  <br />
+                  I’ll take care of the geometry.
+                </p>
               </div>
-              <h3>Your idea, engineered.</h3>
-              <p>
-                Describe a change in plain language.
-                <br />
-                I’ll take care of the geometry.
-              </p>
-            </div>
+            )}
             {messages.map((message, index) => (
               <div className={`chat-message ${message.role}`} key={index}>
                 {message.role === "assistant" && (
@@ -1041,6 +1266,15 @@ export default function App() {
                   </div>
                 )}
                 <div className="message-content">
+                  {message.reference && (
+                    <figure className="message-reference">
+                      <img
+                        src={message.reference.data}
+                        alt={`Reference: ${message.reference.name}`}
+                      />
+                      <figcaption>{message.reference.name}</figcaption>
+                    </figure>
+                  )}
                   <span className="message-text">
                     {message.text ||
                       (message.status === "streaming"
@@ -1081,11 +1315,17 @@ export default function App() {
             {messages.length === 1 && (
               <div className="suggestions">
                 <span>TRY ASKING</span>
-                {[
-                  "Make the plate 140 mm wide",
-                  "Change all holes to Ø12 mm",
-                  "Round the corners to R12",
-                ].map((text) => (
+                {(drawing
+                  ? [
+                      "Make the plate 140 mm wide",
+                      "Change all holes to Ø12 mm",
+                      "Round the corners to R12",
+                    ]
+                  : [
+                      "Draw a 100 × 60 mm plate with R5 corners",
+                      "Create a Ø50 mm disk with a Ø10 center hole",
+                    ]
+                ).map((text) => (
                   <button key={text} onClick={() => setChatInput(text)}>
                     {text}
                     <ArrowLeft size={12} />
@@ -1143,12 +1383,30 @@ export default function App() {
             </div>
           )}
           <div className="chat-composer">
+            <SketchUpload
+              sketch={sketch}
+              onFile={loadFile}
+              onClear={() => {
+                setSketch(null);
+                setClarification(null);
+              }}
+              disabled={busy || projectBusy}
+            />
+            {messages.length === 1 && (
+              <button
+                className="example-button"
+                onClick={useExample}
+                disabled={busy || projectBusy}
+              >
+                Try an example <ArrowRight size={12} />
+              </button>
+            )}
             <div className="composer-input">
               <textarea
-                aria-label="Ask AI to edit drawing"
+                aria-label="Drawing instructions"
                 rows={3}
                 value={chatInput}
-                disabled={busy}
+                disabled={busy || projectBusy}
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
@@ -1161,7 +1419,9 @@ export default function App() {
                     ? "Add the missing dimensions…"
                     : selected
                       ? `How should I change ${selected.label.toLowerCase()}?`
-                      : "Describe a change to your drawing…"
+                      : drawing
+                        ? "Describe a change to your drawing…"
+                        : "Describe your part and dimensions in mm…"
                 }
               />
               <div className="composer-bottom">
@@ -1172,7 +1432,8 @@ export default function App() {
                     </>
                   ) : (
                     <>
-                      <Layers2 size={11} /> Whole drawing
+                      <Layers2 size={11} />{" "}
+                      {drawing ? "Whole drawing" : "New drawing"}
                     </>
                   )}
                 </span>
@@ -1180,7 +1441,9 @@ export default function App() {
                   aria-label={
                     busy ? "Stop generation" : "Send drawing instruction"
                   }
-                  disabled={!busy && !chatInput.trim()}
+                  disabled={
+                    projectBusy || (!busy && !chatInput.trim() && !sketch)
+                  }
                   onClick={busy ? cancelGeneration : sendChat}
                 >
                   {busy ? (
@@ -1240,18 +1503,32 @@ export default function App() {
         <ModelSettings
           config={config}
           onClose={() => setSettings(false)}
+          onClear={() => {
+            try {
+              localStorage.removeItem("draftline-model");
+              setConfig({ ...defaultConfig });
+              setSettings(false);
+              tell("Saved model settings cleared.");
+            } catch {
+              tell(
+                "Saved settings could not be cleared. Please check browser storage access.",
+                true,
+              );
+            }
+          }}
           onSave={(next) => {
             setConfig(next);
             setSettings(false);
             try {
-              localStorage.setItem(
-                "draftline-model",
-                JSON.stringify({ baseURL: next.baseURL, model: next.model }),
-              );
+              localStorage.setItem("draftline-model", JSON.stringify(next));
             } catch {
-              /* Settings remain in memory. */
+              tell(
+                "Settings work for this session, but browser storage could not save them.",
+                true,
+              );
+              return;
             }
-            tell("Model settings saved for this session.");
+            tell("Model settings saved in this browser.");
           }}
         />
       )}
@@ -1279,8 +1556,9 @@ export default function App() {
               1. Connect an OpenAI-compatible vision model in Model settings.
             </p>
             <p>
-              2. Upload, drop, or paste a sketch. Add essential dimensions, then
-              generate. The assistant asks about missing measurements.
+              2. Start a New Drawing. Attach or paste a sketch in the assistant,
+              add essential dimensions, and send. Reply there to clarify
+              measurements.
             </p>
             <p>
               3. Click a shape and describe your change. Clear selection to edit
@@ -1291,9 +1569,9 @@ export default function App() {
               millimeter scale, with page margins for annotations.
             </p>
             <small>
-              Drawings are saved locally. Sketches and keys are kept in memory.
-              Sending a request shares its sketch and drawing with your selected
-              provider.
+              Projects, conversations, sketches and model settings are saved in
+              this browser. Sending a request shares its sketch and drawing with
+              your selected provider.
             </small>
             <button className="button primary" onClick={() => setHelp(false)}>
               Let’s draw <ArrowRight size={15} />

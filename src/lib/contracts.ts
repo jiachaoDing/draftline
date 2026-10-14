@@ -63,6 +63,7 @@ export type ChatMessage = {
   status?: "streaming" | "validating" | "complete" | "cancelled" | "error";
   code?: string;
   received?: number;
+  reference?: { data: string; name: string };
 };
 
 export const drawingRequestSchema = z.object({

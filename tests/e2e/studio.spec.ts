@@ -158,14 +158,17 @@ test("sketch → clarification → generated code → targeted edit → undo/red
   await expect(
     page.getByText("1 models found.", { exact: false }),
   ).toBeVisible();
-  await page.getByLabel("Model", { exact: true }).fill("vision-test");
+  await page.getByLabel("Model", { exact: true }).click();
+  await page.getByRole("option", { name: "vision-test", exact: true }).click();
   await page.getByRole("button", { name: "Test connection" }).click();
   await expect(
     page.getByText("Connected. Your selected model responded successfully."),
   ).toBeVisible();
   await page.getByRole("button", { name: "Save settings" }).click();
 
-  await page.getByRole("button", { name: "Just exploring?" }).click();
+  await page.getByRole("button", { name: "New Drawing", exact: true }).click();
+  await expect(frame.locator("#plate-outline")).toHaveCount(0);
+  await page.getByRole("button", { name: "Try an example" }).click();
   await expect(page.getByAltText("Uploaded sketch")).toBeVisible();
   await page
     .getByLabel("Drawing instructions")
@@ -173,13 +176,13 @@ test("sketch → clarification → generated code → targeted edit → undo/red
       "Draw this plate with missing width. Material: 3 mm stainless steel. Deburr edges.",
     );
   await page
-    .getByRole("button", { name: "Generate drawing", exact: true })
+    .getByRole("button", { name: "Send drawing instruction", exact: true })
     .click();
   await expect(
     page.getByText("What is the plate width in millimeters?"),
   ).toBeVisible();
   await page
-    .getByLabel("Ask AI to edit drawing")
+    .getByLabel("Drawing instructions")
     .fill("120 mm wide, 80 mm high.");
   await page.getByRole("button", { name: "Send drawing instruction" }).click();
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "6");
@@ -190,7 +193,9 @@ test("sketch → clarification → generated code → targeted edit → undo/red
     "1:1",
   );
   await expect(
-    page.getByText("Generated test plate", { exact: true }),
+    page
+      .locator(".canvas-document-heading")
+      .getByText("Generated test plate", { exact: true }),
   ).toBeVisible();
   expect(
     await page.evaluate(() => localStorage.getItem("sandbox-leak")),
@@ -210,7 +215,7 @@ test("sketch → clarification → generated code → targeted edit → undo/red
     page.getByText("SELECTED ELEMENT", { exact: true }),
   ).toBeVisible();
   await page
-    .getByLabel("Ask AI to edit drawing")
+    .getByLabel("Drawing instructions")
     .fill("Change this hole to Ø14 mm.");
   await page.getByRole("button", { name: "Send drawing instruction" }).click();
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "7");
@@ -262,14 +267,24 @@ test("sketch → clarification → generated code → targeted edit → undo/red
   const stored = await page.evaluate(() =>
     JSON.stringify({ ...localStorage, ...sessionStorage }),
   );
-  expect(stored).not.toContain("browser-test-key");
+  expect(JSON.parse(stored)["draftline-model"]).toContain("browser-test-key");
+  expect(page.url()).not.toContain("browser-test-key");
+  await expect(page.locator(".saved-indicator")).toContainText("Saved locally");
   await page.reload();
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "7");
   await expect(frame.locator("#presentation")).toContainText(
     "Material: 3 mm stainless steel.",
   );
   await page.getByRole("button", { name: "Model settings" }).click();
-  await expect(page.getByLabel("API key", { exact: true })).toHaveValue("");
+  await expect(page.getByLabel("API key", { exact: true })).toHaveValue(
+    "browser-test-key",
+  );
+  await expect(page.getByLabel("Base URL", { exact: true })).toHaveValue(
+    baseURL,
+  );
+  await expect(page.getByLabel("Model", { exact: true })).toHaveValue(
+    "vision-test",
+  );
 });
 
 test("upload and clipboard paste accept images; invalid files fail safely", async ({
@@ -379,7 +394,7 @@ test("mobile layout keeps core controls within viewport", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
   await expect(
-    page.getByRole("button", { name: "Generate drawing", exact: true }),
+    page.getByRole("button", { name: "Send drawing instruction", exact: true }),
   ).toBeVisible();
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
@@ -451,12 +466,310 @@ async function connectModel(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: "Save settings" }).click();
 }
 
+test("projects retain drawings, conversations, references and isolated AI context", async ({
+  page,
+}) => {
+  await connectModel(page);
+  await page.getByRole("button", { name: "New Drawing", exact: true }).click();
+  await expect(
+    page.getByText("A fresh page for your next idea."),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Export SVG" })).toBeDisabled();
+  await page
+    .getByRole("button", {
+      name: "Rename drawing Untitled drawing",
+      exact: true,
+    })
+    .click();
+  await page.getByLabel("Project name", { exact: true }).fill("Bracket A");
+  await page.getByRole("button", { name: "Save project name" }).click();
+  await page.getByRole("button", { name: "Try an example" }).click();
+  await expect(page.getByAltText("Uploaded sketch")).toBeVisible();
+  await page
+    .getByLabel("Drawing instructions")
+    .fill("Project A only: missing width");
+  await page.getByRole("button", { name: "Send drawing instruction" }).click();
+  await expect(
+    page.getByText("What is the plate width in millimeters?"),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "New Drawing", exact: true }).click();
+  await expect(
+    page.getByText("What is the plate width in millimeters?"),
+  ).toHaveCount(0);
+  await expect(page.getByAltText("Uploaded sketch")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Undo", exact: true }),
+  ).toBeDisabled();
+  await page
+    .getByLabel("Drawing instructions")
+    .fill("Project B only: 120 × 80 mm plate");
+  await page.getByRole("button", { name: "Send drawing instruction" }).click();
+  const frame = page.frameLocator('iframe[title="Technical drawing preview"]');
+  await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "6");
+  const requestB = JSON.stringify(requests.at(-1));
+  expect(requestB).toContain("Project B only");
+  expect(requestB).not.toContain("Project A only");
+  expect(requestB).not.toContain("Current SVG");
+  expect(requestB).not.toContain("image_url");
+  await page
+    .getByRole("button", { name: "Open drawing Bracket A", exact: true })
+    .click();
+  await expect(
+    page.getByText("What is the plate width in millimeters?"),
+  ).toBeVisible();
+  await expect(page.getByAltText("Uploaded sketch")).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByText("What is the plate width in millimeters?"),
+  ).toBeVisible();
+  await expect(page.getByAltText("Uploaded sketch")).toBeVisible();
+  await page.getByLabel("Drawing instructions").fill("120 mm wide, 80 mm high");
+  await page.getByRole("button", { name: "Send drawing instruction" }).click();
+  await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "6");
+  expect(JSON.stringify(requests.at(-1))).toContain("User clarification:");
+  expect(JSON.stringify(requests.at(-1))).not.toContain("Project B only");
+  await expect(
+    page.getByRole("button", { name: "Open drawing Bracket A", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", {
+      name: "Delete drawing Generated test plate",
+      exact: true,
+    })
+    .click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(
+    page.getByRole("button", {
+      name: "Open drawing Generated test plate",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await page.reload();
+  await expect(
+    page.getByRole("button", {
+      name: "Open drawing Generated test plate",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "6");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.screenshot({
+    path: ".generated/draftline-projects.png",
+    fullPage: true,
+  });
+});
+
+test("settings update and clear persist without credentials in requests URLs or drawing context", async ({
+  page,
+}) => {
+  const urls: string[] = [];
+  page.on("request", (request) => urls.push(request.url()));
+  await connectModel(page);
+  await page.getByRole("button", { name: "Model settings" }).click();
+  await page.getByLabel("API key", { exact: true }).fill("updated-local-key");
+  await page.getByLabel("Model", { exact: true }).fill("updated-model");
+  await page.getByRole("button", { name: "Save settings" }).click();
+  await page.reload();
+  await page.getByRole("button", { name: "Model settings" }).click();
+  await expect(page.getByLabel("API key", { exact: true })).toHaveValue(
+    "updated-local-key",
+  );
+  await expect(page.getByLabel("Model", { exact: true })).toHaveValue(
+    "updated-model",
+  );
+  await page.getByRole("button", { name: "Clear saved settings" }).click();
+  expect(
+    await page.evaluate(() => localStorage.getItem("draftline-model")),
+  ).toBeNull();
+  await page.reload();
+  await page.getByRole("button", { name: "Model settings" }).click();
+  await expect(page.getByLabel("API key", { exact: true })).toHaveValue("");
+  await expect(page.getByLabel("Model", { exact: true })).toHaveValue("");
+  await expect(page.getByLabel("Base URL", { exact: true })).toHaveValue(
+    "https://api.openai.com/v1",
+  );
+  expect(urls.join(" ")).not.toMatch(/browser-test-key|updated-local-key/);
+});
+
+test("projects and large references survive a full browser restart", async ({
+  playwright,
+}, testInfo) => {
+  test.setTimeout(60_000);
+  const profile = testInfo.outputPath("browser-profile");
+  const options = {
+    channel: process.env.PLAYWRIGHT_CHANNEL || "msedge",
+    headless: true,
+    baseURL: "http://127.0.0.1:3000",
+    viewport: { width: 1440, height: 900 },
+  };
+  let context = await playwright.chromium.launchPersistentContext(
+    profile,
+    options,
+  );
+  try {
+    let page = await context.newPage();
+    await connectModel(page);
+    await page
+      .getByRole("button", { name: "New Drawing", exact: true })
+      .click();
+    await page
+      .getByRole("button", {
+        name: "Rename drawing Untitled drawing",
+        exact: true,
+      })
+      .click();
+    await page
+      .getByLabel("Project name", { exact: true })
+      .fill("Restart project");
+    await page.getByRole("button", { name: "Save project name" }).click();
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jWZkAAAAASUVORK5CYII=",
+      "base64",
+    );
+    await page.getByLabel("Upload sketch image").setInputFiles({
+      name: "large-reference.png",
+      mimeType: "image/png",
+      buffer: Buffer.concat([png, Buffer.alloc(6 * 1024 * 1024)]),
+    });
+    await page
+      .getByLabel("Drawing instructions")
+      .fill("Restart project: 120 × 80 mm plate");
+    await page
+      .getByRole("button", { name: "Send drawing instruction" })
+      .click();
+    await expect(
+      page
+        .frameLocator('iframe[title="Technical drawing preview"]')
+        .locator("#hole-top-left"),
+    ).toHaveAttribute("r", "6");
+    await page
+      .getByLabel("Drawing instructions")
+      .fill("Keep this unsent draft");
+    await page.getByLabel("Show dimensions").uncheck();
+    await expect(page.locator(".saved-indicator")).toHaveText("Saved locally");
+    const projectData = await page.evaluate(async () => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const req = indexedDB.open("draftline-projects", 1);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      try {
+        return await new Promise<string>((resolve, reject) => {
+          const req = db
+            .transaction("projects")
+            .objectStore("projects")
+            .getAll();
+          req.onsuccess = () => resolve(JSON.stringify(req.result));
+          req.onerror = () => reject(req.error);
+        });
+      } finally {
+        db.close();
+      }
+    });
+    expect(projectData).not.toContain("browser-test-key");
+    await context.close();
+    context = await playwright.chromium.launchPersistentContext(
+      profile,
+      options,
+    );
+    page = await context.newPage();
+    await page.goto("/");
+    await expect(
+      page.getByRole("button", {
+        name: "Open drawing Restart project",
+        exact: true,
+      }),
+    ).toHaveAttribute("aria-current", "true");
+    await expect(page.getByAltText("Uploaded sketch")).toBeVisible();
+    await expect(
+      page.getByAltText("Reference: large-reference.png"),
+    ).toBeVisible();
+    await expect(page.getByLabel("Drawing instructions")).toHaveValue(
+      "Keep this unsent draft",
+    );
+    await expect(page.getByLabel("Show dimensions")).not.toBeChecked();
+    const frame = page.frameLocator(
+      'iframe[title="Technical drawing preview"]',
+    );
+    await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "6");
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await expect(
+      page.getByText("A fresh page for your next idea."),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Redo", exact: true }).click();
+    await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "6");
+    await page.getByRole("button", { name: "Model settings" }).click();
+    await expect(page.getByLabel("API key", { exact: true })).toHaveValue(
+      "browser-test-key",
+    );
+    await page.getByRole("button", { name: "Close model settings" }).click();
+    await page
+      .getByRole("button", {
+        name: "Delete drawing Restart project",
+        exact: true,
+      })
+      .click();
+    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    await expect(
+      page.getByRole("button", {
+        name: "Open drawing Restart project",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await page.getByRole("button", { name: /Delete drawing/ }).click();
+    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    await expect(
+      page.getByText("A fresh page for your next idea."),
+    ).toBeVisible();
+    await page.reload();
+    await expect(
+      page.getByRole("button", {
+        name: "Open drawing Untitled drawing",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("A fresh page for your next idea."),
+    ).toBeVisible();
+    await page.screenshot({
+      path: ".generated/draftline-new-drawing.png",
+      fullPage: true,
+    });
+  } finally {
+    await context.close();
+  }
+});
+
+test("storage failures keep the assistant usable and report unsaved work", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    IDBFactory.prototype.open = () => {
+      throw new DOMException("Storage unavailable", "SecurityError");
+    };
+  });
+  await connectModel(page);
+  await expect(page.locator(".saved-indicator")).toContainText("Not saved");
+  await page
+    .getByLabel("Drawing instructions")
+    .fill("Draw a 120 × 80 mm plate");
+  await page.getByRole("button", { name: "Send drawing instruction" }).click();
+  await expect(
+    page
+      .frameLocator('iframe[title="Technical drawing preview"]')
+      .locator("#hole-top-left"),
+  ).toHaveAttribute("r", "6");
+  await expect(page.locator(".saved-indicator")).toContainText("Not saved");
+  await expect(page.getByRole("alert")).toContainText("Browser storage");
+  await expect(page.getByRole("button", { name: "Export SVG" })).toBeEnabled();
+});
+
 test("ordinary chat is visible before the provider completes its stream", async ({
   page,
 }) => {
   await connectModel(page);
   await page
-    .getByLabel("Ask AI to edit drawing")
+    .getByLabel("Drawing instructions")
     .fill("streaming conversation test");
   await page.getByRole("button", { name: "Send drawing instruction" }).click();
   await expect(page.getByText("This plate", { exact: true })).toBeVisible();
@@ -484,9 +797,7 @@ test("received HTML remains plain text until completion and sandbox validation",
   page,
 }) => {
   await connectModel(page);
-  await page
-    .getByLabel("Ask AI to edit drawing")
-    .fill("streaming drawing test");
+  await page.getByLabel("Drawing instructions").fill("streaming drawing test");
   await page.getByRole("button", { name: "Send drawing instruction" }).click();
   await expect(
     page.getByText("Preparing a revised plate.", { exact: true }),
@@ -511,7 +822,7 @@ test("stop generation closes the provider connection and keeps the drawing", asy
   page,
 }) => {
   await connectModel(page);
-  await page.getByLabel("Ask AI to edit drawing").fill("cancel streaming test");
+  await page.getByLabel("Drawing instructions").fill("cancel streaming test");
   await page.getByRole("button", { name: "Send drawing instruction" }).click();
   await expect(
     page.getByText("Working on your update", { exact: true }),
@@ -527,6 +838,20 @@ test("stop generation closes the provider connection and keeps the drawing", asy
   await expect(
     page.getByRole("button", { name: "Undo", exact: true }),
   ).toBeDisabled();
+  await page.reload();
+  await expect(page.getByText("Stopped", { exact: true })).toBeVisible();
+  await page
+    .getByLabel("Drawing instructions")
+    .fill("Make the plate 120 mm wide");
+  await page.getByRole("button", { name: "Send drawing instruction" }).click();
+  await expect(
+    page
+      .frameLocator('iframe[title="Technical drawing preview"]')
+      .locator("#hole-top-left"),
+  ).toHaveAttribute("r", "6");
+  expect(JSON.stringify(requests.at(-1))).not.toContain(
+    "Working on your update",
+  );
 });
 
 test("a prematurely ended stream shows a connection error without applying partial results", async ({
@@ -534,7 +859,7 @@ test("a prematurely ended stream shows a connection error without applying parti
 }) => {
   await connectModel(page);
   await page
-    .getByLabel("Ask AI to edit drawing")
+    .getByLabel("Drawing instructions")
     .fill("disconnect streaming test");
   await page.getByRole("button", { name: "Send drawing instruction" }).click();
   await expect(page.getByRole("alert")).toContainText(

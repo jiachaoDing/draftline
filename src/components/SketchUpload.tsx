@@ -71,7 +71,7 @@ export default function SketchUpload({
           <div className="upload-icon">
             <ImagePlus size={24} strokeWidth={1.6} />
           </div>
-          <strong>Drop your sketch here</strong>
+          <strong>Attach reference sketch</strong>
           <span>
             or <b>browse files</b> to upload
           </span>
