@@ -36,6 +36,12 @@ import {
   X,
 } from "lucide-react";
 import ModelSettings from "./components/ModelSettings";
+import RequestUserInput from "./components/RequestUserInput";
+import {
+  createQuestionnaire,
+  userInputArgsSchema,
+  type UserInputResponse,
+} from "./lib/user-input";
 import SketchUpload, { type Sketch } from "./components/SketchUpload";
 import { Preview, type PreviewHandle } from "./components/Preview";
 import {
@@ -66,6 +72,7 @@ import type {
   Drawing,
   ElementInfo,
   Snapshot,
+  PendingUserInput,
 } from "./lib/contracts";
 
 const CodeEditor = lazy(() => import("./components/CodeEditor"));
@@ -119,6 +126,7 @@ export default function App() {
   const [clarification, setClarification] = useState<ProjectContext | null>(
     null,
   );
+  const [userInput, setUserInput] = useState<PendingUserInput | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [tab, setTab] = useState<"drawing" | "code">("drawing");
   const [code, setCode] = useState("");
@@ -148,6 +156,7 @@ export default function App() {
     setSketch(project.sketch);
     setChatInput(project.chatInput);
     setClarification(project.clarification);
+    setUserInput(project.userInput);
     setLayers(project.layers);
     setSelectedId(null);
     setElements([]);
@@ -222,7 +231,10 @@ export default function App() {
       messages,
       sketch,
       chatInput,
-      clarification,
+      clarification: clarification
+        ? { ...clarification, toolTurns: clarification.toolTurns || [] }
+        : null,
+      userInput,
       layers,
       name: current.renamed ? current.name : drawing?.title || current.name,
       updatedAt: Date.now(),
@@ -257,6 +269,7 @@ export default function App() {
     sketch,
     chatInput,
     clarification,
+    userInput,
     layers,
     drawing,
     persist,
@@ -347,6 +360,7 @@ export default function App() {
     setElements([]);
     setClarification(null);
     setTab("drawing");
+    setUserInput(null);
   }, []);
   const finishReply = useCallback(
     (status: ChatMessage["status"], text?: string, keepCode = false) => {
@@ -460,7 +474,7 @@ export default function App() {
   );
   useEffect(() => {
     const paste = (event: ClipboardEvent) => {
-      if (busy || settings) return;
+      if (busy || settings || userInput) return;
       const image = [...(event.clipboardData?.items || [])]
         .find((item) => item.type.startsWith("image/"))
         ?.getAsFile();
@@ -471,7 +485,7 @@ export default function App() {
     };
     document.addEventListener("paste", paste);
     return () => document.removeEventListener("paste", paste);
-  }, [loadFile, busy, settings]);
+  }, [loadFile, busy, settings, userInput]);
   useEffect(() => {
     const keyboard = (event: KeyboardEvent) => {
       if (
@@ -479,6 +493,7 @@ export default function App() {
           "input,textarea,dialog,[contenteditable]",
         ) ||
         busy ||
+        userInput ||
         pending
       )
         return;
@@ -502,7 +517,7 @@ export default function App() {
     };
     document.addEventListener("keydown", keyboard);
     return () => document.removeEventListener("keydown", keyboard);
-  }, [busy, pending]);
+  }, [busy, pending, userInput]);
 
   const onSnapshot = useCallback(
     (snapshot: Snapshot) => {
@@ -591,7 +606,7 @@ export default function App() {
     };
     try {
       const result = await requestDrawing(
-        { ...input, config },
+        { ...input, config, toolTurns: input.toolTurns || [] },
         controller.signal,
         (text) => {
           source += text;
@@ -602,9 +617,32 @@ export default function App() {
       if (updateFrame !== undefined) cancelAnimationFrame(updateFrame);
       flush();
       controller.signal.throwIfAborted();
-      if (result.kind === "message") {
+      if (result.kind === "request_user_input") {
+        const args = userInputArgsSchema.parse(
+          JSON.parse(result.calls[0].arguments),
+        );
+        setUserInput({
+          context: { ...input, toolTurns: input.toolTurns || [] },
+          request: result,
+          callIndex: 0,
+          responses: [],
+          state: createQuestionnaire(args),
+        });
+        finishReply(
+          "complete",
+          result.calls
+            .flatMap((call) =>
+              userInputArgsSchema
+                .parse(JSON.parse(call.arguments))
+                .questions.map((q) => q.question),
+            )
+            .join("\n"),
+        );
+      } else if (result.kind === "message") {
+        setUserInput(null);
         finishReply("complete", result.message);
       } else if (result.kind === "clarification") {
+        setUserInput(null);
         setClarification(input);
         finishReply("complete", result.question);
       } else if (result.kind === "patch") {
@@ -643,6 +681,7 @@ export default function App() {
       if (updateFrame !== undefined) cancelAnimationFrame(updateFrame);
       flush(true);
       if (clarification) setClarification(input);
+      if (userInput) setUserInput(userInput);
       if ((error as Error).name === "AbortError") {
         finishReply("cancelled", undefined, true);
         tell("Generation stopped. Your drawing is unchanged.");
@@ -670,13 +709,78 @@ export default function App() {
     }
   }
 
+  const submitUserInput = (response: UserInputResponse) => {
+    if (!userInput || busy || projectBusy) return;
+    if (!config.apiKey || !config.model) {
+      setSettings(true);
+      return;
+    }
+    const responses = [...userInput.responses, response];
+    if (userInput.callIndex + 1 < userInput.request.calls.length) {
+      const callIndex = userInput.callIndex + 1;
+      const args = userInputArgsSchema.parse(
+        JSON.parse(userInput.request.calls[callIndex].arguments),
+      );
+      setUserInput({
+        ...userInput,
+        callIndex,
+        responses,
+        state: createQuestionnaire(args),
+      });
+      return;
+    }
+    const toolTurns = [
+      ...userInput.context.toolTurns,
+      {
+        content: userInput.request.content,
+        calls: userInput.request.calls,
+        responses,
+      },
+    ];
+    if (toolTurns.length > 12) {
+      tell(
+        "This drawing has reached the clarification limit. Cancel questions and start a new instruction.",
+        true,
+      );
+      return;
+    }
+    const answerId = `tool-answer:${userInput.request.calls.map((call) => call.id).join(":")}`;
+    setMessages((messages) => [
+      ...messages.filter((message) => message.id !== answerId),
+      {
+        id: answerId,
+        role: "user",
+        text: userInput.request.calls
+          .flatMap((call, i) =>
+            userInputArgsSchema
+              .parse(JSON.parse(call.arguments))
+              .questions.map(
+                (q) =>
+                  `${q.question}\n${responses[i].answers[q.id].answers.join("\n") || "Unanswered"}`,
+              ),
+          )
+          .join("\n\n"),
+      },
+    ]);
+    // Retain the exact pending request until continuation succeeds, so a failed or
+    // stopped stream can be retried with the same tool IDs and original drawing.
+    void runAI({ ...userInput.context, toolTurns });
+  };
+  const cancelUserInput = () => {
+    setUserInput(null);
+    setMessages((messages) => [
+      ...messages,
+      { role: "assistant", text: "Questions cancelled.", status: "cancelled" },
+    ]);
+  };
+
   const sendChat = () => {
     const text =
       chatInput.trim() ||
       (sketch
         ? "Use this reference sketch to create or refine the drawing. Read its dimensions and ask for anything essential that is unclear."
         : "");
-    if (!text || busy || projectBusy || !loaded) return;
+    if (!text || busy || projectBusy || !loaded || userInput) return;
     if (!config.apiKey || !config.model) {
       setSettings(true);
       return;
@@ -710,6 +814,7 @@ export default function App() {
         svg: drawing?.svg,
         selectedId: selectedId || undefined,
         notes: drawing?.notes || [],
+        toolTurns: [],
         history: context,
       });
   };
@@ -1045,7 +1150,7 @@ export default function App() {
                 className="icon-button"
                 aria-label="Undo"
                 title="Undo (Ctrl Z)"
-                disabled={history.index === 0 || busy}
+                disabled={history.index === 0 || busy || !!userInput}
                 onClick={() => navigate(-1)}
               >
                 <Undo2 size={17} />
@@ -1054,7 +1159,11 @@ export default function App() {
                 className="icon-button"
                 aria-label="Redo"
                 title="Redo (Ctrl Shift Z)"
-                disabled={history.index === history.items.length - 1 || busy}
+                disabled={
+                  history.index === history.items.length - 1 ||
+                  busy ||
+                  !!userInput
+                }
                 onClick={() => navigate(1)}
               >
                 <Redo2 size={17} />
@@ -1122,14 +1231,14 @@ export default function App() {
                   <div className="code-actions">
                     <button
                       className="button small"
-                      disabled={busy || formattingCode}
+                      disabled={busy || formattingCode || !!userInput}
                       onClick={formatCode}
                     >
                       {formattingCode ? "Formatting…" : "Format"}
                     </button>
                     <button
                       className="button small primary"
-                      disabled={busy || formattingCode}
+                      disabled={busy || formattingCode || !!userInput}
                       onClick={() => {
                         const candidate = {
                           title:
@@ -1160,7 +1269,7 @@ export default function App() {
                   <CodeEditor
                     value={code}
                     onChange={setCode}
-                    disabled={busy || formattingCode}
+                    disabled={busy || formattingCode || !!userInput}
                   />
                 </Suspense>
                 <div className="code-note">
@@ -1345,7 +1454,7 @@ export default function App() {
             )}
             <div ref={chatEnd} />
           </div>
-          {selected && (
+          {selected && !userInput && (
             <div className="selection-card">
               <div className="selection-heading">
                 <span>
@@ -1376,97 +1485,115 @@ export default function App() {
               <p>Changes apply to this element and its dimensions.</p>
             </div>
           )}
-          {clarification && (
-            <div className="clarification-banner">
-              <CircleHelp size={15} /> A measurement is needed. Reply below to
-              continue.
-            </div>
-          )}
-          <div className="chat-composer">
-            <SketchUpload
-              sketch={sketch}
-              onFile={loadFile}
-              onClear={() => {
-                setSketch(null);
-                setClarification(null);
-              }}
+          {userInput && !busy ? (
+            <RequestUserInput
+              key={`${activeId}:${userInput.request.calls[userInput.callIndex].id}`}
+              args={userInputArgsSchema.parse(
+                JSON.parse(
+                  userInput.request.calls[userInput.callIndex].arguments,
+                ),
+              )}
+              state={userInput.state}
               disabled={busy || projectBusy}
+              onChange={(state) => setUserInput({ ...userInput, state })}
+              onSubmit={submitUserInput}
+              onCancel={cancelUserInput}
             />
-            {messages.length === 1 && (
-              <button
-                className="example-button"
-                onClick={useExample}
-                disabled={busy || projectBusy}
-              >
-                Try an example <ArrowRight size={12} />
-              </button>
-            )}
-            <div className="composer-input">
-              <textarea
-                aria-label="Drawing instructions"
-                rows={3}
-                value={chatInput}
-                disabled={busy || projectBusy}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    sendChat();
-                  }
-                }}
-                placeholder={
-                  clarification
-                    ? "Add the missing dimensions…"
-                    : selected
-                      ? `How should I change ${selected.label.toLowerCase()}?`
-                      : drawing
-                        ? "Describe a change to your drawing…"
-                        : "Describe your part and dimensions in mm…"
-                }
-              />
-              <div className="composer-bottom">
-                <span>
-                  {selected ? (
-                    <>
-                      <MousePointer2 size={11} /> Selected element
-                    </>
-                  ) : (
-                    <>
-                      <Layers2 size={11} />{" "}
-                      {drawing ? "Whole drawing" : "New drawing"}
-                    </>
-                  )}
-                </span>
-                <button
-                  aria-label={
-                    busy ? "Stop generation" : "Send drawing instruction"
-                  }
-                  disabled={
-                    projectBusy || (!busy && !chatInput.trim() && !sketch)
-                  }
-                  onClick={busy ? cancelGeneration : sendChat}
-                >
-                  {busy ? (
-                    <Square size={13} fill="currentColor" />
-                  ) : (
-                    <Send size={15} />
-                  )}
-                </button>
+          ) : (
+            <>
+              {clarification && (
+                <div className="clarification-banner">
+                  <CircleHelp size={15} /> A measurement is needed. Reply below
+                  to continue.
+                </div>
+              )}
+              <div className="chat-composer">
+                <SketchUpload
+                  sketch={sketch}
+                  onFile={loadFile}
+                  onClear={() => {
+                    setSketch(null);
+                    setClarification(null);
+                  }}
+                  disabled={busy || projectBusy}
+                />
+                {messages.length === 1 && (
+                  <button
+                    className="example-button"
+                    onClick={useExample}
+                    disabled={busy || projectBusy}
+                  >
+                    Try an example <ArrowRight size={12} />
+                  </button>
+                )}
+                <div className="composer-input">
+                  <textarea
+                    aria-label="Drawing instructions"
+                    rows={3}
+                    value={chatInput}
+                    disabled={busy || projectBusy}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        sendChat();
+                      }
+                    }}
+                    placeholder={
+                      clarification
+                        ? "Add the missing dimensions…"
+                        : selected
+                          ? `How should I change ${selected.label.toLowerCase()}?`
+                          : drawing
+                            ? "Describe a change to your drawing…"
+                            : "Describe your part and dimensions in mm…"
+                    }
+                  />
+                  <div className="composer-bottom">
+                    <span>
+                      {selected ? (
+                        <>
+                          <MousePointer2 size={11} /> Selected element
+                        </>
+                      ) : (
+                        <>
+                          <Layers2 size={11} />{" "}
+                          {drawing ? "Whole drawing" : "New drawing"}
+                        </>
+                      )}
+                    </span>
+                    <button
+                      aria-label={
+                        busy ? "Stop generation" : "Send drawing instruction"
+                      }
+                      disabled={
+                        projectBusy || (!busy && !chatInput.trim() && !sketch)
+                      }
+                      onClick={busy ? cancelGeneration : sendChat}
+                    >
+                      {busy ? (
+                        <Square size={13} fill="currentColor" />
+                      ) : (
+                        <Send size={15} />
+                      )}
+                    </button>
+                  </div>
+                </div>
+                <div className="assistant-model">
+                  <span
+                    className={`connection-dot ${config.apiKey && config.model ? "connected" : ""}`}
+                  />
+                  <button onClick={() => setSettings(true)}>
+                    {config.apiKey && config.model
+                      ? config.model
+                      : "Connect your AI model"}
+                    <ChevronDown size={11} />
+                  </button>
+                  <span>↵ to send</span>
+                </div>
               </div>
-            </div>
-            <div className="assistant-model">
-              <span
-                className={`connection-dot ${config.apiKey && config.model ? "connected" : ""}`}
-              />
-              <button onClick={() => setSettings(true)}>
-                {config.apiKey && config.model
-                  ? config.model
-                  : "Connect your AI model"}
-                <ChevronDown size={11} />
-              </button>
-              <span>↵ to send</span>
-            </div>
-          </div>
+            </>
+          )}
         </aside>
       </main>
       {pending && (

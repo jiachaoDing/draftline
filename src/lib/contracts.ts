@@ -1,4 +1,11 @@
 import { z } from "zod";
+import {
+  userInputCallSchema,
+  userInputTurnSchema,
+  userInputResponseSchema,
+  questionnaireSchema,
+  userInputArgsSchema,
+} from "./user-input";
 
 export const configSchema = z.object({
   baseURL: z.string().min(1).max(2048),
@@ -41,6 +48,16 @@ export const resultSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 export type AIResult = z.infer<typeof resultSchema>;
+export const userInputResultSchema = z
+  .object({
+    kind: z.literal("request_user_input"),
+    content: z.string().max(16000),
+    calls: z.array(userInputCallSchema).min(1).max(4),
+  })
+  .refine(
+    ({ calls }) => new Set(calls.map((call) => call.id)).size === calls.length,
+  );
+export type DrawingResult = AIResult | z.infer<typeof userInputResultSchema>;
 export type Drawing = {
   title: string;
   html: string;
@@ -78,6 +95,7 @@ export const drawingRequestSchema = z.object({
   svg: z.string().max(600_000).optional(),
   selectedId: z.string().max(200).optional(),
   notes: notesSchema,
+  toolTurns: z.array(userInputTurnSchema).max(12).default([]),
   history: z
     .array(
       z.object({
@@ -89,3 +107,31 @@ export const drawingRequestSchema = z.object({
     .default([]),
 });
 export type DrawingRequest = z.infer<typeof drawingRequestSchema>;
+export const pendingUserInputSchema = z
+  .object({
+    context: drawingRequestSchema.omit({ config: true }),
+    request: userInputResultSchema,
+    callIndex: z.number().int().min(0),
+    responses: z.array(userInputResponseSchema).max(4),
+    state: questionnaireSchema,
+  })
+  .refine((pending) => {
+    if (
+      pending.callIndex >= pending.request.calls.length ||
+      pending.responses.length !== pending.callIndex
+    )
+      return false;
+    const args = userInputArgsSchema.parse(
+      JSON.parse(pending.request.calls[pending.callIndex].arguments),
+    );
+    return (
+      pending.state.answers.length === args.questions.length &&
+      pending.state.index < args.questions.length &&
+      pending.state.answers.every(
+        (answer, i) =>
+          answer.selected === null ||
+          answer.selected <= args.questions[i].options.length,
+      )
+    );
+  });
+export type PendingUserInput = z.infer<typeof pendingUserInputSchema>;

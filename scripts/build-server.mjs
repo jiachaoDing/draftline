@@ -4,6 +4,9 @@ import path from "node:path";
 import { PAGE_CSP } from "../server/security.ts";
 
 const assets = {};
+await mkdir("dist/client/licenses/codex", { recursive: true });
+for (const name of ["LICENSE", "NOTICE", "README.md"])
+  await copyFile(`third_party/codex/${name}`, `dist/client/licenses/codex/${name}.txt`);
 async function collect(directory, prefix = "") {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const file = path.join(directory, entry.name);

@@ -5,6 +5,7 @@ import { configSchema, drawingRequestSchema } from "../src/lib/contracts";
 import { createProvider, parseAIResult } from "./provider";
 import { DRAWING_PROMPT, EDIT_PROMPT } from "./prompts";
 import { providerErrorMessage, streamAI } from "./stream";
+import { requestUserInputTool } from "./user-input";
 
 export function createApp(allowLocal = false) {
   const app = new Hono();
@@ -64,11 +65,30 @@ export function createApp(allowLocal = false) {
         type: "image_url",
         image_url: { url: input.image, detail: "high" },
       });
+    const continuation: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
+      input.toolTurns.flatMap((turn) => [
+        {
+          role: "assistant" as const,
+          content: turn.content || null,
+          tool_calls: turn.calls.map((call) => ({
+            id: call.id,
+            type: "function" as const,
+            function: { name: "request_user_input", arguments: call.arguments },
+          })),
+        },
+        ...turn.calls.map((call, i) => ({
+          role: "tool" as const,
+          tool_call_id: call.id,
+          content: JSON.stringify(turn.responses[i]),
+        })),
+      ]);
     return streamAI(
       c,
       client,
       {
         model: input.config.model,
+        tools: [requestUserInputTool],
+        parallel_tool_calls: false,
         messages: [
           {
             role: "system",
@@ -79,9 +99,11 @@ export function createApp(allowLocal = false) {
             content: message.text,
           })),
           { role: "user", content },
+          ...continuation,
         ],
       },
       parseAIResult,
+      true,
     );
   });
   app.onError((error, c) => {

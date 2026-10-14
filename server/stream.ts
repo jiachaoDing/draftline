@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import OpenAI from "openai";
+import { userInputResultSchema } from "../src/lib/contracts";
 
 export class AIStreamError extends Error {}
 export function providerErrorMessage(error: Error, streaming = false) {
@@ -38,6 +39,7 @@ export function streamAI<T>(
   client: OpenAI,
   params: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming,
   finalize: (content: string) => T,
+  allowUserInput = false,
 ) {
   const response = streamSSE(c, async (output) => {
     const controller = new AbortController();
@@ -72,6 +74,10 @@ export function streamAI<T>(
       );
       let content = "";
       let finishReason: string | null = null;
+      const calls = new Map<
+        number,
+        { id: string; name: string; arguments: string }
+      >();
       for await (const chunk of upstream) {
         if (controller.signal.aborted || output.aborted) break;
         armWatchdog();
@@ -81,6 +87,30 @@ export function streamAI<T>(
             "The model declined this request. Adjust your instructions.",
           );
         const text = choice?.delta?.content;
+        for (const delta of choice?.delta?.tool_calls || []) {
+          if (!allowUserInput || delta.index < 0 || delta.index > 3)
+            throw new AIStreamError(
+              "The model returned an unsupported tool call.",
+            );
+          const call = calls.get(delta.index) || {
+            id: "",
+            name: "",
+            arguments: "",
+          };
+          if (delta.id) call.id += delta.id;
+          if (delta.function?.name) call.name += delta.function.name;
+          if (delta.function?.arguments)
+            call.arguments += delta.function.arguments;
+          if (
+            call.arguments.length > 32000 ||
+            call.id.length > 200 ||
+            call.name.length > 100
+          )
+            throw new AIStreamError(
+              "The model returned an oversized tool call.",
+            );
+          calls.set(delta.index, call);
+        }
         if (text) {
           content += text;
           if (content.length > 1_200_000)
@@ -105,6 +135,34 @@ export function streamAI<T>(
       if (finishReason === "content_filter")
         throw new AIStreamError(
           "The model declined this request. Adjust your instructions.",
+        );
+      if (finishReason === "tool_calls" && allowUserInput) {
+        const ordered = [...calls.entries()].sort(([a], [b]) => a - b);
+        if (ordered.some(([, call]) => call.name !== "request_user_input"))
+          throw new AIStreamError(
+            "The model returned an unsupported tool call.",
+          );
+        const parsed = userInputResultSchema.safeParse({
+          kind: "request_user_input",
+          content,
+          calls: ordered.map(([, call]) => ({
+            id: call.id,
+            arguments: call.arguments,
+          })),
+        });
+        if (!parsed.success)
+          throw new AIStreamError(
+            "The model returned invalid request_user_input questions. Please try again.",
+          );
+        await output.writeSSE({
+          event: "result",
+          data: JSON.stringify(parsed.data),
+        });
+        return;
+      }
+      if (calls.size)
+        throw new AIStreamError(
+          "The provider ended a tool call before completion. Please try again.",
         );
       if (finishReason !== "stop")
         throw new AIStreamError(

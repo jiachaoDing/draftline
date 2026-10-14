@@ -1,4 +1,4 @@
-import type { AIResult, DrawingRequest, ModelConfig } from "./contracts";
+import type { DrawingResult, DrawingRequest, ModelConfig } from "./contracts";
 import { streamPost, type DeltaHandler } from "./stream";
 
 async function post<T>(
@@ -27,7 +27,7 @@ export const requestDrawing = (
   input: DrawingRequest,
   signal: AbortSignal,
   onDelta: DeltaHandler,
-) => streamPost<AIResult>("/api/draw", input, signal, onDelta);
+) => streamPost<DrawingResult>("/api/draw", input, signal, onDelta);
 export const discoverModels = (config: ModelConfig, signal?: AbortSignal) =>
   post<{ models: string[] }>("/api/models", config, signal);
 export const testConnection = (

@@ -1,0 +1,135 @@
+.user-input-panel {
+  margin: 10px 14px 14px;
+  padding: 14px;
+  border: 1px solid #cedaf8;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 3px 14px #245ef008;
+  flex-shrink: 0;
+  max-height: min(570px, 68dvh, calc(100% - 105px));
+  overflow: auto;
+}
+.user-input-panel:focus {
+  outline: 2px solid #245ef050;
+  outline-offset: -1px;
+}
+.user-input-heading,
+.user-input-heading > span,
+.user-input-progress,
+.user-input-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.user-input-heading {
+  justify-content: space-between;
+  color: var(--blue);
+  font-weight: 600;
+}
+.user-input-heading button {
+  padding: 4px;
+  display: flex;
+}
+.user-input-progress {
+  margin: 12px 0;
+  flex-wrap: wrap;
+}
+.user-input-progress button {
+  font-size: 11px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  color: #6b7789;
+}
+.user-input-progress button[aria-current] {
+  color: var(--blue);
+  background: #edf2ff;
+}
+.user-input-progress > span {
+  margin-left: auto;
+  color: #87909f;
+  font-size: 11px;
+}
+.user-input-panel h3 {
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 8px 0 12px;
+  overflow-wrap: anywhere;
+}
+.user-input-options {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.user-input-options button {
+  display: flex;
+  text-align: left;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  line-height: 1.4;
+}
+.user-input-options button[aria-checked="true"] {
+  background: #f0f4ff;
+  border-color: #91b0ff;
+}
+.user-input-options strong {
+  font-weight: 550;
+  font-size: 12px;
+}
+.user-input-options small {
+  display: block;
+  font-size: 11px;
+  color: #6b7789;
+  margin-top: 3px;
+}
+.user-input-options button > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.user-input-number {
+  color: #87909f;
+}
+.user-input-panel textarea {
+  margin-top: 10px;
+  padding: 9px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: #263246;
+  background: #fbfcff;
+  line-height: 1.5;
+}
+.user-input-notes-toggle {
+  padding: 10px 0;
+  color: var(--blue);
+  font-size: 11px;
+}
+.user-input-actions {
+  margin-top: 9px;
+  flex-wrap: wrap;
+}
+.user-input-actions button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 8px;
+  font-size: 11px;
+  border-radius: 6px;
+}
+.user-input-actions .primary {
+  margin-left: auto;
+  background: var(--blue);
+  color: white;
+}
+.user-input-hints {
+  font-size: 10px;
+  color: #87909f;
+  margin-top: 10px;
+  line-height: 1.6;
+}
+.user-input-confirm p {
+  color: #6b7789;
+  font-size: 12px;
+  line-height: 1.6;
+}

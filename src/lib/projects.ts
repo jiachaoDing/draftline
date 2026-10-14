@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   drawingRequestSchema,
   notesSchema,
+  pendingUserInputSchema,
   type Drawing,
   type ModelConfig,
   type ChatMessage,
@@ -78,6 +79,7 @@ export const projectSchema = z.object({
   sketch: referenceSchema.nullable(),
   chatInput: z.string(),
   clarification: drawingRequestSchema.omit({ config: true }).nullable(),
+  userInput: pendingUserInputSchema.nullable().default(null),
   layers: z.object({
     geometry: z.boolean(),
     dimensions: z.boolean(),
@@ -89,8 +91,8 @@ export type Project = Omit<z.infer<typeof projectSchema>, "messages"> & {
 };
 export type ProjectContext = Omit<
   z.infer<typeof drawingRequestSchema>,
-  "config"
->;
+  "config" | "toolTurns"
+> & { toolTurns?: z.infer<typeof drawingRequestSchema>["toolTurns"] };
 export const welcome = {
   role: "assistant" as const,
   text: "Describe a part with its dimensions, or attach a reference sketch. I’ll create your drawing, then help you refine it.",
@@ -106,6 +108,7 @@ export function newProject(drawing: Drawing | null = null): Project {
     sketch: null,
     chatInput: "",
     clarification: null,
+    userInput: null,
     layers: { geometry: true, dimensions: true, presentation: true },
   };
 }
@@ -142,6 +145,7 @@ export async function saveProject(project: Project) {
     sketch: project.sketch,
     chatInput: project.chatInput,
     clarification: project.clarification,
+    userInput: project.userInput,
     layers: project.layers,
   });
 }
