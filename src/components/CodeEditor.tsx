@@ -39,6 +39,7 @@ export default function CodeEditor({
   const host = useRef<HTMLDivElement>(null);
   const editor = useRef<EditorView | null>(null);
   const editable = useRef(new Compartment());
+  const initial = useRef({ value, disabled });
   const change = useRef(onChange);
   change.current = onChange;
 
@@ -46,7 +47,7 @@ export default function CodeEditor({
     const view = new EditorView({
       parent: host.current!,
       state: EditorState.create({
-        doc: value,
+        doc: initial.current.value,
         extensions: [
           basicSetup,
           html(),
@@ -62,7 +63,9 @@ export default function CodeEditor({
             "aria-multiline": "true",
             spellcheck: "false",
           }),
-          editable.current.of(EditorState.readOnly.of(disabled)),
+          editable.current.of(
+            EditorState.readOnly.of(initial.current.disabled),
+          ),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) change.current(update.state.doc.toString());
           }),

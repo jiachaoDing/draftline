@@ -142,6 +142,9 @@ async function setup(
   );
   await page.goto("/");
   await page.getByRole("button", { name: "New Drawing", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "A fresh page for your next idea." }),
+  ).toBeVisible();
   await page.getByLabel("Drawing instructions").fill(instruction);
   await page.getByRole("button", { name: "Send drawing instruction" }).click();
   await expect(
@@ -203,6 +206,11 @@ test("custom answers, previous-question editing, persisted drafts and automatic 
     .getByRole("button", { name: "Submit answers", exact: true })
     .click();
   await expect(panel(page)).toHaveCount(0);
+  // The panel closes when continuation starts. Wait for the sandbox commit;
+  // its own failure timeout is six seconds, longer than the default assertion.
+  await expect(
+    page.getByRole("button", { name: "Stop generation", exact: true }),
+  ).toHaveCount(0, { timeout: 8000 });
   const frame = page.frameLocator('iframe[title="Technical drawing preview"]');
   await expect(frame.locator("#plate-outline")).toBeVisible();
   expect(requests).toHaveLength(2);
@@ -248,7 +256,9 @@ test("keyboard navigation, unanswered confirmation and queued calls do not submi
   await expect(
     panel(page).getByRole("heading", { name: "What is the plate width?" }),
   ).toBeVisible();
-  await panel(page).getByRole("radio", { name: /120 mm/ }).focus();
+  await panel(page)
+    .getByRole("radio", { name: /120 mm/ })
+    .focus();
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
   await expect(panel(page)).toHaveCount(0);
@@ -295,6 +305,10 @@ test("failed and stopped continuation restores questions and can retry; selected
   await expect(
     page.getByRole("button", { name: "Stop generation", exact: true }),
   ).toBeVisible();
+  // Cancellation must be tested after the fixture has actually started its stream.
+  await expect(
+    page.getByText("Resuming drawing", { exact: true }),
+  ).toBeVisible();
   await page
     .getByRole("button", { name: "Stop generation", exact: true })
     .click();
@@ -329,13 +343,26 @@ test("pending questions are isolated per project, cancellable, and usable on a n
     .getByRole("radio", { name: /None of the above/ })
     .click();
   await page.getByLabel("Answer notes").fill("My custom width");
-  await page.getByRole("button", { name: "New Drawing", exact: true }).click();
-  await expect(panel(page)).toHaveCount(0);
-  await page
-    .getByRole("button", { name: "Open drawing Untitled drawing", exact: true })
-    .last()
-    .click();
-  await expect(page.getByLabel("Answer notes")).toHaveValue("My custom width");
+  for (let i = 0; i < 3; i++) {
+    await page
+      .getByRole("button", { name: "New Drawing", exact: true })
+      .click();
+    await expect(panel(page)).toHaveCount(0);
+    // A render/save racing the switch must not drop the newly inserted project.
+    await expect(
+      page.getByRole("button", { name: /^Open drawing / }),
+    ).toHaveCount(3 + i);
+    await page
+      .getByRole("button", {
+        name: "Open drawing Untitled drawing",
+        exact: true,
+      })
+      .last()
+      .click();
+    await expect(page.getByLabel("Answer notes")).toHaveValue(
+      "My custom width",
+    );
+  }
   expect(
     await panel(page).evaluate((el) => el.scrollWidth <= el.clientWidth),
   ).toBe(true);

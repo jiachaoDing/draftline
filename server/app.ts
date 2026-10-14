@@ -1,9 +1,8 @@
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import type OpenAI from "openai";
 import { configSchema, drawingRequestSchema } from "../src/lib/contracts";
 import { createProvider, parseAIResult } from "./provider";
-import { DRAWING_PROMPT, EDIT_PROMPT } from "./prompts";
+import { drawingMessages } from "./messages";
 import { providerErrorMessage, streamAI } from "./stream";
 import { requestUserInputTool } from "./user-input";
 
@@ -54,34 +53,6 @@ export function createApp(allowLocal = false) {
     if (input.mode === "edit" && !input.svg)
       return c.json({ error: "Create a drawing before editing it." }, 400);
     const client = createProvider(input.config, allowLocal);
-    const content: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [
-      {
-        type: "text",
-        text: `${input.instruction}\n${input.svg ? `Current SVG:\n${input.svg}\nSelected element: ${input.selectedId || "none; whole-drawing edit permitted"}` : ""}\nExisting user-supplied manufacturing notes: ${JSON.stringify(input.notes)}`,
-      },
-    ];
-    if (input.image)
-      content.push({
-        type: "image_url",
-        image_url: { url: input.image, detail: "high" },
-      });
-    const continuation: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
-      input.toolTurns.flatMap((turn) => [
-        {
-          role: "assistant" as const,
-          content: turn.content || null,
-          tool_calls: turn.calls.map((call) => ({
-            id: call.id,
-            type: "function" as const,
-            function: { name: "request_user_input", arguments: call.arguments },
-          })),
-        },
-        ...turn.calls.map((call, i) => ({
-          role: "tool" as const,
-          tool_call_id: call.id,
-          content: JSON.stringify(turn.responses[i]),
-        })),
-      ]);
     return streamAI(
       c,
       client,
@@ -89,18 +60,7 @@ export function createApp(allowLocal = false) {
         model: input.config.model,
         tools: [requestUserInputTool],
         parallel_tool_calls: false,
-        messages: [
-          {
-            role: "system",
-            content: input.mode === "edit" ? EDIT_PROMPT : DRAWING_PROMPT,
-          },
-          ...input.history.map((message) => ({
-            role: message.role,
-            content: message.text,
-          })),
-          { role: "user", content },
-          ...continuation,
-        ],
+        messages: drawingMessages(input),
       },
       parseAIResult,
       true,

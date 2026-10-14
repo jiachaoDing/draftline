@@ -1,7 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "./tests/e2e",
-  timeout: 30_000,
+  // Browser startup, cold Vite transforms and IndexedDB restart checks share
+  // this workflow budget; assertions and the app's own timeouts remain bounded.
+  timeout: 60_000,
+  workers: 2,
   retries: 0,
   use: {
     ...devices["Desktop Chrome"],

@@ -1,5 +1,6 @@
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useMemo,
@@ -31,12 +32,15 @@ export const Preview = forwardRef<PreviewHandle, Props>(
       () => buildSandbox(props.html, channel),
       [props.html, channel],
     );
-    const send = (type: string, payload?: unknown) =>
-      frame.current?.contentWindow?.postMessage(
-        { channel, type, payload },
-        "*",
-      );
-    useImperativeHandle(ref, () => ({ send }), [channel]);
+    const send = useCallback(
+      (type: string, payload?: unknown) =>
+        frame.current?.contentWindow?.postMessage(
+          { channel, type, payload },
+          "*",
+        ),
+      [channel],
+    );
+    useImperativeHandle(ref, () => ({ send }), [send]);
     useEffect(() => {
       let ready = false;
       const timer = setTimeout(() => {
@@ -94,13 +98,10 @@ export const Preview = forwardRef<PreviewHandle, Props>(
         clearTimeout(timer);
         window.removeEventListener("message", handle);
       };
-    }, [channel]);
-    useEffect(() => send("layers", props.layers), [props.layers, channel]);
-    useEffect(
-      () => send("select", props.selectedId),
-      [props.selectedId, channel],
-    );
-    useEffect(() => send("mode", props.mode), [props.mode, channel]);
+    }, [channel, send]);
+    useEffect(() => send("layers", props.layers), [props.layers, send]);
+    useEffect(() => send("select", props.selectedId), [props.selectedId, send]);
+    useEffect(() => send("mode", props.mode), [props.mode, send]);
     return (
       <iframe
         ref={frame}

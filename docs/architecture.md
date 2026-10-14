@@ -1,0 +1,57 @@
+# Architecture
+
+Draftline is one React browser application and one Hono API. SVG is the editable drawing model. AI may produce synchronous HTML/JavaScript to construct it; committed and restored drawings use sanitized SVG snapshots wrapped as HTML. The same API bundles for Node and a Worker.
+
+## Module map
+
+| Area                | Entry points                                                | Responsibility                                                                                                          |
+| ------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Workspace           | `src/App.tsx`                                               | Active project, request/validation lifecycle, history commits, shortcuts and export actions                             |
+| Focused UI          | `src/components/`                                           | Project list, chat transcript/autoscroll, model settings, CodeMirror editor, preview, sketch upload and questions       |
+| Source draft        | `src/hooks/useDrawingSource.ts`, `src/lib/format-source.ts` | Source synchronization and asynchronous Prettier formatting without overwriting a changed draft                         |
+| Browser AI workflow | `src/lib/ai-workflow.ts`, `user-input-flow.ts`              | Request context, completed conversation history, drawing change policy, queued answers and retryable continuation       |
+| Contracts           | `src/lib/contracts.ts`, `user-input.ts`                     | Zod request/result/persistence contracts and explicit-answer state machine, shared with server                          |
+| Drawing             | `src/lib/drawing.ts`, `presentation.ts`, `history.ts`       | DOMPurify, scale/layer/ID validation, scoped patches, derived sheet information, SVG export and revision branching      |
+| Execution           | `src/lib/sandbox.ts`, `src/components/Preview.tsx`          | Opaque-origin iframe, CSP, synchronous script execution, pan/zoom and channel-checked snapshots                         |
+| Persistence         | `src/lib/projects.ts`, `model-settings.ts`                  | IndexedDB project records and validation; separate local-storage model settings                                         |
+| Browser transport   | `src/lib/api.ts`, `stream.ts`, `stream-preview.ts`          | JSON model discovery, cancellable SSE, UTF-8 framing and display-only partial JSON                                      |
+| API/provider        | `server/app.ts`, `provider.ts`, `messages.ts`               | Origin/body policy, request validation, SDK configuration and provider message construction                             |
+| Server streaming    | `server/stream.ts`, `user-input.ts`, `prompts.ts`           | Deltas, heartbeat, inactivity/cancellation, final validation, tool assembly, safe errors and model drawing instructions |
+| Packaging           | `scripts/`, `vite.config.ts`, `server/security.ts`          | Local processes, frontend build, embedded text assets, licenses and production CSP                                      |
+
+Browser modules import no Node APIs, provider SDKs or server implementation. Server code imports only universal browser-side contracts. The `DrawingContext` type omits provider settings, while `DrawingRequest` adds them at the transport boundary. Keep DOM-dependent drawing functions in the browser.
+
+## Generation and manual editing
+
+1. App builds `DrawingContext` with the instruction, optional image, canonical SVG, selected ID, notes and up to ten completed history messages. Interrupted/validating replies are filtered out; history text is bounded to 8,000 characters.
+2. App adds settings when calling `api.ts`, which posts `/api/draw`. Hono validates the request. `drawingMessages` constructs system, history, image and tool messages without using settings in their content; the official SDK receives credentials separately.
+3. `streamAI` sends `start`, `delta`, `result` or `error` SSE events. Only a successful provider finish and schema validation produce `result`. `previewStream` decodes partial content for plain-text display.
+4. A full drawing becomes a validation candidate. A hidden `Preview` executes it; the parent checks frame source/channel and sanitizes/validates the snapshot. Only then does App commit `{title, summary, notes, svg, html: svgToHTML(svg)}` into history.
+5. A selected patch passes through `drawingChange` and `applyPatches`: selected element/descendants determine permitted dimension groups; replacements preserve IDs, types and unrelated geometry. Clear selection to permit full replacement.
+6. **Apply code** uses the same hidden preview and commit path. The editor draft and editor undo are separate from drawing revisions. Formatting completes only into an unchanged draft. Invalid source leaves the committed drawing available.
+7. The visible frame receives derived presentation HTML. Layer visibility and pan/zoom are preview state. Exports use the canonical drawing, preserving physical scale; geometry-only export removes dimensions, and dimensioned export derives sheet information.
+
+Cancellation closes the upstream connection and keeps received text for display. App keeps `busy` until candidate validation finishes; project navigation is disabled during this interval. Each commit clears stale selection and clarification. Revision history keeps 30 entries, branching from the active index.
+
+App updates project, active-ID and pending-candidate refs at the owning event/effect transition. Rendering does not copy React state back into these refs: an older concurrent render must not overwrite an in-flight project insertion or candidate commit.
+
+Transcript autoscroll moves only the assistant's scroll container. It must not scroll the outer page on mobile while project navigation or question input is in progress.
+
+## Clarification and persistence
+
+`request_user_input` calls contain validated JSON arguments and stable tool IDs. `PendingUserInput` stores original context, the assistant request, current call index, submitted responses and questionnaire drafts. `answerQuestions` advances queued calls, then builds one tool turn in call order. It leaves pending state unchanged for a failed/stopped continuation to retry. Up to 12 rounds are accepted. The server recreates each assistant `tool_calls` message and matching `tool_call_id` result. Text clarification also retains original context and appends the user's measurement.
+
+`Project` stores name, revision history/index, conversation/reference images, composer, clarification/question state and layers in IndexedDB through `idb`. Saves batch streamed deltas at 400 ms and flush on page hide. Active project ID lives in a separate metadata store. Restoring a record validates/sanitizes its SVG, rebuilds HTML, and marks interrupted replies cancelled. Invalid records remain stored and produce a warning; storage errors keep the workspace usable with an unsaved status.
+
+Model URL/key/ID live in the `draftline-model` local-storage entry. Project serialization lists fields explicitly, and schemas strip extra fields. Source scripts are not replayed from stored projects. Changing a project remounts `ProjectList`, resetting its rename/delete UI.
+
+## Decisions and remaining risks
+
+- Keep React state in the coordinator where preview, assistant and persistence share it; keep focused transient UI state inside components. Pure workflow functions improve testability without a second state store. App still coordinates autosave and asynchronous request/validation state: extract a project hook or reducer only when a concrete change needs it, with switching/retry/storage tests first.
+- Zod, DOMPurify, Hono, the official SDK, `idb`, CodeMirror, Prettier and existing stream libraries own their specialist work. Biome handles targeted correctness/hooks/import checks; TypeScript checks types and Prettier owns formatting. Hook dependency checking permits event-trigger dependencies such as refocusing on a question change and allocating a new frame channel per source.
+- Generated code must finish synchronously. The iframe/CSP isolates origin access and network, but cannot enforce a CPU quota; an infinite script can block the browser. Future execution isolation requires a separate design and browser tests.
+- SVG validation proves structure, scale and edit scope, not that geometric relationships match the requested part. Treat output as user-reviewable drawings; a future geometric checker should target specific constraints rather than introduce a speculative CAD kernel.
+- Provider URL validation blocks literal private addresses and unsafe URL forms. It does not resolve DNS or enforce redirect/network egress policy. Public multi-user hosting needs platform-level egress, authentication and usage controls before broad exposure.
+- Browser-origin storage is the workspace's persistence boundary. Large histories/images and conversations can grow storage use; quota warnings and export exist. Repeated image storage and retention policies are a future measured improvement.
+- Packaging embeds frontend files as UTF-8 text; keep binary media out of this asset path until the packager gains binary handling.
+- The production build reports frontend chunks above 500 kB after minification (the main application and lazy CodeMirror editor). Measure load/interaction costs before adjusting chunk boundaries; browser validation is needed for any lazy-loading changes.

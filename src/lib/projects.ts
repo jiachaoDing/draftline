@@ -5,30 +5,10 @@ import {
   notesSchema,
   pendingUserInputSchema,
   type Drawing,
-  type ModelConfig,
   type ChatMessage,
 } from "./contracts";
 import { cleanDrawing, svgToHTML } from "./drawing";
 import { EXAMPLE } from "./example";
-
-export const defaultConfig: ModelConfig = {
-  baseURL: "https://api.openai.com/v1",
-  apiKey: "",
-  model: "",
-};
-export function readConfig(): ModelConfig {
-  try {
-    const saved = JSON.parse(localStorage.getItem("draftline-model") || "{}");
-    return Object.fromEntries(
-      Object.entries(defaultConfig).map(([key, value]) => [
-        key,
-        typeof saved[key] === "string" ? saved[key] : value,
-      ]),
-    ) as ModelConfig;
-  } catch {
-    return { ...defaultConfig };
-  }
-}
 
 const referenceSchema = z.object({
   name: z.string().max(500),
@@ -89,10 +69,6 @@ export const projectSchema = z.object({
 export type Project = Omit<z.infer<typeof projectSchema>, "messages"> & {
   messages: ChatMessage[];
 };
-export type ProjectContext = Omit<
-  z.infer<typeof drawingRequestSchema>,
-  "config" | "toolTurns"
-> & { toolTurns?: z.infer<typeof drawingRequestSchema>["toolTurns"] };
 export const welcome = {
   role: "assistant" as const,
   text: "Describe a part with its dimensions, or attach a reference sketch. I’ll create your drawing, then help you refine it.",

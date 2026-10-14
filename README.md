@@ -4,7 +4,7 @@ A working sketch → drawing → edit → SVG application. AI writes inline HTML
 
 ## Run locally
 
-Requires Node.js 24.11+ and npm. All project files use UTF-8.
+Requires Node.js 24.11+ and npm. All project files use UTF-8. For code changes, start with [AGENTS.md](AGENTS.md), the [architecture map](docs/architecture.md), and the [development guide](docs/development.md).
 
 ```powershell
 npm ci
@@ -42,10 +42,7 @@ This interaction is adapted from [OpenAI Codex](https://github.com/openai/codex/
 ## Build and verify
 
 ```powershell
-npm run check
-npm test
-npm run test:e2e
-npm run build
+npm run verify:all
 npm start
 ```
 
@@ -55,19 +52,19 @@ Playwright uses installed Microsoft Edge by default. Set `PLAYWRIGHT_CHANNEL=chr
 
 ## Libraries and architecture
 
-| Responsibility                         | Reused implementation                                                                 |
-| -------------------------------------- | ------------------------------------------------------------------------------------- |
-| UI and build                           | React, Vite, Lucide                                                                   |
-| Accessible model selection             | [Headless UI Combobox](https://headlessui.com/react/combobox)                            |
-| Source editing and formatting           | [CodeMirror 6](https://codemirror.net/), [Prettier standalone](https://prettier.io/docs/browser) |
-| AI requests and custom API URLs        | [Official OpenAI JavaScript SDK](https://github.com/openai/openai-node) on the server |
-| Stream framing and incremental display | Hono SSE, eventsource-parser, partial-json                                            |
-| Portable API routing and body limits   | [Hono](https://github.com/honojs/hono), its Node adapter and body-limit middleware    |
-| SVG and HTML sanitization              | [DOMPurify](https://github.com/cure53/DOMPurify)                                      |
-| SVG zoom, pan and fit                  | [svg-pan-zoom](https://github.com/bumbu/svg-pan-zoom)                                 |
-| Local project persistence              | [idb](https://github.com/jakearchibald/idb) with IndexedDB                              |
-| Request and response contracts         | Zod                                                                                   |
-| Unit and browser checks                | Vitest, jsdom, Playwright                                                             |
+| Responsibility                         | Reused implementation                                                                            |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| UI and build                           | React, Vite, Lucide                                                                              |
+| Accessible model selection             | [Headless UI Combobox](https://headlessui.com/react/combobox)                                    |
+| Source editing and formatting          | [CodeMirror 6](https://codemirror.net/), [Prettier standalone](https://prettier.io/docs/browser) |
+| AI requests and custom API URLs        | [Official OpenAI JavaScript SDK](https://github.com/openai/openai-node) on the server            |
+| Stream framing and incremental display | Hono SSE, eventsource-parser, partial-json                                                       |
+| Portable API routing and body limits   | [Hono](https://github.com/honojs/hono), its Node adapter and body-limit middleware               |
+| SVG and HTML sanitization              | [DOMPurify](https://github.com/cure53/DOMPurify)                                                 |
+| SVG zoom, pan and fit                  | [svg-pan-zoom](https://github.com/bumbu/svg-pan-zoom)                                            |
+| Local project persistence              | [idb](https://github.com/jakearchibald/idb) with IndexedDB                                       |
+| Request and response contracts         | Zod                                                                                              |
+| Unit and browser checks                | Vitest, jsdom, Playwright                                                                        |
 
 `server/app.ts` forwards user-configured credentials to the chosen provider. `server/stream.ts` handles streaming, cancellation, timeouts, error redaction and final response validation for every AI route. `src/lib/stream.ts` provides the shared browser transport, and `src/lib/stream-preview.ts` decodes partial responses for text display. `server/prompts.ts` contains the drawing contract. `src/lib/sandbox.ts` supplies the isolated preview and interaction bridge. `src/lib/drawing.ts` validates scale and layers, enforces patch boundaries, and serializes export. `src/lib/presentation.ts` lays out sheet information using native SVG and browser font measurement. React holds a bounded 30-revision undo history, including user-supplied manufacturing notes.
 

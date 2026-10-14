@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-  defaultConfig,
-  newProject,
-  projectSchema,
-  readConfig,
-} from "../src/lib/projects";
+import { newProject, projectSchema } from "../src/lib/projects";
+import { defaultConfig, readConfig } from "../src/lib/model-settings";
 import { EXAMPLE } from "../src/lib/example";
 
 beforeEach(() => localStorage.clear());
