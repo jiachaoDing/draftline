@@ -2,6 +2,7 @@ import {
   forwardRef,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useImperativeHandle,
   useMemo,
   useRef,
@@ -41,7 +42,10 @@ export const Preview = forwardRef<PreviewHandle, Props>(
       [channel],
     );
     useImperativeHandle(ref, () => ({ send }), [send]);
-    useEffect(() => {
+    // Install the source/channel-checked bridge during commit, before the
+    // srcdoc frame can publish its first snapshot. Activity/autosave renders
+    // can otherwise postpone passive effects beyond the frame's startup.
+    useLayoutEffect(() => {
       let ready = false;
       const timer = setTimeout(() => {
         if (!ready)

@@ -1,0 +1,73 @@
+.agent-activities {
+  margin: 8px 0;
+  font-size: 11px;
+  color: var(--muted);
+  min-width: 0;
+}
+.agent-history > summary {
+  padding: 5px 0;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.agent-step {
+  border-left: 1px solid var(--line);
+  margin: 4px 0;
+  padding-left: 8px;
+}
+.agent-step > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 4px 0;
+  list-style: none;
+}
+.agent-step > summary::-webkit-details-marker {
+  display: none;
+}
+.agent-step > summary > svg {
+  flex-shrink: 0;
+}
+.agent-step > summary > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.agent-step small {
+  font-size: 9px;
+  text-transform: capitalize;
+}
+.agent-step.running {
+  color: #263246;
+}
+.agent-step.failed {
+  color: #b45309;
+}
+.agent-step.completed > summary > svg {
+  color: var(--blue);
+}
+.agent-step[open] > summary > .activity-chevron {
+  transform: rotate(90deg);
+}
+.agent-step p {
+  margin: 4px 0 8px 18px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 140px;
+  overflow-y: auto;
+}
+.agent-step > summary:focus-visible,
+.agent-history > summary:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.activity-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}

@@ -5,6 +5,7 @@ import {
   toolResponse,
   openCompletion,
   contentChunk,
+  finishCompletion,
 } from "../helpers/provider-stream";
 import { inspectedHTML, radiusPatch } from "../helpers/source-patch";
 import { EXAMPLE_SVG } from "../../src/lib/example";
@@ -13,6 +14,18 @@ let provider: Server;
 let baseURL: string;
 let requests: any[] = [];
 let held = false;
+let releaseActivity = () => {};
+let activityStage = "";
+async function pauseActivity(
+  res: import("node:http").ServerResponse,
+  stage: string,
+) {
+  activityStage = stage;
+  await new Promise<void>((resolve) => {
+    releaseActivity = resolve;
+    res.once("close", resolve);
+  });
+}
 const tool = (id: string, name: string, args: unknown) => ({
   id,
   name,
@@ -37,6 +50,96 @@ test.beforeAll(async () => {
       toolResponse(res, [
         tool(id, "apply_patch", { revision: rev, patch: text }),
       ]);
+    if (instruction.includes("source argument compatibility")) {
+      if (!last) {
+        toolResponse(res, [
+          tool(
+            "read-options",
+            "read_source",
+            instruction.includes("invalid")
+              ? { file_path: "drawing.html", offset: 0, limit: 2000 }
+              : {
+                  file_path: "drawing.html",
+                  offset: null,
+                  limit: null,
+                  element_id: null,
+                },
+          ),
+        ]);
+      } else if (!result.ok) {
+        toolResponse(res, [
+          tool("read-corrected", "read_source", {
+            file_path: "drawing.html",
+            offset: 1,
+            limit: 80,
+            element_id: null,
+          }),
+        ]);
+      } else {
+        completeResponse(
+          res,
+          JSON.stringify({
+            kind: "message",
+            message: "Source inspection complete.",
+          }),
+        );
+      }
+      return;
+    }
+    if (instruction.includes("activity progress")) {
+      if (!last) {
+        await pauseActivity(res, "submitted");
+        openCompletion(res);
+        const chunk = (tool_calls: unknown[]) =>
+          res.write(
+            `data: ${JSON.stringify({ choices: [{ index: 0, delta: { tool_calls }, finish_reason: null }] })}\n\n`,
+          );
+        chunk([
+          {
+            index: 0,
+            id: "read0",
+            function: { name: "read_source", arguments: "" },
+          },
+          {
+            index: 1,
+            id: "search0",
+            function: { name: "search_source", arguments: "" },
+          },
+        ]);
+        await pauseActivity(res, "arguments");
+        chunk([
+          {
+            index: 0,
+            function: {
+              arguments: JSON.stringify({
+                file_path: "drawing.html",
+                element_id: "hole-top-left",
+                limit: 200,
+              }),
+            },
+          },
+          {
+            index: 1,
+            function: {
+              arguments: JSON.stringify({
+                file_path: "drawing.html",
+                query: "4 × Ø10",
+              }),
+            },
+          },
+        ]);
+        finishCompletion(
+          res,
+          instruction.includes("disconnect") ? "length" : "tool_calls",
+        );
+        return;
+      }
+      if (last.tool_call_id === "search0")
+        await pauseActivity(res, "inspected");
+      if (last.tool_call_id === "missing") await pauseActivity(res, "failed");
+      if (last.tool_call_id === "dimension")
+        await pauseActivity(res, "validated");
+    }
     if (!last) {
       toolResponse(res, [
         tool("read0", "read_source", {
@@ -178,6 +281,7 @@ test.afterAll(
 async function open(page: Page) {
   requests = [];
   held = false;
+  activityStage = "";
   await page.addInitScript((baseURL) => {
     if (window !== window.top) return;
     localStorage.setItem(
@@ -205,6 +309,188 @@ async function send(page: Page, text: string) {
     .getByRole("button", { name: "Send drawing instruction", exact: true })
     .click();
 }
+
+test("source reads accept null options immediately and return actionable invalid-field feedback", async ({
+  page,
+}) => {
+  const frame = await open(page);
+  await send(page, "source argument compatibility");
+  await expect(
+    page.getByText("Source inspection complete.", { exact: true }),
+  ).toBeVisible();
+  expect(requests).toHaveLength(2);
+  const firstFeedback = JSON.parse(
+    requests[1].messages.find((message: any) => message.role === "tool")
+      .content,
+  );
+  expect(firstFeedback.ok).toBe(true);
+  const advertised = requests[0].tools.find(
+    (entry: any) => entry.function.name === "read_source",
+  ).function.parameters;
+  expect(advertised.properties.element_id.anyOf).toContainEqual({
+    type: "null",
+  });
+  expect(advertised.properties.limit.anyOf).toContainEqual({
+    type: "integer",
+    minimum: 1,
+    maximum: 200,
+  });
+  await expect(
+    page.getByLabel("Agent activity").locator('[data-status="failed"]'),
+  ).toHaveCount(0);
+  requests = [];
+  await send(page, "source argument compatibility invalid");
+  await expect(
+    page.getByText("Source inspection complete.", { exact: true }),
+  ).toHaveCount(2);
+  const failed = JSON.parse(
+    requests[1].messages.find((message: any) => message.role === "tool")
+      .content,
+  );
+  expect(failed.ok).toBe(false);
+  expect(failed.error).toContain("offset:");
+  expect(failed.error).toContain("limit:");
+  expect(
+    JSON.parse(
+      requests[2].messages
+        .filter((message: any) => message.role === "tool")
+        .at(-1).content,
+    ).ok,
+  ).toBe(true);
+  const activity = page.getByLabel("Agent activity").last();
+  await activity.locator(".agent-history > summary").click();
+  await activity.locator('[data-status="failed"] > summary').click();
+  await expect(activity.locator('[data-status="failed"]')).toContainText(
+    "limit:",
+  );
+  await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "5");
+});
+
+test("activity is immediate, streams queued calls, shows failures and retries, and collapses completed work", async ({
+  page,
+}) => {
+  const frame = await open(page);
+  await send(page, "Resize selected hole to Ø14 with activity progress.");
+  const activity = page.getByLabel("Agent activity");
+  await expect(activity.locator('[data-activity-id="model:0"]')).toContainText(
+    "Waiting for model response",
+  );
+  await expect.poll(() => activityStage).toBe("submitted");
+  releaseActivity();
+  await expect(
+    activity.locator('[data-activity-id="tool:0:0"]'),
+  ).toHaveAttribute("data-status", "pending");
+  await expect(
+    activity.locator('[data-activity-id="tool:0:1"]'),
+  ).toHaveAttribute("data-status", "pending");
+  await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "5");
+  releaseActivity();
+  await expect.poll(() => activityStage).toBe("inspected");
+  await expect(
+    activity.locator('[data-activity-id="model:1"]'),
+  ).toHaveAttribute("data-status", "running");
+  await activity.locator(".agent-history > summary").click();
+  await expect(
+    activity.locator('[data-activity-id="tool:0:0"]'),
+  ).toHaveAttribute("data-status", "completed");
+  await expect(
+    activity.locator('[data-activity-id="tool:0:1"]'),
+  ).toHaveAttribute("data-status", "completed");
+  releaseActivity();
+  await expect.poll(() => activityStage).toBe("failed");
+  const failed = activity.locator('[data-activity-id="tool:1:0"]');
+  await expect(failed).toHaveAttribute("data-status", "failed");
+  await failed.locator("summary").click();
+  await expect(failed).toContainText("Failed to find expected lines");
+  await page.screenshot({ path: test.info().outputPath("activity-live.png") });
+  releaseActivity();
+  await expect.poll(() => activityStage).toBe("validated");
+  await expect(
+    activity.getByText("Retrying failed modification", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(
+    activity.locator(
+      '[data-activity-id$=":validation"][data-status="completed"]',
+    ),
+  ).not.toHaveCount(0);
+  await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "5");
+  releaseActivity();
+  await expect(
+    page.getByText("Incremental edit complete.", { exact: true }),
+  ).toBeVisible();
+  await expect(activity.locator(".agent-history")).not.toHaveAttribute("open");
+  await expect(activity.locator(".agent-history > summary")).toContainText(
+    "failed",
+  );
+  await expect(activity.locator(".agent-history > summary")).toContainText(
+    "retries",
+  );
+  await page.screenshot({
+    path: test.info().outputPath("activity-complete.png"),
+  });
+  await activity.locator(".agent-history > summary").click();
+  await expect(
+    activity.locator('[data-activity-id="tool:1:0"]'),
+  ).toHaveAttribute("data-status", "failed");
+  await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "7");
+  await expect(page.getByText("Saved locally", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByLabel("Agent activity").locator(".agent-history > summary"),
+  ).toContainText("retries");
+});
+
+test("an interrupted streamed tool never executes and leaves no live activity", async ({
+  page,
+}) => {
+  const frame = await open(page);
+  await send(page, "activity progress disconnect");
+  await expect.poll(() => activityStage).toBe("submitted");
+  releaseActivity();
+  const activity = page.getByLabel("Agent activity");
+  await expect(
+    activity.locator('[data-activity-id="tool:0:0"]'),
+  ).toHaveAttribute("data-status", "pending");
+  releaseActivity();
+  await expect(
+    page.getByRole("button", { name: "Send drawing instruction", exact: true }),
+  ).toBeVisible();
+  await expect(
+    activity.locator('[data-status="running"], [data-status="pending"]'),
+  ).toHaveCount(0);
+  await expect(activity.locator(".agent-history > summary")).toContainText(
+    "failed",
+  );
+  expect(requests).toHaveLength(1);
+  await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "5");
+});
+
+test("stopping while tool arguments stream marks queued activities stopped, including after refresh", async ({
+  page,
+}) => {
+  const frame = await open(page);
+  await send(page, "activity progress cancel");
+  await expect.poll(() => activityStage).toBe("submitted");
+  releaseActivity();
+  const activity = page.getByLabel("Agent activity");
+  await expect(
+    activity.locator('[data-activity-id="tool:0:0"]'),
+  ).toHaveAttribute("data-status", "pending");
+  await page.getByRole("button", { name: "Stop generation" }).click();
+  await expect(
+    activity.locator('[data-status="pending"], [data-status="running"]'),
+  ).toHaveCount(0);
+  await expect(activity.locator(".agent-history > summary")).toContainText(
+    "stopped",
+  );
+  await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "5");
+  await expect(page.getByText("Saved locally", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByLabel("Agent activity").locator(".agent-history > summary"),
+  ).toContainText("stopped");
+  expect(requests).toHaveLength(1);
+});
 
 test("real provider loop retries patch/validation/scope/revision errors, then synchronizes history, storage, code and export", async ({
   page,

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { EXAMPLE } from "../src/lib/example";
 import { drawingContext } from "../src/lib/ai-workflow";
 import { runDrawingAgent } from "../src/lib/drawing-agent";
@@ -10,6 +10,7 @@ import type { DrawingRequest, DrawingResult } from "../src/lib/contracts";
 import { inspectedHTML, radiusPatch } from "./helpers/source-patch";
 import { projectSchema, newProject } from "../src/lib/projects";
 import { pushHistory } from "../src/lib/history";
+import type { AgentActivity } from "../src/lib/agent-activity";
 
 const config = {
   baseURL: "https://example.com/v1",
@@ -44,6 +45,144 @@ async function session(selectedId?: string, current = () => true) {
 const signal = () => new AbortController().signal;
 
 describe("versioned virtual source tools", () => {
+  it("reads source on the first attempt with omitted or null optional fields", async () => {
+    const tools = await session();
+    for (const args of [
+      { file_path: "drawing.html" },
+      {
+        file_path: "drawing.html",
+        offset: null,
+        limit: null,
+        element_id: null,
+      },
+      { file_path: "drawing.html", element_id: "" },
+    ]) {
+      const feedback = JSON.parse(
+        await tools.execute(call("read", "read_source", args), signal()),
+      );
+      expect(feedback, JSON.stringify(feedback)).toHaveProperty("ok", true);
+      expect(feedback.text).toMatch(/^L1: /);
+      expect(feedback.text.split("\n")).toHaveLength(80);
+    }
+    expect(tools.changed).toBe(false);
+    expect(tools.source.revision).toBe("base");
+  });
+  it("identifies invalid read fields and limits so the next attempt can correct them", async () => {
+    const tools = await session();
+    const failed = JSON.parse(
+      await tools.execute(
+        call("bad", "read_source", {
+          file_path: "drawing.html",
+          offset: 0,
+          limit: 2000,
+        }),
+        signal(),
+      ),
+    );
+    expect(failed.ok).toBe(false);
+    expect(failed.error).toContain("offset:");
+    expect(failed.error).toContain("limit:");
+    expect(failed.error).toContain("200");
+    expect(failed.error).toContain('"offset":1,"limit":80');
+    const fixed = JSON.parse(
+      await tools.execute(
+        call("fixed", "read_source", {
+          file_path: "drawing.html",
+          offset: 1,
+          limit: 200,
+        }),
+        signal(),
+      ),
+    );
+    expect(fixed.ok).toBe(true);
+    expect(tools.changed).toBe(false);
+  });
+  it("describes schema and JSON errors without echoing unknown fields or argument values", async () => {
+    const tools = await session();
+    const unknown = JSON.parse(
+      await tools.execute(
+        call("bad", "read_source", {
+          file_path: "drawing.html",
+          "private-field": "private-value",
+        }),
+        signal(),
+      ),
+    );
+    expect(unknown.error).toContain("file_path, offset, limit, element_id");
+    expect(unknown.error).not.toContain("private-field");
+    expect(unknown.error).not.toContain("private-value");
+    const malformed = JSON.parse(
+      await tools.execute(
+        { id: "json", name: "read_source", arguments: "private-invalid-json" },
+        signal(),
+      ),
+    );
+    expect(malformed.error).toContain("complete JSON object");
+    expect(malformed.error).not.toContain("private-invalid-json");
+  });
+  it("reports validation as running until the actual sandbox check finishes", async () => {
+    const activities: AgentActivity[] = [];
+    let completeValidation!: () => void;
+    let rounds = 0;
+    const result = runDrawingAgent({
+      context: drawingContext("Resize", [], EXAMPLE),
+      config,
+      drawing: EXAMPLE,
+      signal: signal(),
+      isCurrent: () => true,
+      onRound: () => {},
+      onDelta: () => {},
+      onActivity: (activity) => activities.push(activity),
+      validate: (html) =>
+        new Promise((resolve) => {
+          completeValidation = async () => resolve(await validate(html));
+        }),
+      request: async (input) => {
+        rounds++;
+        if (rounds === 1)
+          return {
+            kind: "tool_calls",
+            content: "",
+            calls: [
+              call("read", "read_source", {
+                file_path: "drawing.html",
+                limit: 200,
+              }),
+            ],
+          };
+        if (rounds === 2)
+          return {
+            kind: "tool_calls",
+            content: "",
+            calls: [
+              call("patch", "apply_patch", {
+                revision: input.source!.revision,
+                patch: radiusPatch(input.source!.html, "hole-top-left", "7"),
+              }),
+            ],
+          };
+        return { kind: "message", message: "Done" };
+      },
+    });
+    await vi.waitFor(() =>
+      expect(
+        activities
+          .filter((step) => step.kind === "validation")
+          .map((step) => step.status),
+      ).toEqual(["running"]),
+    );
+    expect(
+      activities.filter((step) => step.id === "tool:1:0").at(-1)?.status,
+    ).toBe("running");
+    expect(EXAMPLE.svg).toContain('r="5"');
+    completeValidation();
+    expect((await result).drawing?.svg).toContain('r="7"');
+    expect(
+      activities
+        .filter((step) => step.kind === "validation")
+        .map((step) => step.status),
+    ).toEqual(["running", "completed"]);
+  });
   it("inspects selected elements, surrounding lines, associated dimensions and literal search", async () => {
     const tools = await session();
     const read = readSource(tools.source, 1, 30, "hole-top-left");
@@ -184,6 +323,7 @@ describe("versioned virtual source tools", () => {
 
 describe("inspect → patch → feedback → retry agent loop", () => {
   it("recovers from matching errors, sequences batched calls and commits one synchronized revision", async () => {
+    const activities: AgentActivity[] = [];
     const requests: DrawingRequest[] = [];
     const request = async (input: DrawingRequest): Promise<DrawingResult> => {
       requests.push(input);
@@ -254,6 +394,7 @@ describe("inspect → patch → feedback → retry agent loop", () => {
       return { kind: "message", message: "Updated the selected hole to Ø14." };
     };
     const outcome = await runDrawingAgent({
+      onActivity: (activity) => activities.push(activity),
       context: drawingContext(
         "Resize",
         [],
@@ -271,6 +412,21 @@ describe("inspect → patch → feedback → retry agent loop", () => {
       onRound: () => {},
     });
     expect(requests).toHaveLength(5);
+    expect(
+      activities
+        .filter((step) => step.id === "tool:1:0")
+        .map((step) => step.status),
+    ).toEqual(["pending", "running", "failed"]);
+    expect(
+      activities.find(
+        (step) => step.id === "tool:3:0" && step.status === "running",
+      )?.retry,
+    ).toBe(true);
+    expect(
+      activities
+        .filter((step) => step.kind === "validation")
+        .map((step) => step.status),
+    ).toEqual(["running", "completed"]);
     expect(outcome.drawing?.svg).toContain('r="7"');
     expect(JSON.stringify(outcome.context)).not.toContain(config.apiKey);
     expect(outcome.drawing?.html).toContain(outcome.drawing!.svg);

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { ArrowLeft, Code2, Sparkles } from "lucide-react";
 import type { ChatMessage } from "../lib/contracts";
+import AgentActivities from "./AgentActivities";
 
 type Props = {
   messages: ChatMessage[];
@@ -60,11 +61,22 @@ export default function ChatTranscript({
             <span className="message-text">
               {message.text ||
                 (message.status === "streaming"
-                  ? "Connecting to your model…"
+                  ? message.activities?.length
+                    ? ""
+                    : "Connecting to your model…"
                   : message.status === "cancelled"
                     ? "Generation stopped."
                     : "")}
             </span>
+            {message.activities && (
+              <AgentActivities
+                activities={message.activities}
+                active={
+                  message.status === "streaming" ||
+                  message.status === "validating"
+                }
+              />
+            )}
             {message.status === "streaming" && message.text && (
               <span className="stream-cursor" aria-hidden="true" />
             )}
@@ -83,7 +95,12 @@ export default function ChatTranscript({
             {message.status && message.status !== "complete" && (
               <small className={`reply-status ${message.status}`}>
                 {message.status === "streaming"
-                  ? "Streaming response"
+                  ? message.activities?.some(
+                      (step) =>
+                        step.status === "running" && step.kind !== "model",
+                    )
+                    ? "Working on your drawing"
+                    : "Waiting for model response"
                   : message.status === "validating"
                     ? "Checking the completed drawing"
                     : message.status === "cancelled"
@@ -115,7 +132,7 @@ export default function ChatTranscript({
           ))}
         </div>
       )}
-      {busy && (
+      {busy && !messages.at(-1)?.activities?.length && (
         <div className="thinking">
           <span />
           <span />

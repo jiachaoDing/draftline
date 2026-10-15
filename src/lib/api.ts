@@ -1,5 +1,6 @@
 import type { DrawingResult, DrawingRequest, ModelConfig } from "./contracts";
 import { streamPost, type DeltaHandler } from "./stream";
+import type { ToolPending } from "./agent-activity";
 
 async function post<T>(
   path: string,
@@ -27,7 +28,9 @@ export const requestDrawing = (
   input: DrawingRequest,
   signal: AbortSignal,
   onDelta: DeltaHandler,
-) => streamPost<DrawingResult>("/api/draw", input, signal, onDelta);
+  onToolPending?: (event: ToolPending) => void,
+) =>
+  streamPost<DrawingResult>("/api/draw", input, signal, onDelta, onToolPending);
 export const discoverModels = (config: ModelConfig, signal?: AbortSignal) =>
   post<{ models: string[] }>("/api/models", config, signal);
 export const testConnection = (

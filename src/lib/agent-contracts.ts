@@ -29,13 +29,37 @@ export type VirtualSource = z.infer<typeof sourceSchema>;
 export type AgentCall = z.infer<typeof agentCallSchema>;
 export type AgentTurn = z.infer<typeof agentTurnSchema>;
 
-const file = { file_path: z.literal("drawing.html") };
+const file = { file_path: z.enum(["drawing.html"]) };
 export const readSourceSchema = z
   .object({
     ...file,
-    offset: z.number().int().min(1).default(1),
-    limit: z.number().int().min(1).max(200).default(80),
-    element_id: z.string().max(200).optional(),
+    offset: z
+      .number()
+      .int()
+      .min(1)
+      .nullable()
+      .default(1)
+      .describe("One-based line offset. Omit or use null for 1.")
+      .transform((value) => value ?? 1),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(200)
+      .nullable()
+      .default(80)
+      .describe(
+        "Number of lines, 1 to 200. Omit or use null for 80; paginate for more.",
+      )
+      .transform((value) => value ?? 80),
+    element_id: z
+      .string()
+      .max(200)
+      .nullish()
+      .describe(
+        "Exact element ID for focused inspection. Omit or use null to read the file.",
+      )
+      .transform((value) => value || undefined),
   })
   .strict();
 export const searchSourceSchema = z

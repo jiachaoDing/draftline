@@ -6,6 +6,19 @@ documented in [apply-patch/README.md](apply-patch/README.md), pinned to commit
 tests and WASM/source hashes are included in that directory. The license and
 notice below apply to both integrations.
 
+Agent activity presentation follows the paired call lifecycle in
+[`codex-rs/protocol/src/protocol.rs`](https://github.com/openai/codex/blob/c22a06c18070c3e33bd2648c7210a00a2a9f6f80/codex-rs/protocol/src/protocol.rs)
+(`PatchApplyBegin`/`PatchApplyEnd`, call identity and terminal status) and compact
+activity/detail disclosure in
+[`codex-rs/tui/src/history_cell/mod.rs`](https://github.com/openai/codex/blob/c22a06c18070c3e33bd2648c7210a00a2a9f6f80/codex-rs/tui/src/history_cell/mod.rs)
+at the patch engine's pinned commit. `src/lib/agent-activity.ts` and
+`src/components/AgentActivities.tsx` implement these patterns for DraftLine's
+existing SSE and browser tool executor using React, Lucide and native HTML
+disclosure controls. Streamed tool metadata denotes pending work; actual
+execution and validation callbacks determine running and terminal states.
+DraftLine includes bounded tool feedback and excludes model reasoning from this
+activity view.
+
 DraftLine adapts code from [openai/codex](https://github.com/openai/codex) at commit
 [`2f05c0a71f59fb2f05800846351f3e9926c3e52b`](https://github.com/openai/codex/tree/2f05c0a71f59fb2f05800846351f3e9926c3e52b).
 Copyright 2025 OpenAI. Licensed under Apache License 2.0; see [LICENSE](LICENSE)

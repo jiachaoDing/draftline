@@ -1,4 +1,5 @@
 import { EventSourceParserStream } from "eventsource-parser/stream";
+import { toolPendingSchema, type ToolPending } from "./agent-activity";
 
 const INTERRUPTED =
   "The streaming connection was interrupted before completion. Please try again.";
@@ -10,6 +11,7 @@ export async function readAIStream<T>(
   response: Response,
   onDelta?: DeltaHandler,
   onActivity?: () => void,
+  onToolPending?: (event: ToolPending) => void,
 ): Promise<T> {
   if (!response.ok) {
     const body = await response.json().catch(() => null);
@@ -45,7 +47,12 @@ export async function readAIStream<T>(
     while (true) {
       const { value, done } = await reader.read();
       if (done) throw new AIStreamError(INTERRUPTED);
-      if (!["delta", "result", "error"].includes(value.event || "")) continue;
+      if (
+        !["delta", "result", "error", "tool_pending"].includes(
+          value.event || "",
+        )
+      )
+        continue;
       let data;
       try {
         data = JSON.parse(value.data);
@@ -58,6 +65,14 @@ export async function readAIStream<T>(
         throw new AIStreamError(
           typeof data.error === "string" ? data.error : INTERRUPTED,
         );
+      if (value.event === "tool_pending") {
+        const parsed = toolPendingSchema.safeParse(data);
+        if (!parsed.success)
+          throw new AIStreamError(
+            "The server sent an invalid activity event. Please try again.",
+          );
+        onToolPending?.(parsed.data);
+      }
       if (value.event === "delta") {
         if (typeof data.text !== "string")
           throw new AIStreamError(
@@ -84,6 +99,7 @@ export async function streamPost<T>(
   body: unknown,
   signal?: AbortSignal,
   onDelta?: DeltaHandler,
+  onToolPending?: (event: ToolPending) => void,
 ): Promise<T> {
   const transport = new AbortController();
   const combined = signal
@@ -110,7 +126,7 @@ export async function streamPost<T>(
       signal: combined,
     });
     armTimeout();
-    return await readAIStream<T>(response, onDelta, armTimeout);
+    return await readAIStream<T>(response, onDelta, armTimeout, onToolPending);
   } catch (error) {
     if (signal?.aborted)
       throw new DOMException("Generation cancelled.", "AbortError");

@@ -10,6 +10,7 @@ import {
 import { cleanDrawing, svgToHTML } from "./drawing";
 import { EXAMPLE } from "./example";
 import { drawingRevision } from "./ai-workflow";
+import { agentActivitySchema, settleActivities } from "./agent-activity";
 
 const referenceSchema = z.object({
   name: z.string().max(500),
@@ -38,10 +39,12 @@ const messageSchema = z
       .optional(),
     code: z.string().optional(),
     received: z.number().optional(),
+    activities: z.array(agentActivitySchema).max(256).default([]),
     reference: referenceSchema.optional(),
   })
   .transform((message) => ({
     ...message,
+    activities: settleActivities(message.activities, "cancelled"),
     status:
       message.status === "streaming" || message.status === "validating"
         ? ("cancelled" as const)

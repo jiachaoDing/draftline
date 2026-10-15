@@ -641,6 +641,9 @@ test("projects and large references survive a full browser restart", async ({
       .getByRole("button", { name: "Send drawing instruction" })
       .click();
     await expect(
+      page.getByRole("button", { name: "New Drawing", exact: true }),
+    ).toBeEnabled({ timeout: 10_000 });
+    await expect(
       page
         .frameLocator('iframe[title="Technical drawing preview"]')
         .locator("#hole-top-left"),

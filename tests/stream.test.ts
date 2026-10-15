@@ -14,6 +14,48 @@ afterEach(() => {
 });
 
 describe("shared frontend stream transport", () => {
+  it("delivers validated tool activity before a terminal result, without exposing arguments", async () => {
+    let output!: ReadableStreamDefaultController<Uint8Array>;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        output = controller;
+      },
+    });
+    const pending = vi.fn();
+    const result = readAIStream(response(body), undefined, undefined, pending);
+    output.enqueue(
+      encode(
+        event("tool_pending", {
+          index: 0,
+          name: "apply_patch",
+          arguments: "private",
+        }),
+      ),
+    );
+    await vi.waitFor(() =>
+      expect(pending).toHaveBeenCalledWith({ index: 0, name: "apply_patch" }),
+    );
+    output.enqueue(
+      encode(event("result", { kind: "message", message: "Done" })),
+    );
+    await expect(result).resolves.toEqual({ kind: "message", message: "Done" });
+  });
+  it("rejects invalid activity metadata and interrupted calls even after activity arrives", async () => {
+    for (const data of [
+      { index: 4, name: "read_source" },
+      { index: 0, name: "read_source" },
+    ]) {
+      const body = new ReadableStream<Uint8Array>({
+        start(output) {
+          output.enqueue(encode(event("tool_pending", data)));
+          output.close();
+        },
+      });
+      await expect(readAIStream(response(body))).rejects.toThrow(
+        data.index === 4 ? "invalid activity" : "interrupted",
+      );
+    }
+  });
   it("handles SSE framing and Chinese/emoji split across single-byte packets", async () => {
     const content = `: heartbeat\r\n\r\n${event("delta", { text: "你好 🔧\n" })}${event("result", { kind: "message", message: "你好 🔧" })}`;
     const bytes = encode(content);

@@ -55,6 +55,12 @@ import { pushHistory, type History } from "./lib/history";
 import { requestDrawing } from "./lib/api";
 import { runDrawingAgent } from "./lib/drawing-agent";
 import { validateDrawingSource } from "./lib/validate-source";
+import {
+  settleActivities,
+  updateActivity,
+  activityLabel,
+  type ActivityHandler,
+} from "./lib/agent-activity";
 import { previewStream } from "./lib/stream-preview";
 import { useDrawingSource } from "./hooks/useDrawingSource";
 import {
@@ -121,6 +127,9 @@ export default function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([welcome]);
   const [chatInput, setChatInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const runningActivity = [...(messages.at(-1)?.activities || [])]
+    .reverse()
+    .find((activity) => activity.status === "running");
   const [notice, setNotice] = useState<{
     text: string;
     error?: boolean;
@@ -379,6 +388,13 @@ export default function App() {
                   status,
                   text: text ?? message.text,
                   code: keepCode ? message.code : undefined,
+                  activities:
+                    status === "error" || status === "cancelled"
+                      ? settleActivities(
+                          message.activities,
+                          status === "error" ? "failed" : "cancelled",
+                        )
+                      : message.activities,
                 }
               : message,
           ),
@@ -499,6 +515,22 @@ export default function App() {
           html: svgToHTML(snapshot.svg),
         });
         setBusy(false);
+        const id = activeReply.current;
+        setMessages((messages) =>
+          messages.map((message) =>
+            message.id === id
+              ? {
+                  ...message,
+                  activities: updateActivity(message.activities, {
+                    id: "final-validation",
+                    kind: "validation",
+                    status: "completed",
+                    detail: "Validated drawing committed to revision history.",
+                  }),
+                }
+              : message,
+          ),
+        );
         finishReply("complete");
         tell("Drawing is ready. Click an element to refine it.");
       }
@@ -518,6 +550,7 @@ export default function App() {
               ? {
                   ...message,
                   status: "error",
+                  activities: settleActivities(message.activities, "failed"),
                   text: `${message.text}\n\nThe drawing could not be applied. ${text}`,
                 }
               : message,
@@ -546,8 +579,34 @@ export default function App() {
     activeReply.current = replyId;
     setMessages((messages) => [
       ...messages,
-      { id: replyId, role: "assistant", text: "", status: "streaming" },
+      {
+        id: replyId,
+        role: "assistant",
+        text: "",
+        status: "streaming",
+        activities: [
+          {
+            id: "model:0",
+            kind: "model",
+            status: "pending",
+            detail: "Request submitted. Connecting to your model.",
+          },
+        ],
+      },
     ]);
+    const onActivity: ActivityHandler = (activity) => {
+      if (controller.signal.aborted || activeReply.current !== replyId) return;
+      setMessages((messages) =>
+        messages.map((message) =>
+          message.id === replyId
+            ? {
+                ...message,
+                activities: updateActivity(message.activities, activity),
+              }
+            : message,
+        ),
+      );
+    };
     let source = "";
     let updateFrame: number | undefined;
     const flush = (retainReceivedText = false) => {
@@ -592,21 +651,7 @@ export default function App() {
         onRound: () => {
           source = "";
         },
-        onTool: (name) => {
-          setMessages((messages) =>
-            messages.map((message) =>
-              message.id === replyId
-                ? {
-                    ...message,
-                    text:
-                      name === "apply_patch"
-                        ? "Applying and validating drawing patch…"
-                        : "Inspecting drawing source…",
-                  }
-                : message,
-            ),
-          );
-        },
+        onActivity,
         onDelta: (text) => {
           source += text;
           if (updateFrame === undefined)
@@ -635,8 +680,20 @@ export default function App() {
         setClarification(input);
         finishReply("complete", result.question);
       } else if (result.kind !== "tool_calls") {
+        onActivity({
+          id: "final-validation",
+          kind: "validation",
+          status: "running",
+          detail: "Checking the completed drawing before committing it.",
+        });
         const change = drawingChange(result, input, drawing);
         if (change.kind === "commit") {
+          onActivity({
+            id: "final-validation",
+            kind: "validation",
+            status: "completed",
+            detail: "Drawing changes passed SVG and edit scope checks.",
+          });
           commit(change.drawing);
           finishReply("complete", result.summary);
           tell("Selected element updated.");
@@ -664,6 +721,7 @@ export default function App() {
               ? {
                   ...message,
                   status: "error",
+                  activities: settleActivities(message.activities, "failed"),
                   text: `${message.text}\n\n${(error as Error).message}`,
                 }
               : message,
@@ -1108,7 +1166,9 @@ export default function App() {
                 <span>
                   {pending
                     ? "Checking your drawing…"
-                    : "Receiving AI response…"}
+                    : runningActivity
+                      ? `${activityLabel(runningActivity)}…`
+                      : "Receiving AI response…"}
                 </span>
                 <button onClick={cancelGeneration}>Cancel</button>
               </div>

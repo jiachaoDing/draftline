@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { AgentActivity } from "./agent-activity";
 import {
   agentCallsResultSchema,
   agentTurnSchema,
@@ -89,6 +90,7 @@ export type ChatMessage = {
   status?: "streaming" | "validating" | "complete" | "cancelled" | "error";
   code?: string;
   received?: number;
+  activities?: AgentActivity[];
   reference?: { data: string; name: string };
 };
 

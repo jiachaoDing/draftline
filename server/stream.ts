@@ -3,6 +3,7 @@ import { streamSSE } from "hono/streaming";
 import OpenAI from "openai";
 import { userInputResultSchema } from "../src/lib/contracts";
 import { agentCallsResultSchema } from "../src/lib/agent-contracts";
+import { toolPendingSchema } from "../src/lib/agent-activity";
 
 export class AIStreamError extends Error {}
 export function providerErrorMessage(error: Error, streaming = false) {
@@ -80,6 +81,7 @@ export function streamAI<T>(
         number,
         { id: string; name: string; arguments: string }
       >();
+      const announced = new Set<number>();
       for await (const chunk of upstream) {
         if (controller.signal.aborted || output.aborted) break;
         armWatchdog();
@@ -112,6 +114,17 @@ export function streamAI<T>(
               "The model returned an oversized tool call.",
             );
           calls.set(delta.index, call);
+          const pending = toolPendingSchema.safeParse({
+            index: delta.index,
+            name: call.name,
+          });
+          if (pending.success && !announced.has(delta.index)) {
+            announced.add(delta.index);
+            await output.writeSSE({
+              event: "tool_pending",
+              data: JSON.stringify(pending.data),
+            });
+          }
         }
         if (text) {
           content += text;
@@ -140,6 +153,10 @@ export function streamAI<T>(
         );
       if (finishReason === "tool_calls" && allowUserInput) {
         const ordered = [...calls.entries()].sort(([a], [b]) => a - b);
+        if (ordered.some(([index], position) => index !== position))
+          throw new AIStreamError(
+            "The model returned invalid tool call indices. Please try again.",
+          );
         if (
           allowAgentTools &&
           ordered.some(([, call]) => call.name !== "request_user_input")
