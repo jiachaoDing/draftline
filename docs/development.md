@@ -4,18 +4,20 @@ Use Node.js 24.11+ and npm. Files are UTF-8. Install the lockfile with `npm ci`,
 
 ## Commands
 
-| Command                | Purpose                                                                               |
-| ---------------------- | ------------------------------------------------------------------------------------- |
-| `npm run lint`         | Biome correctness, React hook and browser/server import boundaries; warnings fail     |
-| `npm run format:check` | Check Prettier formatting                                                             |
-| `npm run format`       | Format maintained source/config/docs; excludes generated output and third-party files |
-| `npm run check`        | Strict TypeScript checking for source, server, tests and tooling                      |
-| `npm test`             | Vitest unit/integration suite                                                         |
-| `npm run test:e2e`     | Full browser suite with the local compatible provider; starts the dev server          |
-| `npm run build`        | Type check, Vite client and bundled Worker/Node server with license assets            |
-| `npm start`            | Serve the build on loopback port 3000; `PORT` overrides it                            |
-| `npm run verify`       | Lint, formatting, types, unit/integration tests and production build                  |
-| `npm run verify:all`   | All of `verify`, then browser regression tests; completion/CI gate                    |
+| Command                | Purpose                                                                                                        |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `npm run lint`         | Biome correctness, React hook and browser/server import boundaries; warnings fail                              |
+| `npm run format:check` | Check Prettier formatting                                                                                      |
+| `npm run format`       | Format maintained source/config/docs; excludes generated output and third-party files                          |
+| `npm run check`        | Strict TypeScript checking for source, server, tests and tooling                                               |
+| `npm test`             | Vitest unit/integration suite                                                                                  |
+| `npm run test:e2e`     | Full browser suite with the local compatible provider; starts the dev server                                   |
+| `npm run build`        | Type check, Vite client and bundled Worker/Node server with license assets                                     |
+| `npm run build:patch`  | Rebuild original Codex Rust WASM and recorded source/artifact hashes; requires Rust and wasm32-unknown-unknown |
+| `npm run test:patch`   | Run retained upstream Rust parser/matcher tests using wasm32-wasip1 and Node WASI                              |
+| `npm start`            | Serve the build on loopback port 3000; `PORT` overrides it                                                     |
+| `npm run verify`       | Lint, formatting, types, unit/integration tests and production build                                           |
+| `npm run verify:all`   | All of `verify`, then browser regression tests; completion/CI gate                                             |
 
 Playwright uses installed Microsoft Edge by default. To use its Chromium on Windows:
 
@@ -54,6 +56,7 @@ Get-Content -LiteralPath src/lib/drawing.ts -Encoding UTF8
 ## Test map and debugging
 
 - Drawing/presentation/export changes: `drawing.test.ts`, `ai-workflow.test.ts`, `history.test.ts`, plus the drawing/code/export/undo cases in `e2e/studio.spec.ts`.
+- Incremental source editing: `codex-patch.test.ts` runs the shipped Rust WASM against original upstream fixtures and verifies provenance hashes; `drawing-agent.test.ts` covers version/scope/atomicity, feedback/retry and cancellation. `e2e/incremental.spec.ts` exercises repeated streamed tools through the real provider SDK, browser WASM and isolated validation frame, including failure recovery, consecutive patches, question refresh, manual edits, history, persistence and exports. Rust source updates also require `build:patch` and `test:patch`; see [patch engine attribution](../third_party/codex/apply-patch/README.md).
 - AI transport/messages/security changes: `stream.test.ts`, `provider.test.ts`, `messages.test.ts`, `user-input-provider.test.ts`. Keep terminal result, cancellation, malformed/truncated stream and safe error behavior covered.
 - Clarification changes: `user-input.test.ts`, `user-input-flow.test.ts`, `e2e/user-input.spec.ts`; check queued/follow-up calls, explicit submission, persisted drafts and retry IDs.
 - Settings/projects/editor changes: `projects.test.ts`, `format-source.test.ts`, `e2e/model-selector.spec.ts` and project switching, browser restart, storage failure and code-editor cases in `e2e/studio.spec.ts`.

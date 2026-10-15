@@ -1,5 +1,11 @@
 # OpenAI Codex attribution
 
+The original Rust incremental patch engine and supporting browser tool loop are
+documented in [apply-patch/README.md](apply-patch/README.md), pinned to commit
+`c22a06c18070c3e33bd2648c7210a00a2a9f6f80`. Source copies, adaptations, fixture
+tests and WASM/source hashes are included in that directory. The license and
+notice below apply to both integrations.
+
 DraftLine adapts code from [openai/codex](https://github.com/openai/codex) at commit
 [`2f05c0a71f59fb2f05800846351f3e9926c3e52b`](https://github.com/openai/codex/tree/2f05c0a71f59fb2f05800846351f3e9926c3e52b).
 Copyright 2025 OpenAI. Licensed under Apache License 2.0; see [LICENSE](LICENSE)

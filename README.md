@@ -1,6 +1,6 @@
 # Draftline — AI Drawing Studio
 
-A working sketch → drawing → edit → SVG application. AI writes inline HTML, SVG, and synchronous JavaScript directly. The application validates and displays that code, then applies small SVG replacements for selected-element edits.
+A working sketch → drawing → edit → SVG application. AI writes inline HTML, SVG, and synchronous JavaScript for initial drawings, then inspects and patches the current drawing's versioned source using the original OpenAI Codex Rust patch engine compiled to WebAssembly.
 
 ## Run locally
 
@@ -29,7 +29,9 @@ Ordinary conversation, missing-dimension clarification, drawing generation, sele
 
 The browser reads SSE with `eventsource-parser` and decodes display-only partial JSON with `partial-json`. Human-readable answers appear progressively as actual network content arrives. Generated HTML/SVG and patches appear as plain text while receiving. A terminal successful model completion and validated response are required before applying an edit. Complete generated HTML is executed and checked in a hidden isolated preview; only the verified SVG is committed to the visible canvas and undo history.
 
-**Stop generation** cancels the browser request and its upstream model connection. Connection testing also supports streaming replies and cancellation. Interrupted connections, provider errors, malformed responses, token-limit truncation, and invalid SVG leave the current drawing intact and show an error. Partial or cancelled messages stay visible but are excluded from subsequent model history. Requests are not automatically replayed.
+For subsequent modifications, the assistant can call `read_source`, `search_source` and `apply_patch` repeatedly within one user request. Inspection returns numbered HTML/SVG lines, selected-element context, associated dimensions and a revision token. Patches use Codex's `*** Begin Patch` / `*** Update File: drawing.html` / `@@` format. The browser executes the original Rust parser, matching and update algorithms through WASM, validates each candidate in the drawing sandbox, and returns success or errors to the model for correction and retry. Only the current virtual `drawing.html` is accessible. Each patch must use the inspected revision and unique context; selected edits preserve unrelated elements. A successful final model response commits all validated changes as one undo step. The loop allows 16 tool rounds and keeps full HTML available for drawing creation and whole-drawing regeneration.
+
+**Stop generation** cancels the browser request and its upstream model connection. Connection testing also supports streaming replies and cancellation. Interrupted connections, provider errors, malformed responses, token-limit truncation, and unresolved patch failures leave the committed drawing intact and discard staged edits. Partial or cancelled messages stay visible but are excluded from subsequent model history. The model can correct tool failures within the active request; transport failures require an explicit new request.
 
 The server sends a heartbeat every 15 seconds and limits upstream inactivity to 120 seconds. The browser detects a connection that sends no bytes for 45 seconds; heartbeat bytes keep an active connection alive. Streaming responses use `Cache-Control: no-store, no-transform` and `X-Accel-Buffering: no`.
 
@@ -38,6 +40,8 @@ Clarification uses the `request_user_input` function tool through the same Chat 
 Question shortcuts: ↑/↓ select, 1–4 submit an option, ←/→ or PageUp/PageDown change questions, Tab opens notes, Enter submits, Shift Enter adds a newline. Tab/Escape in notes clears notes and returns to options. Escape from the question area or **Cancel questions** interrupts clarification. Stopping or failing a continuation retains the questions for explicit retry; refreshing during continuation restores them without replaying the request.
 
 This interaction is adapted from [OpenAI Codex](https://github.com/openai/codex/tree/2f05c0a71f59fb2f05800846351f3e9926c3e52b/codex-rs/tui/src/bottom_pane/request_user_input). The translated state machine, schema, modifications, Apache-2.0 license and upstream notice are documented in [third_party/codex](third_party/codex/README.md). Production builds include these files under `/licenses/codex/`.
+
+The incremental editing engine is pinned to Codex commit [`c22a06c18070c3e33bd2648c7210a00a2a9f6f80`](https://github.com/openai/codex/tree/c22a06c18070c3e33bd2648c7210a00a2a9f6f80). Original Rust sources, fixtures, mechanical adaptations, build hashes and tool-loop design are recorded in [the patch-engine attribution](third_party/codex/apply-patch/README.md). The checked-in WASM artifact runs in both development and production; Rust is needed only to rebuild it.
 
 ## Build and verify
 
@@ -52,19 +56,20 @@ Playwright uses installed Microsoft Edge by default. Set `PLAYWRIGHT_CHANNEL=chr
 
 ## Libraries and architecture
 
-| Responsibility                         | Reused implementation                                                                            |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| UI and build                           | React, Vite, Lucide                                                                              |
-| Accessible model selection             | [Headless UI Combobox](https://headlessui.com/react/combobox)                                    |
-| Source editing and formatting          | [CodeMirror 6](https://codemirror.net/), [Prettier standalone](https://prettier.io/docs/browser) |
-| AI requests and custom API URLs        | [Official OpenAI JavaScript SDK](https://github.com/openai/openai-node) on the server            |
-| Stream framing and incremental display | Hono SSE, eventsource-parser, partial-json                                                       |
-| Portable API routing and body limits   | [Hono](https://github.com/honojs/hono), its Node adapter and body-limit middleware               |
-| SVG and HTML sanitization              | [DOMPurify](https://github.com/cure53/DOMPurify)                                                 |
-| SVG zoom, pan and fit                  | [svg-pan-zoom](https://github.com/bumbu/svg-pan-zoom)                                            |
-| Local project persistence              | [idb](https://github.com/jakearchibald/idb) with IndexedDB                                       |
-| Request and response contracts         | Zod                                                                                              |
-| Unit and browser checks                | Vitest, jsdom, Playwright                                                                        |
+| Responsibility                         | Reused implementation                                                                                                                                                                                |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| UI and build                           | React, Vite, Lucide                                                                                                                                                                                  |
+| Accessible model selection             | [Headless UI Combobox](https://headlessui.com/react/combobox)                                                                                                                                        |
+| Source editing and formatting          | [CodeMirror 6](https://codemirror.net/), [Prettier standalone](https://prettier.io/docs/browser)                                                                                                     |
+| Incremental AI editing                 | [OpenAI Codex Rust apply-patch](https://github.com/openai/codex/tree/c22a06c18070c3e33bd2648c7210a00a2a9f6f80/codex-rs/apply-patch), browser WASM; [parse5](https://parse5.js.org/) source locations |
+| AI requests and custom API URLs        | [Official OpenAI JavaScript SDK](https://github.com/openai/openai-node) on the server                                                                                                                |
+| Stream framing and incremental display | Hono SSE, eventsource-parser, partial-json                                                                                                                                                           |
+| Portable API routing and body limits   | [Hono](https://github.com/honojs/hono), its Node adapter and body-limit middleware                                                                                                                   |
+| SVG and HTML sanitization              | [DOMPurify](https://github.com/cure53/DOMPurify)                                                                                                                                                     |
+| SVG zoom, pan and fit                  | [svg-pan-zoom](https://github.com/bumbu/svg-pan-zoom)                                                                                                                                                |
+| Local project persistence              | [idb](https://github.com/jakearchibald/idb) with IndexedDB                                                                                                                                           |
+| Request and response contracts         | Zod                                                                                                                                                                                                  |
+| Unit and browser checks                | Vitest, jsdom, Playwright                                                                                                                                                                            |
 
 `server/app.ts` forwards user-configured credentials to the chosen provider. `server/stream.ts` handles streaming, cancellation, timeouts, error redaction and final response validation for every AI route. `src/lib/stream.ts` provides the shared browser transport, and `src/lib/stream-preview.ts` decodes partial responses for text display. `server/prompts.ts` contains the drawing contract. `src/lib/sandbox.ts` supplies the isolated preview and interaction bridge. `src/lib/drawing.ts` validates scale and layers, enforces patch boundaries, and serializes export. `src/lib/presentation.ts` lays out sheet information using native SVG and browser font measurement. React holds a bounded 30-revision undo history, including user-supplied manufacturing notes.
 

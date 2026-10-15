@@ -1,4 +1,5 @@
 node_modules/
+third_party/codex/apply-patch/target/
 dist/
 .generated/
 .env*

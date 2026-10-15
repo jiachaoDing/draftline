@@ -226,9 +226,88 @@ export function applyPatches(
       throw new Error(
         "The edit removed a stable element ID. Try a whole-drawing edit.",
       );
+    // XMLSerializer adds xmlns to standalone fragments. The drawing root
+    // already provides this namespace; avoid a spurious attribute-only edit.
+    for (const node of [replacement, ...replacement.querySelectorAll("*")])
+      if (node.getAttribute("xmlns") === svg.namespaceURI)
+        node.removeAttribute("xmlns");
     old.replaceWith(replacement);
   }
   return serialize(validateSVG(svg));
+}
+
+/** Verify a source patch against the same selected-element policy as SVG replacements. */
+export function mergeSelectedEdit(
+  before: string,
+  after: string,
+  selectedId: string,
+) {
+  const old = validateSVG(sanitizeSVG(before));
+  const next = validateSVG(sanitizeSVG(after));
+  const selected = [...old.querySelectorAll("[id]")].find(
+    (node) => node.id === selectedId,
+  );
+  if (!selected) throw new Error("The selected element no longer exists.");
+  const ids = new Set([
+    selectedId,
+    ...[...selected.querySelectorAll("[id]")].map((node) => node.id),
+  ]);
+  const allowed = [
+    selectedId,
+    ...[...old.querySelectorAll("#dimensions > g[data-for]")]
+      .filter((node) =>
+        node
+          .getAttribute("data-for")!
+          .split(/\s+/)
+          .some((id) => ids.has(id)),
+      )
+      .map((node) => node.id),
+  ];
+  return applyPatches(
+    before,
+    allowed.map((id) => {
+      const node = [...next.querySelectorAll("[id]")].find(
+        (node) => node.id === id,
+      );
+      if (!node) throw new Error("The edit removed a stable element ID.");
+      return { id, svg: serialize(node) };
+    }),
+    selectedId,
+  );
+}
+
+export function assertSelectedEdit(
+  before: string,
+  after: string,
+  selectedId: string,
+) {
+  const next = validateSVG(sanitizeSVG(after));
+  const expected = mergeSelectedEdit(before, after, selectedId);
+  const expectedNode = sanitizeSVG(expected);
+  if (!expectedNode.isEqualNode(next)) {
+    const mismatch = [
+      expectedNode,
+      ...expectedNode.querySelectorAll("[id]"),
+    ].find((node) => {
+      const other = [next, ...next.querySelectorAll("[id]")].find(
+        (el) => el.id === node.id,
+      );
+      return (
+        !other ||
+        node
+          .getAttributeNames()
+          .some(
+            (name) => node.getAttribute(name) !== other.getAttribute(name),
+          ) ||
+        other
+          .getAttributeNames()
+          .some((name) => node.getAttribute(name) !== other.getAttribute(name))
+      );
+    });
+    throw new Error(
+      `The edit changed unrelated elements${mismatch ? ` (${mismatch.id})` : " (structure or text)"}. Only the selection and associated dimensions may change.`,
+    );
+  }
 }
 
 export function exportSVG(

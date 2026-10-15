@@ -5,6 +5,7 @@ import { createProvider, parseAIResult } from "./provider";
 import { drawingMessages } from "./messages";
 import { providerErrorMessage, streamAI } from "./stream";
 import { requestUserInputTool } from "./user-input";
+import { drawingTools } from "./drawing-tools";
 
 export function createApp(allowLocal = false) {
   const app = new Hono();
@@ -58,12 +59,16 @@ export function createApp(allowLocal = false) {
       client,
       {
         model: input.config.model,
-        tools: [requestUserInputTool],
+        tools: [
+          requestUserInputTool,
+          ...(input.mode === "edit" && input.source ? drawingTools : []),
+        ],
         parallel_tool_calls: false,
         messages: drawingMessages(input),
       },
       parseAIResult,
       true,
+      input.mode === "edit" && !!input.source,
     );
   });
   app.onError((error, c) => {

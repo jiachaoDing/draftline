@@ -7,6 +7,8 @@
     "node": ">=24.11.0"
   },
   "scripts": {
+    "build:patch": "node scripts/build-codex-patch.mjs",
+    "test:patch": "node scripts/test-codex-patch.mjs",
     "dev": "node scripts/dev.mjs",
     "build": "tsc --noEmit && vite build && node scripts/build-server.mjs",
     "start": "node scripts/serve.mjs",
@@ -34,6 +36,7 @@
     "idb": "^8.0.4",
     "lucide-react": "1.55.0",
     "openai": "7.32.0",
+    "parse5": "8.0.1",
     "partial-json": "0.1.7",
     "prettier": "3.9.10",
     "react": "19.3.0",

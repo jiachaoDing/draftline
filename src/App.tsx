@@ -53,11 +53,14 @@ import {
 } from "./lib/drawing";
 import { pushHistory, type History } from "./lib/history";
 import { requestDrawing } from "./lib/api";
+import { runDrawingAgent } from "./lib/drawing-agent";
+import { validateDrawingSource } from "./lib/validate-source";
 import { previewStream } from "./lib/stream-preview";
 import { useDrawingSource } from "./hooks/useDrawingSource";
 import {
   drawingContext,
   drawingChange,
+  drawingRevision,
   type DrawingContext,
 } from "./lib/ai-workflow";
 import {
@@ -355,7 +358,9 @@ export default function App() {
   }
 
   const commit = useCallback((next: Drawing) => {
-    setHistory((h) => pushHistory(h, next));
+    setHistory((h) =>
+      pushHistory(h, { ...next, revision: crypto.randomUUID() }),
+    );
     setSelectedId(null);
     setElements([]);
     setClarification(null);
@@ -567,20 +572,60 @@ export default function App() {
       );
     };
     try {
-      const result = await requestDrawing(
-        { ...input, config, toolTurns: input.toolTurns || [] },
-        controller.signal,
-        (text) => {
+      const projectId = activeIdRef.current;
+      const baseRevision = drawing ? drawingRevision(drawing) : undefined;
+      const outcome = await runDrawingAgent({
+        context: input,
+        config,
+        drawing,
+        signal: controller.signal,
+        request: requestDrawing,
+        validate: validateDrawingSource,
+        isCurrent: () => {
+          const project = projectsRef.current.find((p) => p.id === projectId);
+          const current = project?.history.items[project.history.index];
+          return (
+            activeIdRef.current === projectId &&
+            (current ? drawingRevision(current) : undefined) === baseRevision
+          );
+        },
+        onRound: () => {
+          source = "";
+        },
+        onTool: (name) => {
+          setMessages((messages) =>
+            messages.map((message) =>
+              message.id === replyId
+                ? {
+                    ...message,
+                    text:
+                      name === "apply_patch"
+                        ? "Applying and validating drawing patch…"
+                        : "Inspecting drawing source…",
+                  }
+                : message,
+            ),
+          );
+        },
+        onDelta: (text) => {
           source += text;
           if (updateFrame === undefined)
             updateFrame = requestAnimationFrame(() => flush());
         },
-      );
+      });
+      const { result } = outcome;
       if (updateFrame !== undefined) cancelAnimationFrame(updateFrame);
       flush();
       controller.signal.throwIfAborted();
-      if (result.kind === "request_user_input") {
-        setUserInput(pendingQuestions(input, result));
+      if (outcome.drawing) {
+        commit(outcome.drawing);
+        finishReply(
+          "complete",
+          result.kind === "message" ? result.message : outcome.drawing.summary,
+        );
+        tell("Drawing updated.");
+      } else if (result.kind === "request_user_input") {
+        setUserInput(pendingQuestions(outcome.context, result));
         finishReply("complete", questionText(result));
       } else if (result.kind === "message") {
         setUserInput(null);
@@ -589,7 +634,7 @@ export default function App() {
         setUserInput(null);
         setClarification(input);
         finishReply("complete", result.question);
-      } else {
+      } else if (result.kind !== "tool_calls") {
         const change = drawingChange(result, input, drawing);
         if (change.kind === "commit") {
           commit(change.drawing);

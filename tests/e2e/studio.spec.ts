@@ -185,6 +185,9 @@ test("sketch → clarification → generated code → targeted edit → undo/red
     .getByLabel("Drawing instructions")
     .fill("120 mm wide, 80 mm high.");
   await page.getByRole("button", { name: "Send drawing instruction" }).click();
+  await expect(
+    page.getByRole("button", { name: "New Drawing", exact: true }),
+  ).toBeEnabled({ timeout: 10_000 });
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "6");
   await expect(frame.locator("#presentation")).toContainText(
     "Material: 3 mm stainless steel.",

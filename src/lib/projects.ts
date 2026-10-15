@@ -9,6 +9,7 @@ import {
 } from "./contracts";
 import { cleanDrawing, svgToHTML } from "./drawing";
 import { EXAMPLE } from "./example";
+import { drawingRevision } from "./ai-workflow";
 
 const referenceSchema = z.object({
   name: z.string().max(500),
@@ -16,6 +17,7 @@ const referenceSchema = z.object({
 });
 const drawingSchema = z
   .object({
+    revision: z.string().min(1).max(200).optional(),
     title: z.string().max(120),
     svg: z.string().max(600_000),
     summary: z.string().max(3000),
@@ -23,7 +25,8 @@ const drawingSchema = z
   })
   .transform((drawing): Drawing => {
     const svg = cleanDrawing(drawing.svg);
-    return { ...drawing, svg, html: svgToHTML(svg) };
+    const restored = { ...drawing, svg, html: svgToHTML(svg) };
+    return { ...restored, revision: drawingRevision(restored) };
   });
 const messageSchema = z
   .object({
@@ -74,6 +77,8 @@ export const welcome = {
   text: "Describe a part with its dimensions, or attach a reference sketch. I’ll create your drawing, then help you refine it.",
 };
 export function newProject(drawing: Drawing | null = null): Project {
+  if (drawing)
+    drawing = { ...drawing, revision: drawing.revision || crypto.randomUUID() };
   return {
     id: crypto.randomUUID(),
     name: drawing?.title || "Untitled drawing",

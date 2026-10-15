@@ -9,6 +9,15 @@ import { applyPatches, svgToHTML } from "./drawing";
 // Credentials enter only at the transport boundary, never into saved context.
 export type DrawingContext = Omit<DrawingRequest, "config">;
 
+export function drawingRevision(drawing: Drawing) {
+  if (drawing.revision) return drawing.revision;
+  // Stable identity for bundled examples and records created before first save.
+  let hash = 2166136261;
+  for (const c of drawing.svg)
+    hash = Math.imul(hash ^ c.charCodeAt(0), 16777619);
+  return `source-${(hash >>> 0).toString(16)}`;
+}
+
 export function conversationHistory(messages: ChatMessage[]) {
   return messages
     .filter((message) => !message.status || message.status === "complete")
@@ -42,6 +51,14 @@ export function drawingContext(
     selectedId,
     notes: drawing?.notes || [],
     toolTurns: [],
+    agentTurns: [],
+    source: drawing
+      ? {
+          path: "drawing.html",
+          revision: drawingRevision(drawing),
+          html: drawing.html,
+        }
+      : undefined,
     history,
   };
 }

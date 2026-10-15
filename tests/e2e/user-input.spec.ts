@@ -133,7 +133,10 @@ async function setup(
   instruction = "Draw a plate; ask for dimensions",
 ) {
   await page.addInitScript(
-    (config) => localStorage.setItem("draftline-model", JSON.stringify(config)),
+    (config) => {
+      if (window === window.top)
+        localStorage.setItem("draftline-model", JSON.stringify(config));
+    },
     {
       baseURL,
       apiKey: "browser-test-key",
@@ -278,7 +281,10 @@ test("failed and stopped continuation restores questions and can retry; selected
   page,
 }) => {
   await page.addInitScript(
-    (config) => localStorage.setItem("draftline-model", JSON.stringify(config)),
+    (config) => {
+      if (window === window.top)
+        localStorage.setItem("draftline-model", JSON.stringify(config));
+    },
     { baseURL, apiKey: "test", model: "vision-test" },
   );
   await page.goto("/");

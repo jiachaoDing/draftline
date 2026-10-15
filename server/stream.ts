@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import OpenAI from "openai";
 import { userInputResultSchema } from "../src/lib/contracts";
+import { agentCallsResultSchema } from "../src/lib/agent-contracts";
 
 export class AIStreamError extends Error {}
 export function providerErrorMessage(error: Error, streaming = false) {
@@ -40,6 +41,7 @@ export function streamAI<T>(
   params: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming,
   finalize: (content: string) => T,
   allowUserInput = false,
+  allowAgentTools = false,
 ) {
   const response = streamSSE(c, async (output) => {
     const controller = new AbortController();
@@ -102,7 +104,7 @@ export function streamAI<T>(
           if (delta.function?.arguments)
             call.arguments += delta.function.arguments;
           if (
-            call.arguments.length > 32000 ||
+            call.arguments.length > (allowAgentTools ? 200_000 : 32000) ||
             call.id.length > 200 ||
             call.name.length > 100
           )
@@ -138,6 +140,25 @@ export function streamAI<T>(
         );
       if (finishReason === "tool_calls" && allowUserInput) {
         const ordered = [...calls.entries()].sort(([a], [b]) => a - b);
+        if (
+          allowAgentTools &&
+          ordered.some(([, call]) => call.name !== "request_user_input")
+        ) {
+          const parsed = agentCallsResultSchema.safeParse({
+            kind: "tool_calls",
+            content,
+            calls: ordered.map(([, call]) => call),
+          });
+          if (!parsed.success)
+            throw new AIStreamError(
+              "The model returned invalid tool calls. Please try again.",
+            );
+          await output.writeSSE({
+            event: "result",
+            data: JSON.stringify(parsed.data),
+          });
+          return;
+        }
         if (ordered.some(([, call]) => call.name !== "request_user_input"))
           throw new AIStreamError(
             "The model returned an unsupported tool call.",

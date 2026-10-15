@@ -1,5 +1,10 @@
 import { z } from "zod";
 import {
+  agentCallsResultSchema,
+  agentTurnSchema,
+  sourceSchema,
+} from "./agent-contracts";
+import {
   userInputCallSchema,
   userInputTurnSchema,
   userInputResponseSchema,
@@ -57,8 +62,12 @@ export const userInputResultSchema = z
   .refine(
     ({ calls }) => new Set(calls.map((call) => call.id)).size === calls.length,
   );
-export type DrawingResult = AIResult | z.infer<typeof userInputResultSchema>;
+export type DrawingResult =
+  | AIResult
+  | z.infer<typeof userInputResultSchema>
+  | z.infer<typeof agentCallsResultSchema>;
 export type Drawing = {
+  revision?: string;
   title: string;
   html: string;
   svg: string;
@@ -95,6 +104,8 @@ export const drawingRequestSchema = z.object({
   svg: z.string().max(600_000).optional(),
   selectedId: z.string().max(200).optional(),
   notes: notesSchema,
+  source: sourceSchema.optional(),
+  agentTurns: z.array(agentTurnSchema).max(16).default([]),
   toolTurns: z.array(userInputTurnSchema).max(12).default([]),
   history: z
     .array(

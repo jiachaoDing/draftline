@@ -10,6 +10,12 @@ for (const name of ["LICENSE", "NOTICE", "README.md"])
     `third_party/codex/${name}`,
     `dist/client/licenses/codex/${name}.txt`,
   );
+await mkdir("dist/client/licenses/codex/apply-patch", { recursive: true });
+for (const name of ["README.md", "build.json"])
+  await copyFile(
+    `third_party/codex/apply-patch/${name}`,
+    `dist/client/licenses/codex/apply-patch/${name}.txt`,
+  );
 async function collect(directory, prefix = "") {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const file = path.join(directory, entry.name);
