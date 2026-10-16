@@ -41,12 +41,24 @@ translated into TypeScript/React; layout uses DraftLine CSS, native controls,
 accessible radio semantics and mouse navigation. Tool requests use the existing
 OpenAI-compatible Chat Completions transport. Each question initially highlights
 the first option; only explicitly submitted answers are returned. Notes use the
-upstream `user_note: ` prefix; the client appends “None of the above”.
+upstream `user_note: ` prefix; the client appends one “Custom answer” choice.
+Its identity is the index after the predefined options. Custom text and optional
+notes have separate per-question drafts. Custom selection immediately reveals
+and focuses its textarea; submission requires non-whitespace text and returns
+the actual answer, with optional notes as a second entry. Tool instructions
+request concrete predefined answers and allow an empty options array for exact
+measurements. Saved records default the custom draft to an empty string.
 
 DraftLine waits for explicit user submission, preserves pending questions and
 drafts in project storage, and resumes with assistant `tool_calls` and matching
 `tool` messages. Multiple calls in a completion are queued. The web transport
 validates bounded arguments, unique question/call IDs and matching answers.
 Browser Tab traversal is retained on buttons; Tab from the question area enters
-notes, and Tab/Escape in notes clears them and returns to options. The UI also
-provides visible navigation and cancellation controls.
+notes or focuses the selected custom input, and Tab/Escape in notes clears them
+and returns to options. Escape from custom input returns to options while
+retaining its draft. Arrow keys in either textarea move the caret;
+PageUp/PageDown and Ctrl P/N navigate questions. The UI provides visible
+navigation, skip and cancellation controls. These web adaptations follow the
+client-owned other choice, per-question draft restoration and explicit
+submission conventions in the upstream
+[request-user-input state machine](https://github.com/openai/codex/tree/main/codex-rs/tui/src/bottom_pane/request_user_input).

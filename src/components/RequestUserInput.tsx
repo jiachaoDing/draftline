@@ -5,6 +5,7 @@ import { useEffect, useRef, type KeyboardEvent } from "react";
 import { ArrowLeft, ArrowRight, CircleHelp, X } from "lucide-react";
 import {
   collectAnswers,
+  canSubmitAnswer,
   type Questionnaire,
   type UserInputArgs,
   type UserInputResponse,
@@ -29,18 +30,22 @@ export default function RequestUserInput({
 }: Props) {
   const root = useRef<HTMLDivElement>(null);
   const notes = useRef<HTMLTextAreaElement>(null);
+  const customInput = useRef<HTMLTextAreaElement>(null);
   const question = args.questions[state.index];
   const answer = state.answers[state.index];
+  const isCustom = answer.selected === question.options.length;
   const options = [
     ...question.options,
     {
-      label: "None of the above",
-      description: "Optionally, add details in notes (tab)",
+      label: "Custom answer",
+      description: "Enter your exact measurement or answer.",
     },
   ];
   useEffect(() => {
-    root.current?.focus();
-  }, [state.index]);
+    if (state.confirmUnanswered) return;
+    if (isCustom) customInput.current?.focus();
+    else root.current?.focus();
+  }, [state.index, isCustom, state.confirmUnanswered]);
   const update = (patch: Partial<typeof answer>) =>
     onChange({
       ...state,
@@ -62,13 +67,26 @@ export default function RequestUserInput({
     update({ notes: "", notesVisible: false, committed: false });
     root.current?.focus();
   };
+  const selectOption = (selected: number) => {
+    update({ selected, committed: false });
+    if (selected === question.options.length)
+      requestAnimationFrame(() => customInput.current?.focus());
+    else root.current?.focus();
+  };
   const advance = (selected = answer.selected) => {
-    if (selected === null && answer.notes.trim()) selected = 0;
+    if (selected === question.options.length && !answer.customAnswer.trim()) {
+      selectOption(selected);
+      return;
+    }
     const next = {
       ...state,
       answers: state.answers.map((a, i) =>
         i === state.index
-          ? { ...a, selected, committed: selected !== null }
+          ? {
+              ...a,
+              selected,
+              committed: canSubmitAnswer(question, { ...a, selected }),
+            }
           : a,
       ),
     };
@@ -90,6 +108,7 @@ export default function RequestUserInput({
       return;
     }
     const inNotes = event.target === notes.current;
+    const inCustom = event.target === customInput.current;
     const inOptions =
       event.target === root.current ||
       (event.target as HTMLElement).getAttribute("role") === "radio";
@@ -104,45 +123,42 @@ export default function RequestUserInput({
     }
     if (key === "Escape") {
       event.preventDefault();
-      if (answer.notesVisible) clearNotes();
+      if (inCustom) root.current?.focus();
+      else if (answer.notesVisible) clearNotes();
       else onCancel();
     } else if (key === "Enter" && !event.shiftKey) {
       // Buttons use their native activation; the list itself follows Codex Enter behavior.
       if (
         !inNotes &&
+        !inCustom &&
         !inOptions &&
         (event.target as HTMLElement).tagName === "BUTTON"
       )
         return;
       event.preventDefault();
-      if (
-        !inNotes &&
-        answer.selected === question.options.length &&
-        !answer.notesVisible
-      )
-        openNotes();
-      else advance();
+      advance();
     } else if (key === "Tab" && !event.shiftKey && (inNotes || inOptions)) {
       event.preventDefault();
       if (inNotes) clearNotes();
+      else if (isCustom) customInput.current?.focus();
       else openNotes();
-    } else if (["ArrowUp", "ArrowDown"].includes(key)) {
+    } else if (inOptions && ["ArrowUp", "ArrowDown"].includes(key)) {
       event.preventDefault();
-      update({
-        selected:
-          ((answer.selected ?? 0) +
-            (key === "ArrowUp" ? -1 : 1) +
-            options.length) %
+      selectOption(
+        ((answer.selected ?? 0) +
+          (key === "ArrowUp" ? -1 : 1) +
+          options.length) %
           options.length,
-        committed: false,
-      });
-    } else if (!inNotes && inOptions) {
+      );
+    } else if (inOptions) {
       if (["ArrowLeft", "ArrowRight", "h", "l"].includes(key)) {
         event.preventDefault();
         move(key === "ArrowLeft" || key === "h" ? -1 : 1);
       } else if (/^[1-9]$/.test(key) && Number(key) <= options.length) {
         event.preventDefault();
-        advance(Number(key) - 1);
+        const selected = Number(key) - 1;
+        if (selected === question.options.length) selectOption(selected);
+        else advance(selected);
       } else if (["Backspace", "Delete"].includes(key)) {
         event.preventDefault();
         update({
@@ -153,7 +169,8 @@ export default function RequestUserInput({
         });
       } else if (key === " ") {
         event.preventDefault();
-        update({ committed: answer.selected !== null });
+        if (isCustom) customInput.current?.focus();
+        else update({ committed: canSubmitAnswer(question, answer) });
       } else if (
         key.length === 1 &&
         !event.ctrlKey &&
@@ -254,18 +271,7 @@ export default function RequestUserInput({
                 disabled={disabled}
                 tabIndex={answer.selected === i ? 0 : -1}
                 key={i}
-                onClick={() => {
-                  update({
-                    selected: i,
-                    committed: false,
-                    ...(i === question.options.length
-                      ? { notesVisible: true }
-                      : {}),
-                  });
-                  root.current?.focus();
-                  if (i === question.options.length)
-                    requestAnimationFrame(() => notes.current?.focus());
-                }}
+                onClick={() => selectOption(i)}
               >
                 <span className="user-input-number">{i + 1}.</span>
                 <span>
@@ -275,11 +281,26 @@ export default function RequestUserInput({
               </button>
             ))}
           </div>
+          {isCustom && (
+            <textarea
+              ref={customInput}
+              aria-label="Custom answer"
+              placeholder="Enter your exact measurement or answer (required)"
+              required
+              rows={2}
+              disabled={disabled}
+              maxLength={8000}
+              value={answer.customAnswer}
+              onChange={(event) =>
+                update({ customAnswer: event.target.value, committed: false })
+              }
+            />
+          )}
           {answer.notesVisible ? (
             <textarea
               ref={notes}
               aria-label="Answer notes"
-              placeholder="Add notes"
+              placeholder="Optional notes about your answer"
               rows={2}
               disabled={disabled}
               maxLength={8000}
@@ -294,7 +315,7 @@ export default function RequestUserInput({
               disabled={disabled}
               onClick={openNotes}
             >
-              Add notes or a custom answer
+              Add optional notes
             </button>
           )}
           <div className="user-input-actions">
@@ -310,9 +331,14 @@ export default function RequestUserInput({
             >
               Next <ArrowRight size={13} />
             </button>
+            <button disabled={disabled} onClick={() => advance(null)}>
+              Skip
+            </button>
             <button
               className="primary"
-              disabled={disabled}
+              disabled={
+                disabled || (isCustom && !canSubmitAnswer(question, answer))
+              }
               onClick={() => advance()}
             >
               {state.index === args.questions.length - 1
@@ -321,7 +347,8 @@ export default function RequestUserInput({
             </button>
           </div>
           <p className="user-input-hints">
-            ↑↓ select · ←→ questions · Tab notes · Enter submit · Esc interrupt
+            ↑↓ select · ←→ questions · Tab notes · Enter submit ·
+            PageUp/PageDown questions · Esc returns from input
           </p>
         </>
       )}

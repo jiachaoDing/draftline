@@ -227,6 +227,9 @@ test("sketch → clarification → generated code → targeted edit → undo/red
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "6");
   await page.getByRole("button", { name: "Redo", exact: true }).click();
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "7");
+  await page
+    .getByRole("button", { name: "Drawing layers", exact: true })
+    .click();
   await page.getByLabel("Show dimensions").uncheck();
   await expect(frame.locator("#dimensions")).toHaveAttribute("display", "none");
   await page.getByLabel("Show presentation").uncheck();
@@ -234,6 +237,7 @@ test("sketch → clarification → generated code → targeted edit → undo/red
     "display",
     "none",
   );
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Zoom in", exact: true }).click();
   await page.getByRole("button", { name: "Pan tool", exact: true }).click();
   await expect(frame.locator("body")).toHaveAttribute("data-mode", "pan");
@@ -480,6 +484,12 @@ test("projects retain drawings, conversations, references and isolated AI contex
   await expect(page.getByRole("button", { name: "Export SVG" })).toBeDisabled();
   await page
     .getByRole("button", {
+      name: "Drawing actions for Untitled drawing",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("menuitem", {
       name: "Rename drawing Untitled drawing",
       exact: true,
     })
@@ -536,6 +546,12 @@ test("projects retain drawings, conversations, references and isolated AI contex
   ).toBeVisible();
   await page
     .getByRole("button", {
+      name: "Drawing actions for Generated test plate",
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("menuitem", {
       name: "Delete drawing Generated test plate",
       exact: true,
     })
@@ -617,6 +633,12 @@ test("projects and large references survive a full browser restart", async ({
       .click();
     await page
       .getByRole("button", {
+        name: "Drawing actions for Untitled drawing",
+        exact: true,
+      })
+      .click();
+    await page
+      .getByRole("menuitem", {
         name: "Rename drawing Untitled drawing",
         exact: true,
       })
@@ -651,7 +673,11 @@ test("projects and large references survive a full browser restart", async ({
     await page
       .getByLabel("Drawing instructions")
       .fill("Keep this unsent draft");
+    await page
+      .getByRole("button", { name: "Drawing layers", exact: true })
+      .click();
     await page.getByLabel("Show dimensions").uncheck();
+    await page.keyboard.press("Escape");
     await expect(page.locator(".saved-indicator")).toHaveText("Saved locally");
     const projectData = await page.evaluate(async () => {
       const db = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -685,7 +711,7 @@ test("projects and large references survive a full browser restart", async ({
         name: "Open drawing Restart project",
         exact: true,
       }),
-    ).toHaveAttribute("aria-current", "true");
+    ).toHaveAttribute("aria-current", "page");
     await expect(page.getByAltText("Uploaded sketch")).toBeVisible();
     await expect(
       page.getByAltText("Reference: large-reference.png"),
@@ -693,7 +719,11 @@ test("projects and large references survive a full browser restart", async ({
     await expect(page.getByLabel("Drawing instructions")).toHaveValue(
       "Keep this unsent draft",
     );
+    await page
+      .getByRole("button", { name: "Drawing layers", exact: true })
+      .click();
     await expect(page.getByLabel("Show dimensions")).not.toBeChecked();
+    await page.keyboard.press("Escape");
     const frame = page.frameLocator(
       'iframe[title="Technical drawing preview"]',
     );
@@ -711,6 +741,12 @@ test("projects and large references survive a full browser restart", async ({
     await page.getByRole("button", { name: "Close model settings" }).click();
     await page
       .getByRole("button", {
+        name: "Drawing actions for Restart project",
+        exact: true,
+      })
+      .click();
+    await page
+      .getByRole("menuitem", {
         name: "Delete drawing Restart project",
         exact: true,
       })
@@ -722,7 +758,8 @@ test("projects and large references survive a full browser restart", async ({
         exact: true,
       }),
     ).toHaveCount(0);
-    await page.getByRole("button", { name: /Delete drawing/ }).click();
+    await page.getByRole("button", { name: /Drawing actions for/ }).click();
+    await page.getByRole("menuitem", { name: /Delete drawing/ }).click();
     await page.getByRole("button", { name: "Delete", exact: true }).click();
     await expect(
       page.getByText("A fresh page for your next idea."),

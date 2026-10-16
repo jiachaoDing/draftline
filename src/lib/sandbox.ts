@@ -53,13 +53,18 @@ export function buildSandbox(html: string, channel: string) {
       const { type, payload } = event.data;
       if (!controller) return;
       if (type === 'zoom') payload > 0 ? controller.zoomIn() : controller.zoomOut();
-      if (type === 'fit') { controller.resize(); controller.fit(); controller.center(); }
+        if (type === 'fit') fitDrawing();
       if (type === 'mode') { mode = payload; mode === 'pan' ? controller.enablePan() : controller.disablePan(); document.body.dataset.mode = mode; }
       if (type === 'layers') ['geometry','dimensions','presentation'].forEach(id => { const n = svg.querySelector('[id="'+id+'"]'); if(n) n.setAttribute('display', payload[id] ? 'inline' : 'none'); });
       if (type === 'select') { if (selected) selected.removeAttribute('data-selected'); selected = [...svg.querySelectorAll('[id]')].find(n => n.id === payload); if(selected) selected.setAttribute('data-selected','true'); }
       if (type === 'snapshot') rawSnapshot();
     });
-    window.addEventListener('DOMContentLoaded', () => {
+      const fitDrawing = () => {
+        const size = svg.getBoundingClientRect();
+        if (size.width < 1 || size.height < 1) return;
+        controller.resize(); controller.fit(); controller.center();
+      };
+      window.addEventListener('DOMContentLoaded', () => {
       svg = document.querySelector('svg#drawing');
       if (!svg) return send('error', 'The generated code did not create an SVG with id drawing.');
       svg.dataset.physicalWidth = svg.getAttribute('width'); svg.dataset.physicalHeight = svg.getAttribute('height'); svg.dataset.physicalViewbox = svg.getAttribute('viewBox');
@@ -79,7 +84,7 @@ export function buildSandbox(html: string, channel: string) {
         if(node) node.setAttribute('data-selected','true');
         send('selection', node?.id || null);
       });
-      new ResizeObserver(() => { controller.resize(); controller.fit(); controller.center(); }).observe(document.body);
+        new ResizeObserver(fitDrawing).observe(document.body);
       send('ready', true);
       };
       requestAnimationFrame(initialize);

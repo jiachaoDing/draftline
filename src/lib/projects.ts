@@ -50,28 +50,34 @@ const messageSchema = z
         ? ("cancelled" as const)
         : message.status,
   }));
-export const projectSchema = z.object({
-  id: z.string(),
-  name: z.string().trim().min(1).max(120),
-  renamed: z.boolean().default(false),
-  updatedAt: z.number(),
-  history: z
-    .object({
-      items: z.array(drawingSchema.nullable()).min(1).max(30),
-      index: z.number().int().min(0),
-    })
-    .refine((h) => h.index < h.items.length),
-  messages: z.array(messageSchema),
-  sketch: referenceSchema.nullable(),
-  chatInput: z.string(),
-  clarification: drawingRequestSchema.omit({ config: true }).nullable(),
-  userInput: pendingUserInputSchema.nullable().default(null),
-  layers: z.object({
-    geometry: z.boolean(),
-    dimensions: z.boolean(),
-    presentation: z.boolean(),
-  }),
-});
+export const projectSchema = z
+  .object({
+    id: z.string(),
+    name: z.string().trim().min(1).max(120),
+    renamed: z.boolean().default(false),
+    createdAt: z.number().optional(),
+    updatedAt: z.number(),
+    history: z
+      .object({
+        items: z.array(drawingSchema.nullable()).min(1).max(30),
+        index: z.number().int().min(0),
+      })
+      .refine((h) => h.index < h.items.length),
+    messages: z.array(messageSchema),
+    sketch: referenceSchema.nullable(),
+    chatInput: z.string(),
+    clarification: drawingRequestSchema.omit({ config: true }).nullable(),
+    userInput: pendingUserInputSchema.nullable().default(null),
+    layers: z.object({
+      geometry: z.boolean(),
+      dimensions: z.boolean(),
+      presentation: z.boolean(),
+    }),
+  })
+  .transform((project) => ({
+    ...project,
+    createdAt: project.createdAt ?? project.updatedAt,
+  }));
 export type Project = Omit<z.infer<typeof projectSchema>, "messages"> & {
   messages: ChatMessage[];
 };
@@ -79,14 +85,24 @@ export const welcome = {
   role: "assistant" as const,
   text: "Describe a part with its dimensions, or attach a reference sketch. I’ll create your drawing, then help you refine it.",
 };
-export function newProject(drawing: Drawing | null = null): Project {
+export function newProject(
+  drawing: Drawing | null = null,
+  existingNames: readonly string[] = [],
+): Project {
   if (drawing)
     drawing = { ...drawing, revision: drawing.revision || crypto.randomUUID() };
+  const names = new Set(existingNames.map((name) => name.toLocaleLowerCase()));
+  let name = "Untitled drawing";
+  let suffix = 2;
+  while (names.has(name.toLocaleLowerCase()))
+    name = `Untitled drawing ${suffix++}`;
+  const createdAt = Date.now();
   return {
     id: crypto.randomUUID(),
-    name: drawing?.title || "Untitled drawing",
+    name: drawing?.title || name,
     renamed: false,
-    updatedAt: Date.now(),
+    createdAt,
+    updatedAt: createdAt,
     history: { items: [drawing], index: 0 },
     messages: [{ ...welcome }],
     sketch: null,
@@ -123,6 +139,7 @@ export async function saveProject(project: Project) {
     id: project.id,
     name: project.name,
     renamed: project.renamed,
+    createdAt: project.createdAt,
     updatedAt: project.updatedAt,
     history: project.history,
     messages: project.messages,
@@ -180,7 +197,7 @@ async function readProjects() {
       /* IndexedDB has saved the drawing. */
     }
   }
-  projects.sort((a, b) => b.updatedAt - a.updatedAt);
+  projects.sort((a, b) => b.createdAt - a.createdAt);
   const activeId = await database.get("meta", "active");
   return {
     projects,

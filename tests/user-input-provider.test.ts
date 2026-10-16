@@ -20,7 +20,7 @@ const args = {
           label: "120 mm (Recommended)",
           description: "Use your proposed width.",
         },
-        { label: "Specify width", description: "Enter an exact dimension." },
+        { label: "100 mm", description: "Use a narrower plate." },
       ],
     },
   ],
@@ -84,11 +84,18 @@ describe("streamed request_user_input tool round trips", () => {
     expect(seen.tools[0].function.name).toBe("request_user_input");
     expect(seen.parallel_tool_calls).toBe(false);
     expect(seen.stream).toBe(true);
+    expect(
+      seen.tools[0].function.parameters.properties.questions.items.properties
+        .options.description,
+    ).toContain("concrete");
+    expect(seen.messages[0].content).toContain(
+      "Do not generate generic options",
+    );
   });
   it("resumes with assistant/tool messages, preserving selected SVG, image, history and all prior rounds", async () => {
     const response = {
       answers: {
-        width: { answers: ["None of the above", "user_note: 123 mm"] },
+        width: { answers: ["123 mm"] },
       },
     };
     const turn = {

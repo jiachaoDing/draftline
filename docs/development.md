@@ -62,6 +62,8 @@ Get-Content -LiteralPath src/lib/drawing.ts -Encoding UTF8
 - Source tool arguments: `drawing-agent.test.ts` covers omitted/null read defaults, bounds, field-specific correction and safe schema/JSON error details. `e2e/incremental.spec.ts` verifies advertised nullable options through the real SDK/server and first-attempt reads, then corrects an invalid read using the returned feedback.
 - Clarification changes: `user-input.test.ts`, `user-input-flow.test.ts`, `e2e/user-input.spec.ts`; check queued/follow-up calls, explicit submission, persisted drafts and retry IDs.
 - Settings/projects/editor changes: `projects.test.ts`, `format-source.test.ts`, `e2e/model-selector.spec.ts` and project switching, browser restart, storage failure and code-editor cases in `e2e/studio.spec.ts`.
+- Sidebar navigation: `e2e/sidebar.spec.ts` covers creation-time ordering across opening/editing/renaming and reload, long-list scrolling, name search, collapse, keyboard menus and rename, deletion confirmation, distinct blank names, the mobile drawer and per-project layer visibility in the canvas popover.
+- Viewport layout: `e2e/viewport.spec.ts` checks root and panel bounds through desktop, tablet, mobile and short-window resizing, internal history/navigation/control scrolling, source-editor switching and canvas zoom/pan without page scrolling.
 
 Vitest defaults to jsdom for SVG DOM tests. Tests that run HTTP servers/streams use `// @vitest-environment node`. Fixtures in `tests/helpers/provider-stream.ts` provide real streamed completion/tool-call framing. Assert observable outcomes; avoid UI implementation snapshots.
 

@@ -18,7 +18,6 @@ export const userInputArgsSchema = z
                 description: z.string().max(1000),
               }),
             )
-            .min(1)
             .max(3),
         }),
       )
@@ -80,6 +79,7 @@ export const questionnaireSchema = z.object({
       z.object({
         selected: z.number().int().min(0).nullable(),
         notes: z.string().max(8000),
+        customAnswer: z.string().max(8000).default(""),
         committed: z.boolean(),
         notesVisible: z.boolean(),
       }),
@@ -96,6 +96,7 @@ export function createQuestionnaire(args: UserInputArgs): Questionnaire {
     answers: args.questions.map(() => ({
       selected: 0,
       notes: "",
+      customAnswer: "",
       committed: false,
       notesVisible: false,
     })),
@@ -110,11 +111,11 @@ export function collectAnswers(
       args.questions.map((q, i) => {
         const answer = state.answers[i];
         const values: string[] = [];
-        if (answer.committed) {
-          if (answer.selected !== null)
-            values.push(
-              q.options[answer.selected]?.label ?? "None of the above",
-            );
+        if (answer.committed && canSubmitAnswer(q, answer)) {
+          if (answer.selected === q.options.length)
+            values.push(answer.customAnswer.trim());
+          else if (answer.selected !== null)
+            values.push(q.options[answer.selected].label);
           if (answer.notes.trim())
             values.push(`user_note: ${answer.notes.trim()}`);
         }
@@ -122,4 +123,13 @@ export function collectAnswers(
       }),
     ),
   };
+}
+
+export function canSubmitAnswer(
+  question: UserInputArgs["questions"][number],
+  answer: Questionnaire["answers"][number],
+): boolean {
+  if (answer.selected === question.options.length)
+    return answer.customAnswer.trim().length > 0;
+  return answer.selected !== null && !!question.options[answer.selected];
 }

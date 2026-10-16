@@ -1,5 +1,15 @@
-import { useState } from "react";
-import { Check, FileCode2, Pencil, Plus, Trash2, X } from "lucide-react";
+import { useRef, useState } from "react";
+import {
+  Dialog,
+  DialogBackdrop,
+  DialogPanel,
+  DialogTitle,
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuItems,
+} from "@headlessui/react";
+import { Check, MoreHorizontal, Pencil, Trash2, X } from "lucide-react";
 import type { Project } from "../lib/projects";
 
 type Props = {
@@ -7,7 +17,7 @@ type Props = {
   activeId: string;
   disabled: boolean;
   projectBusy: boolean;
-  onOpen: (id?: string) => void;
+  onOpen: (id: string) => void;
   onRename: (id: string, name: string) => void;
   onDelete: (id: string) => Promise<boolean>;
 };
@@ -23,23 +33,18 @@ export default function ProjectList({
 }: Props) {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [projectName, setProjectName] = useState("");
-  const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<Project | null>(null);
+  const actionButtons = useRef(new Map<string, HTMLButtonElement>());
+  const finishRename = (id: string) => {
+    setRenaming(null);
+    requestAnimationFrame(() => actionButtons.current.get(id)?.focus());
+  };
+
   return (
-    <section className="projects-section" aria-label="Drawing projects">
-      <button
-        className="button primary new-drawing"
-        disabled={disabled}
-        onClick={() => onOpen()}
-      >
-        <Plus size={16} /> New Drawing
-      </button>
-      <div className="section-title">
-        <span>Your drawings</span>
-        <span className="layer-count">{projects.length}</span>
-      </div>
-      <div className="project-list">
+    <>
+      <ul className="project-list" aria-label="Drawings">
         {projects.map((project) => (
-          <div
+          <li
             key={project.id}
             className={`project-row ${activeId === project.id ? "active" : ""}`}
           >
@@ -48,35 +53,37 @@ export default function ProjectList({
                 className="project-rename"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  if (!projectName.trim()) return;
+                  if (disabled || !projectName.trim()) return;
                   onRename(project.id, projectName);
-                  setRenaming(null);
+                  finishRename(project.id);
                 }}
               >
                 <input
                   aria-label="Project name"
                   autoFocus
+                  onFocus={(event) => event.currentTarget.select()}
                   maxLength={120}
                   value={projectName}
-                  onChange={(e) => setProjectName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape") setRenaming(null);
+                  disabled={disabled}
+                  onChange={(event) => setProjectName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") finishRename(project.id);
                   }}
                 />
                 <button
                   className="icon-button"
                   aria-label="Save project name"
-                  disabled={!projectName.trim()}
+                  disabled={disabled || !projectName.trim()}
                 >
-                  <Check size={14} />
+                  <Check size={15} />
                 </button>
                 <button
                   type="button"
                   className="icon-button"
                   aria-label="Cancel rename"
-                  onClick={() => setRenaming(null)}
+                  onClick={() => finishRename(project.id)}
                 >
-                  <X size={14} />
+                  <X size={15} />
                 </button>
               </form>
             ) : (
@@ -84,60 +91,96 @@ export default function ProjectList({
                 <button
                   className="project-open"
                   aria-label={`Open drawing ${project.name}`}
-                  aria-current={activeId === project.id ? "true" : undefined}
+                  aria-current={activeId === project.id ? "page" : undefined}
+                  title={project.name}
                   disabled={disabled}
                   onClick={() => onOpen(project.id)}
                 >
-                  <FileCode2 size={16} />
-                  <span>
-                    <strong title={project.name}>{project.name}</strong>
-                    <small>
-                      {project.history.items[project.history.index]
-                        ? "Vector drawing"
-                        : "Ready for your idea"}
-                    </small>
-                  </span>
+                  <span>{project.name}</span>
                 </button>
-                <button
-                  className="icon-button project-action"
-                  aria-label={`Rename drawing ${project.name}`}
-                  disabled={disabled}
-                  onClick={() => {
-                    setRenaming(project.id);
-                    setProjectName(project.name);
-                  }}
-                >
-                  <Pencil size={13} />
-                </button>
-                <button
-                  className="icon-button project-action"
-                  aria-label={`Delete drawing ${project.name}`}
-                  disabled={disabled}
-                  onClick={() => setDeleting(project.id)}
-                >
-                  <Trash2 size={13} />
-                </button>
+                <Menu>
+                  <MenuButton
+                    ref={(button) => {
+                      if (button) actionButtons.current.set(project.id, button);
+                      else actionButtons.current.delete(project.id);
+                    }}
+                    className="icon-button project-action"
+                    aria-label={`Drawing actions for ${project.name}`}
+                    title="Drawing actions"
+                    disabled={disabled}
+                  >
+                    <MoreHorizontal size={17} />
+                  </MenuButton>
+                  <MenuItems anchor="bottom end" className="project-menu">
+                    <MenuItem>
+                      <button
+                        disabled={disabled}
+                        aria-label={`Rename drawing ${project.name}`}
+                        onClick={() => {
+                          setRenaming(project.id);
+                          setProjectName(project.name);
+                        }}
+                      >
+                        <Pencil size={15} /> Rename
+                      </button>
+                    </MenuItem>
+                    <MenuItem>
+                      <button
+                        className="danger-action"
+                        disabled={disabled}
+                        aria-label={`Delete drawing ${project.name}`}
+                        onClick={() => setDeleting(project)}
+                      >
+                        <Trash2 size={15} /> Delete
+                      </button>
+                    </MenuItem>
+                  </MenuItems>
+                </Menu>
               </>
             )}
-            {deleting === project.id && (
-              <div className="project-delete" role="alert">
-                <span>Delete this drawing and its conversation?</span>
-                <button
-                  disabled={projectBusy}
-                  onClick={() =>
-                    void onDelete(project.id).then((removed) => {
-                      if (removed) setDeleting(null);
-                    })
-                  }
-                >
-                  Delete
-                </button>
-                <button onClick={() => setDeleting(null)}>Keep</button>
-              </div>
-            )}
-          </div>
+          </li>
         ))}
-      </div>
-    </section>
+      </ul>
+      <Dialog
+        open={!!deleting}
+        onClose={() => {
+          if (!projectBusy) setDeleting(null);
+        }}
+        className="project-dialog"
+      >
+        <DialogBackdrop className="project-dialog-backdrop" />
+        <div className="project-dialog-position">
+          <DialogPanel className="project-dialog-panel">
+            <DialogTitle>Delete drawing?</DialogTitle>
+            <p>
+              <strong>{deleting?.name}</strong> and its conversation will be
+              permanently deleted.
+            </p>
+            <div className="project-dialog-actions">
+              <button
+                className="button secondary"
+                data-autofocus
+                disabled={projectBusy}
+                onClick={() => setDeleting(null)}
+              >
+                Keep
+              </button>
+              <button
+                className="button delete-project"
+                disabled={disabled}
+                onClick={() => {
+                  if (deleting)
+                    void onDelete(deleting.id).then((removed) => {
+                      if (removed) setDeleting(null);
+                    });
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </DialogPanel>
+        </div>
+      </Dialog>
+    </>
   );
 }

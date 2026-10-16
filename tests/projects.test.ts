@@ -27,6 +27,29 @@ describe("local model settings", () => {
   });
 });
 describe("project restoration", () => {
+  it("keeps a fixed creation time when restoring and updating saved projects", () => {
+    const project = newProject();
+    expect(project.createdAt).toBe(project.updatedAt);
+    const restored = projectSchema.parse({
+      ...project,
+      createdAt: undefined,
+      updatedAt: 1234,
+    });
+    expect(restored.createdAt).toBe(1234);
+    expect(
+      projectSchema.parse({ ...restored, updatedAt: 5678 }).createdAt,
+    ).toBe(1234);
+  });
+  it("gives new drawings distinct names without changing saved names", () => {
+    const names = ["Untitled drawing", "untitled DRAWING 2", "Bracket A"];
+    expect(newProject(null, names).name).toBe("Untitled drawing 3");
+    expect(newProject(EXAMPLE, names).name).toBe(EXAMPLE.title);
+    expect(names).toEqual([
+      "Untitled drawing",
+      "untitled DRAWING 2",
+      "Bracket A",
+    ]);
+  });
   it("starts projects with independent, empty drawing and conversation state", () => {
     const first = newProject();
     const second = newProject();

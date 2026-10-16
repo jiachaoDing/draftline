@@ -22,6 +22,8 @@ import {
   Maximize,
   Minus,
   MousePointer2,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Redo2,
   Send,
@@ -33,7 +35,8 @@ import {
   X,
 } from "lucide-react";
 import ModelSettings from "./components/ModelSettings";
-import ProjectList from "./components/ProjectList";
+import DrawingSidebar from "./components/DrawingSidebar";
+import DrawingLayers from "./components/DrawingLayers";
 import ChatTranscript from "./components/ChatTranscript";
 import RequestUserInput from "./components/RequestUserInput";
 import type { UserInputResponse } from "./lib/user-input";
@@ -96,6 +99,9 @@ export default function App() {
   const [loaded, setLoaded] = useState(false);
   const [saveStatus, setSaveStatus] = useState("Opening workspace…");
   const [projectBusy, setProjectBusy] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => !window.matchMedia("(max-width: 700px)").matches,
+  );
   // Event/effect writes own these refs. A concurrent render may still contain
   // older React state, so it must not overwrite an in-flight workspace update.
   const projectsRef = useRef(projects);
@@ -314,7 +320,10 @@ export default function App() {
     if (current) await persist(current);
     const project = id
       ? projectsRef.current.find((p) => p.id === id)
-      : newProject();
+      : newProject(
+          null,
+          projectsRef.current.map((project) => project.name),
+        );
     if (project) {
       if (!id) {
         const next = [project, ...projectsRef.current];
@@ -858,6 +867,20 @@ export default function App() {
   return (
     <div className="app">
       <header className="app-header">
+        <button
+          className="icon-button sidebar-toggle"
+          aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+          title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+          aria-expanded={sidebarOpen}
+          aria-controls="drawing-sidebar"
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+        >
+          {sidebarOpen ? (
+            <PanelLeftClose size={19} />
+          ) : (
+            <PanelLeftOpen size={19} />
+          )}
+        </button>
         <a className="brand" href="#" aria-label="Draftline home">
           <span className="brand-mark">
             <svg viewBox="0 0 30 30" fill="none">
@@ -926,74 +949,21 @@ export default function App() {
           </div>
         </div>
       </header>
-      <main className="studio">
-        <aside className="left-panel">
-          <div className="workflow-heading">
-            <div className="eyebrow">
-              <span /> YOUR WORKSPACE
-            </div>
-            <h1>Room for every idea.</h1>
-            <p>Your drawings, right where you left them.</p>
-          </div>
-          <ProjectList
-            key={activeId}
-            projects={projects}
-            activeId={activeId}
-            disabled={busy || projectBusy}
-            projectBusy={projectBusy}
-            onOpen={(id) => void changeProject(id)}
-            onRename={renameProject}
-            onDelete={removeProject}
-          />
-          <section className="layers-section">
-            <div className="section-title">
-              <span>
-                <Layers2 size={15} /> Drawing layers
-              </span>
-              <span className="layer-count">3</span>
-            </div>
-            {(["geometry", "dimensions", "presentation"] as const).map(
-              (layer) => (
-                <label key={layer} className="layer-row">
-                  <span className={`layer-symbol ${layer}`} />
-                  <span>
-                    {layer === "geometry"
-                      ? "Geometry"
-                      : layer === "dimensions"
-                        ? "Dimensions"
-                        : "Sheet information"}
-                    <small>
-                      {layer === "geometry"
-                        ? "Profiles, holes & curves"
-                        : layer === "dimensions"
-                          ? "Measurements & annotations"
-                          : "Title, units & technical notes"}
-                    </small>
-                  </span>
-                  <input
-                    aria-label={`Show ${layer}`}
-                    type="checkbox"
-                    checked={layers[layer]}
-                    onChange={(e) =>
-                      setLayers({ ...layers, [layer]: e.target.checked })
-                    }
-                  />
-                </label>
-              ),
-            )}
-          </section>
-          <div className="left-footer">
-            <ShieldCheck size={16} />
-            <span>
-              Your sketches stay in your browser until
-              <br />
-              you send them to your AI provider.
-            </span>
-            <button className="text-button" onClick={() => setHelp(true)}>
-              How it works <ArrowRight size={12} />
-            </button>
-          </div>
-        </aside>
+      <main
+        className={`studio ${sidebarOpen ? "sidebar-open" : "sidebar-closed"}`}
+      >
+        <DrawingSidebar
+          open={sidebarOpen}
+          onToggle={setSidebarOpen}
+          projects={projects}
+          activeId={activeId}
+          disabled={busy || projectBusy}
+          projectBusy={projectBusy}
+          onOpen={(id) => void changeProject(id)}
+          onRename={renameProject}
+          onDelete={removeProject}
+          onHelp={() => setHelp(true)}
+        />
         <section className="drawing-workspace" aria-label="Drawing workspace">
           <div className="canvas-toolbar">
             <div className="canvas-tabs">
@@ -1011,6 +981,12 @@ export default function App() {
               </button>
             </div>
             <div className="canvas-tools">
+              <DrawingLayers
+                layers={layers}
+                onChange={setLayers}
+                disabled={!drawing || tab !== "drawing"}
+              />
+              <span className="tool-separator" />
               <button
                 className={`icon-button ${mode === "select" ? "active" : ""}`}
                 aria-label="Select tool"
@@ -1241,142 +1217,144 @@ export default function App() {
             validating={!!pending}
             onSuggest={setChatInput}
           />
-          {selected && !userInput && (
-            <div className="selection-card">
-              <div className="selection-heading">
-                <span>
-                  <MousePointer2 size={13} /> SELECTED ELEMENT
-                </span>
-                <button
-                  className="icon-button"
-                  aria-label="Clear selection"
-                  onClick={() => setSelectedId(null)}
-                >
-                  <X size={14} />
-                </button>
-              </div>
-              <strong>{selected.label}</strong>
-              <div className="selection-properties">
-                <span>{selected.tag}</span>
-                {Object.entries(selected.attributes)
-                  .filter(([key]) =>
-                    ["r", "cx", "cy", "width", "height", "rx"].includes(key),
-                  )
-                  .slice(0, 3)
-                  .map(([key, value]) => (
-                    <span key={key}>
-                      {key}: {value} mm
-                    </span>
-                  ))}
-              </div>
-              <p>Changes apply to this element and its dimensions.</p>
-            </div>
-          )}
-          {userInput && !busy ? (
-            <RequestUserInput
-              key={`${activeId}:${userInput.request.calls[userInput.callIndex].id}`}
-              args={questionArgs(userInput.request, userInput.callIndex)}
-              state={userInput.state}
-              disabled={busy || projectBusy}
-              onChange={(state) => setUserInput({ ...userInput, state })}
-              onSubmit={submitUserInput}
-              onCancel={cancelUserInput}
-            />
-          ) : (
-            <>
-              {clarification && (
-                <div className="clarification-banner">
-                  <CircleHelp size={15} /> A measurement is needed. Reply below
-                  to continue.
-                </div>
-              )}
-              <div className="chat-composer">
-                <SketchUpload
-                  sketch={sketch}
-                  onFile={loadFile}
-                  onClear={() => {
-                    setSketch(null);
-                    setClarification(null);
-                  }}
-                  disabled={busy || projectBusy}
-                />
-                {messages.length === 1 && (
+          <div className="assistant-controls">
+            {selected && !userInput && (
+              <div className="selection-card">
+                <div className="selection-heading">
+                  <span>
+                    <MousePointer2 size={13} /> SELECTED ELEMENT
+                  </span>
                   <button
-                    className="example-button"
-                    onClick={useExample}
-                    disabled={busy || projectBusy}
+                    className="icon-button"
+                    aria-label="Clear selection"
+                    onClick={() => setSelectedId(null)}
                   >
-                    Try an example <ArrowRight size={12} />
+                    <X size={14} />
                   </button>
+                </div>
+                <strong>{selected.label}</strong>
+                <div className="selection-properties">
+                  <span>{selected.tag}</span>
+                  {Object.entries(selected.attributes)
+                    .filter(([key]) =>
+                      ["r", "cx", "cy", "width", "height", "rx"].includes(key),
+                    )
+                    .slice(0, 3)
+                    .map(([key, value]) => (
+                      <span key={key}>
+                        {key}: {value} mm
+                      </span>
+                    ))}
+                </div>
+                <p>Changes apply to this element and its dimensions.</p>
+              </div>
+            )}
+            {userInput && !busy ? (
+              <RequestUserInput
+                key={`${activeId}:${userInput.request.calls[userInput.callIndex].id}`}
+                args={questionArgs(userInput.request, userInput.callIndex)}
+                state={userInput.state}
+                disabled={busy || projectBusy}
+                onChange={(state) => setUserInput({ ...userInput, state })}
+                onSubmit={submitUserInput}
+                onCancel={cancelUserInput}
+              />
+            ) : (
+              <>
+                {clarification && (
+                  <div className="clarification-banner">
+                    <CircleHelp size={15} /> A measurement is needed. Reply
+                    below to continue.
+                  </div>
                 )}
-                <div className="composer-input">
-                  <textarea
-                    aria-label="Drawing instructions"
-                    rows={3}
-                    value={chatInput}
-                    disabled={busy || projectBusy}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        sendChat();
-                      }
+                <div className="chat-composer">
+                  <SketchUpload
+                    sketch={sketch}
+                    onFile={loadFile}
+                    onClear={() => {
+                      setSketch(null);
+                      setClarification(null);
                     }}
-                    placeholder={
-                      clarification
-                        ? "Add the missing dimensions…"
-                        : selected
-                          ? `How should I change ${selected.label.toLowerCase()}?`
-                          : drawing
-                            ? "Describe a change to your drawing…"
-                            : "Describe your part and dimensions in mm…"
-                    }
+                    disabled={busy || projectBusy}
                   />
-                  <div className="composer-bottom">
-                    <span>
-                      {selected ? (
-                        <>
-                          <MousePointer2 size={11} /> Selected element
-                        </>
-                      ) : (
-                        <>
-                          <Layers2 size={11} />{" "}
-                          {drawing ? "Whole drawing" : "New drawing"}
-                        </>
-                      )}
-                    </span>
+                  {messages.length === 1 && (
                     <button
-                      aria-label={
-                        busy ? "Stop generation" : "Send drawing instruction"
-                      }
-                      disabled={
-                        projectBusy || (!busy && !chatInput.trim() && !sketch)
-                      }
-                      onClick={busy ? cancelGeneration : sendChat}
+                      className="example-button"
+                      onClick={useExample}
+                      disabled={busy || projectBusy}
                     >
-                      {busy ? (
-                        <Square size={13} fill="currentColor" />
-                      ) : (
-                        <Send size={15} />
-                      )}
+                      Try an example <ArrowRight size={12} />
                     </button>
+                  )}
+                  <div className="composer-input">
+                    <textarea
+                      aria-label="Drawing instructions"
+                      rows={3}
+                      value={chatInput}
+                      disabled={busy || projectBusy}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          sendChat();
+                        }
+                      }}
+                      placeholder={
+                        clarification
+                          ? "Add the missing dimensions…"
+                          : selected
+                            ? `How should I change ${selected.label.toLowerCase()}?`
+                            : drawing
+                              ? "Describe a change to your drawing…"
+                              : "Describe your part and dimensions in mm…"
+                      }
+                    />
+                    <div className="composer-bottom">
+                      <span>
+                        {selected ? (
+                          <>
+                            <MousePointer2 size={11} /> Selected element
+                          </>
+                        ) : (
+                          <>
+                            <Layers2 size={11} />{" "}
+                            {drawing ? "Whole drawing" : "New drawing"}
+                          </>
+                        )}
+                      </span>
+                      <button
+                        aria-label={
+                          busy ? "Stop generation" : "Send drawing instruction"
+                        }
+                        disabled={
+                          projectBusy || (!busy && !chatInput.trim() && !sketch)
+                        }
+                        onClick={busy ? cancelGeneration : sendChat}
+                      >
+                        {busy ? (
+                          <Square size={13} fill="currentColor" />
+                        ) : (
+                          <Send size={15} />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="assistant-model">
+                    <span
+                      className={`connection-dot ${config.apiKey && config.model ? "connected" : ""}`}
+                    />
+                    <button onClick={() => setSettings(true)}>
+                      {config.apiKey && config.model
+                        ? config.model
+                        : "Connect your AI model"}
+                      <ChevronDown size={11} />
+                    </button>
+                    <span>↵ to send</span>
                   </div>
                 </div>
-                <div className="assistant-model">
-                  <span
-                    className={`connection-dot ${config.apiKey && config.model ? "connected" : ""}`}
-                  />
-                  <button onClick={() => setSettings(true)}>
-                    {config.apiKey && config.model
-                      ? config.model
-                      : "Connect your AI model"}
-                    <ChevronDown size={11} />
-                  </button>
-                  <span>↵ to send</span>
-                </div>
-              </div>
-            </>
-          )}
+              </>
+            )}
+          </div>
         </aside>
       </main>
       {pending && (

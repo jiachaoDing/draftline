@@ -4,6 +4,8 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 .assistant-heading {
   padding: 20px 21px;
@@ -51,6 +53,16 @@
   min-height: 0;
   scrollbar-width: thin;
   scrollbar-color: #e1e6ee transparent;
+  overscroll-behavior: contain;
+}
+.assistant-controls {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 70%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 .assistant-intro {
   padding: 8px 7px 28px;
@@ -727,11 +739,9 @@
 }
 @media (min-width: 1600px) {
   .studio {
-    grid-template-columns: 308px minmax(360px, 1fr) 340px;
+    grid-template-columns: var(--sidebar-width) minmax(360px, 1fr) 340px;
   }
-  .workflow-heading,
-  .sketch-section,
-  .layers-section {
+  .sketch-section {
     padding-left: 27px;
     padding-right: 27px;
   }
@@ -746,20 +756,15 @@
 }
 @media (max-width: 1250px) {
   .studio {
-    grid-template-columns: 258px minmax(330px, 1fr) 282px;
+    grid-template-columns: var(--sidebar-width) minmax(330px, 1fr) 282px;
   }
   .app-header {
     padding: 0 20px;
     gap: 18px;
   }
-  .workflow-heading,
-  .sketch-section,
-  .layers-section {
+  .sketch-section {
     padding-left: 19px;
     padding-right: 19px;
-  }
-  .workflow-heading h1 {
-    font-size: 21px;
   }
   .workflow-steps {
     margin-left: 19px;
@@ -805,49 +810,29 @@
   }
 }
 @media (max-width: 1050px) {
-  .app {
-    height: auto;
-    min-height: 100dvh;
-    overflow: visible;
-  }
   .studio {
-    grid-template-columns: 260px minmax(330px, 1fr);
-    grid-template-rows: minmax(650px, calc(100dvh - 72px)) 400px;
-    flex: none;
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .left-panel {
+    grid-row: 1 / -1;
+  }
+  .drawing-workspace {
+    grid-column: 2;
+    grid-row: 1;
   }
   .assistant-panel {
-    grid-column: 1/-1;
+    grid-column: 2;
+    grid-row: 2;
     border-top: 1px solid var(--line);
-    display: grid;
-    grid-template-columns: 1fr 320px;
-    grid-template-rows: 70px 1fr;
   }
   .assistant-heading {
-    grid-column: 1/-1;
-    height: 70px;
-  }
-  .assistant-content {
-    grid-column: 1;
-    grid-row: 2;
-    max-height: 328px;
+    height: 56px;
+    padding-top: 10px;
+    padding-bottom: 10px;
   }
   .assistant-intro {
     display: none;
-  }
-  .chat-composer {
-    grid-column: 2;
-    grid-row: 2;
-    align-self: end;
-  }
-  .selection-card,
-  .clarification-banner {
-    grid-column: 2;
-    grid-row: 2;
-    align-self: start;
-    margin-top: 20px;
-  }
-  .clarification-banner {
-    margin-top: 110px;
   }
   .assistant-content .chat-message {
     max-width: 650px;
@@ -889,17 +874,6 @@
   .studio {
     display: flex;
     flex-direction: column;
-  }
-  .left-panel {
-    border-right: 0;
-    overflow: visible;
-  }
-  .workflow-heading {
-    padding-top: 24px;
-    padding-bottom: 15px;
-  }
-  .workflow-heading h1 {
-    font-size: 25px;
   }
   .workflow-steps {
     justify-content: flex-start;
@@ -954,36 +928,8 @@
     grid-row: 5;
     padding-top: 2px;
   }
-  .layers-section {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 16px;
-    padding: 12px 19px;
-  }
-  .layers-section .section-title {
-    margin: 0;
-    width: 100%;
-    white-space: nowrap;
-  }
-  .layers-section .section-title .layer-count {
-    display: none;
-  }
-  .layer-row {
-    padding: 0;
-    gap: 6px;
-    font-size: 10px;
-  }
-  .layer-symbol,
-  .layer-row small {
-    display: none;
-  }
-  .left-footer {
-    display: none;
-  }
   .drawing-workspace {
-    height: 560px;
-    flex: none;
+    flex: 1 1 45%;
     border-top: 1px solid var(--line);
   }
   .canvas-toolbar {
@@ -1021,13 +967,11 @@
     padding: 0 12px;
   }
   .assistant-panel {
-    height: 510px;
-    display: flex;
+    flex: 1 1 55%;
   }
   .assistant-heading {
-    height: 73px;
-    flex: none;
-    padding: 18px 20px;
+    padding-left: 20px;
+    padding-right: 20px;
   }
   .assistant-content {
     min-height: 0;

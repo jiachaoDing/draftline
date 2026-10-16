@@ -48,7 +48,16 @@ test.beforeAll(async () => {
     if (input.messages.at(-1).role !== "tool") {
       const instruction = input.messages.at(-1).content[0].text;
       const calls = [
-        { id: "call_dimensions", arguments: JSON.stringify(questions) },
+        {
+          id: "call_dimensions",
+          arguments: JSON.stringify(
+            instruction.includes("exact measurement")
+              ? {
+                  questions: [{ ...questions.questions[0], options: [] }],
+                }
+              : questions,
+          ),
+        },
       ];
       if (instruction.includes("queue"))
         calls.push({
@@ -144,6 +153,8 @@ async function setup(
     },
   );
   await page.goto("/");
+  if ((page.viewportSize()?.width || 0) <= 700)
+    await page.getByRole("button", { name: "Expand sidebar" }).click();
   await page.getByRole("button", { name: "New Drawing", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "A fresh page for your next idea." }),
@@ -157,6 +168,150 @@ async function setup(
 const panel = (page: Page) =>
   page.getByRole("region", { name: "Question from assistant" });
 
+test("custom keyboard selection requires text, preserves separate notes and supports review and final submission", async ({
+  page,
+}) => {
+  await setup(page);
+  const custom = page.getByRole("textbox", {
+    name: "Custom answer",
+    exact: true,
+  });
+  const notes = page.getByRole("textbox", {
+    name: "Answer notes",
+    exact: true,
+  });
+  await panel(page).focus();
+  await page.keyboard.press("3");
+  await expect(custom).toBeFocused();
+  await custom.fill("  ");
+  await custom.press("Enter");
+  await expect(panel(page).getByText("1 / 2", { exact: true })).toBeVisible();
+  expect(requests).toHaveLength(1);
+  await panel(page)
+    .getByRole("button", { name: "Add optional notes", exact: true })
+    .click();
+  await expect(notes).toBeFocused();
+  await notes.fill("Keep R8");
+  await notes.press("Enter");
+  await expect(custom).toBeFocused();
+  await expect(
+    panel(page).getByRole("button", { name: "Submit answer", exact: true }),
+  ).toBeDisabled();
+  await custom.fill("132 mm");
+  await custom.press("Shift+Enter");
+  await page.keyboard.type("wide");
+  await expect(custom).toHaveValue("132 mm\nwide");
+  await custom.press("ArrowUp");
+  await expect(
+    panel(page).getByRole("radio", { name: /Custom answer/ }),
+  ).toHaveAttribute("aria-checked", "true");
+  await custom.press("PageDown");
+  await panel(page).getByRole("button", { name: "Width", exact: true }).click();
+  await expect(custom).toBeFocused();
+  await expect(custom).toHaveValue("132 mm\nwide");
+  await expect(notes).toHaveValue("Keep R8");
+  await custom.press("Control+n");
+  await panel(page).press("PageUp");
+  await expect(custom).toBeFocused();
+  await panel(page)
+    .getByRole("radio", { name: /100 mm/ })
+    .click();
+  await expect(custom).toHaveCount(0);
+  await panel(page).focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(custom).toBeFocused();
+  await expect(custom).toHaveValue("132 mm\nwide");
+  await custom.press("Enter");
+  await panel(page).focus();
+  await page.keyboard.press("2");
+  await expect.poll(() => requests.length).toBe(2);
+  expect(JSON.parse(requests[1].messages.at(-1).content)).toEqual({
+    answers: {
+      width: { answers: ["132 mm\nwide", "user_note: Keep R8"] },
+      height: { answers: ["60 mm"] },
+    },
+  });
+  await expect(panel(page)).toHaveCount(0);
+});
+
+test("ordinary answers ignore saved custom drafts and retain optional notes", async ({
+  page,
+}) => {
+  await setup(page);
+  await panel(page)
+    .getByRole("radio", { name: /Custom answer/ })
+    .click();
+  await page
+    .getByRole("textbox", { name: "Custom answer", exact: true })
+    .fill("133 mm");
+  await panel(page)
+    .getByRole("radio", { name: /100 mm/ })
+    .click();
+  await panel(page).focus();
+  await page.keyboard.press("Tab");
+  const notes = page.getByRole("textbox", {
+    name: "Answer notes",
+    exact: true,
+  });
+  await expect(notes).toBeFocused();
+  await notes.fill("Use this width");
+  await notes.press("Enter");
+  await panel(page)
+    .getByRole("button", { name: "Submit answers", exact: true })
+    .click();
+  await expect.poll(() => requests.length).toBe(2);
+  expect(
+    JSON.parse(requests[1].messages.at(-1).content).answers.width.answers,
+  ).toEqual(["100 mm", "user_note: Use this width"]);
+});
+
+test("text-only measurements focus custom input and skip returns an unanswered result", async ({
+  page,
+}) => {
+  await setup(page, "Draw a plate; ask for an exact measurement");
+  const custom = page.getByRole("textbox", {
+    name: "Custom answer",
+    exact: true,
+  });
+  await expect(custom).toBeFocused();
+  await expect(panel(page).getByRole("radio")).toHaveCount(1);
+  await custom.press("Enter");
+  expect(requests).toHaveLength(1);
+  await panel(page).getByRole("button", { name: "Skip", exact: true }).click();
+  await expect(
+    panel(page).getByText("Submit with unanswered questions?"),
+  ).toBeVisible();
+  await panel(page)
+    .getByRole("button", { name: "Proceed", exact: true })
+    .click();
+  await expect.poll(() => requests.length).toBe(2);
+  expect(
+    JSON.parse(requests[1].messages.at(-1).content).answers.width.answers,
+  ).toEqual([]);
+});
+
+test("text-only measurements submit actual text and resume the drawing", async ({
+  page,
+}) => {
+  await setup(page, "Draw a plate; ask for an exact measurement");
+  const custom = page.getByRole("textbox", {
+    name: "Custom answer",
+    exact: true,
+  });
+  await expect(custom).toBeFocused();
+  await custom.fill("145 mm");
+  await custom.press("Enter");
+  await expect.poll(() => requests.length).toBe(2);
+  expect(
+    JSON.parse(requests[1].messages.at(-1).content).answers.width.answers,
+  ).toEqual(["145 mm"]);
+  await expect(
+    page
+      .frameLocator('iframe[title="Technical drawing preview"]')
+      .locator("#plate-outline"),
+  ).toBeVisible();
+});
+
 test("custom answers, previous-question editing, persisted drafts and automatic drawing continuation", async ({
   page,
 }) => {
@@ -165,16 +320,31 @@ test("custom answers, previous-question editing, persisted drafts and automatic 
   expect(requests).toHaveLength(1);
   await page.screenshot({ path: ".generated/request-user-input-desktop.png" });
   await panel(page)
-    .getByRole("radio", { name: /None of the above/ })
+    .getByRole("radio", { name: /Custom answer/ })
     .click();
-  await page.getByLabel("Answer notes").fill("123 mm wide");
+  await expect(
+    page.getByRole("textbox", { name: "Custom answer", exact: true }),
+  ).toBeFocused();
+  await expect(
+    panel(page).getByRole("button", { name: "Submit answer", exact: true }),
+  ).toBeDisabled();
+  await page
+    .getByRole("textbox", { name: "Custom answer", exact: true })
+    .fill("123 mm wide");
   await panel(page)
     .getByRole("button", { name: "Submit answer", exact: true })
     .click();
   await panel(page).getByRole("radio", { name: /60 mm/ }).click();
   await panel(page).getByRole("button", { name: "Back", exact: true }).click();
-  await expect(page.getByLabel("Answer notes")).toHaveValue("123 mm wide");
-  await page.getByLabel("Answer notes").fill("120 mm wide");
+  await expect(
+    page.getByRole("textbox", { name: "Custom answer", exact: true }),
+  ).toHaveValue("123 mm wide");
+  await expect(
+    page.getByRole("textbox", { name: "Custom answer", exact: true }),
+  ).toBeFocused();
+  await page
+    .getByRole("textbox", { name: "Custom answer", exact: true })
+    .fill("120 mm wide");
   await panel(page)
     .getByRole("button", { name: "Submit answer", exact: true })
     .click();
@@ -206,6 +376,16 @@ test("custom answers, previous-question editing, persisted drafts and automatic 
     panel(page).getByRole("radio", { name: /60 mm/ }),
   ).toHaveAttribute("aria-checked", "true");
   await panel(page)
+    .getByRole("button", { name: /Width$/ })
+    .click();
+  await expect(
+    page.getByRole("textbox", { name: "Custom answer", exact: true }),
+  ).toHaveValue("120 mm wide");
+  await expect(
+    page.getByRole("textbox", { name: "Custom answer", exact: true }),
+  ).toBeFocused();
+  await panel(page).getByRole("button", { name: "Next", exact: true }).click();
+  await panel(page)
     .getByRole("button", { name: "Submit answers", exact: true })
     .click();
   await expect(panel(page)).toHaveCount(0);
@@ -222,7 +402,7 @@ test("custom answers, previous-question editing, persisted drafts and automatic 
   expect(tool.tool_call_id).toBe("call_dimensions");
   expect(JSON.parse(tool.content)).toEqual({
     answers: {
-      width: { answers: ["None of the above", "user_note: 120 mm wide"] },
+      width: { answers: ["120 mm wide"] },
       height: { answers: ["60 mm"] },
     },
   });
@@ -346,14 +526,18 @@ test("pending questions are isolated per project, cancellable, and usable on a n
   await page.setViewportSize({ width: 390, height: 844 });
   await setup(page);
   await panel(page)
-    .getByRole("radio", { name: /None of the above/ })
+    .getByRole("radio", { name: /Custom answer/ })
     .click();
-  await page.getByLabel("Answer notes").fill("My custom width");
+  await page
+    .getByRole("textbox", { name: "Custom answer", exact: true })
+    .fill("My custom width");
   for (let i = 0; i < 3; i++) {
+    await page.getByRole("button", { name: "Expand sidebar" }).click();
     await page
       .getByRole("button", { name: "New Drawing", exact: true })
       .click();
     await expect(panel(page)).toHaveCount(0);
+    await page.getByRole("button", { name: "Expand sidebar" }).click();
     // A render/save racing the switch must not drop the newly inserted project.
     await expect(
       page.getByRole("button", { name: /^Open drawing / }),
@@ -365,15 +549,20 @@ test("pending questions are isolated per project, cancellable, and usable on a n
       })
       .last()
       .click();
-    await expect(page.getByLabel("Answer notes")).toHaveValue(
-      "My custom width",
-    );
+    await expect(
+      page.getByRole("textbox", { name: "Custom answer", exact: true }),
+    ).toHaveValue("My custom width");
   }
   expect(
     await panel(page).evaluate((el) => el.scrollWidth <= el.clientWidth),
   ).toBe(true);
-  await page.getByLabel("Answer notes").press("Escape");
-  await expect(page.getByLabel("Answer notes")).toHaveCount(0);
+  await page
+    .getByRole("textbox", { name: "Custom answer", exact: true })
+    .press("Escape");
+  await expect(panel(page)).toBeFocused();
+  await expect(
+    page.getByRole("textbox", { name: "Custom answer", exact: true }),
+  ).toHaveValue("My custom width");
   await page.setViewportSize({ width: 900, height: 850 });
   await expect(panel(page)).toBeVisible();
   expect(
