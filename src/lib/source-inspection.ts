@@ -5,9 +5,17 @@ type Node = DefaultTreeAdapterMap["node"];
 function elementRanges(html: string) {
   const ranges = new Map<
     string,
-    { start: number; end: number; related: string[] }
+    {
+      start: number;
+      end: number;
+      related: string[];
+      parentId?: string;
+      tag: string;
+      label?: string;
+    }
   >();
-  const walk = (node: Node) => {
+  const walk = (node: Node, parentId?: string) => {
+    let childParent = parentId;
     if ("attrs" in node) {
       const id = node.attrs.find((a) => a.name === "id")?.value;
       const location = node.sourceCodeLocation;
@@ -18,12 +26,57 @@ function elementRanges(html: string) {
           related: (
             node.attrs.find((a) => a.name === "data-for")?.value || ""
           ).split(/\s+/),
+          parentId,
+          tag: node.tagName,
+          label: node.attrs
+            .find((a) => a.name === "data-label")
+            ?.value.slice(0, 120),
         });
+      if (id) childParent = id;
     }
-    if ("childNodes" in node) node.childNodes.forEach(walk);
+    if ("childNodes" in node)
+      node.childNodes.forEach((child) => walk(child, childParent));
   };
   walk(parse(html, { sourceCodeLocationInfo: true }));
   return ranges;
+}
+export function sourceSelectionContext(
+  source: VirtualSource,
+  selectedIds: readonly string[],
+) {
+  const ranges = elementRanges(source.html);
+  const focused = new Set(selectedIds);
+  for (const id of selectedIds) {
+    let parent = ranges.get(id)?.parentId;
+    while (parent) {
+      focused.add(parent);
+      parent = ranges.get(parent)?.parentId;
+    }
+  }
+  const ordered = [...ranges].sort(
+    ([a], [b]) => Number(focused.has(b)) - Number(focused.has(a)),
+  );
+  const objects: {
+    id: string;
+    parentId?: string;
+    tag: string;
+    label?: string;
+    start: number;
+    end: number;
+    related: string[];
+  }[] = [];
+  let length = 0;
+  for (const [id, range] of ordered) {
+    const entry = { id, ...range };
+    length += JSON.stringify(entry).length;
+    if (length > 20000 || objects.length >= 120) break;
+    objects.push(entry);
+  }
+  return {
+    selected_ids: selectedIds,
+    objects,
+    truncated: objects.length < ranges.size,
+  };
 }
 export function sourceInfo(source: VirtualSource) {
   return {
@@ -70,6 +123,9 @@ export function readSource(
     ...sourceInfo(source),
     text: text.slice(0, 32_000),
     truncated: text.length > 32_000,
+    structure: elementId
+      ? sourceSelectionContext(source, [elementId])
+      : undefined,
   };
 }
 export function searchSource(source: VirtualSource, query: string) {

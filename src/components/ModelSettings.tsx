@@ -1,3 +1,4 @@
+import { t, useLocale } from "../lib/i18n";
 import { useEffect, useRef, useState } from "react";
 import {
   Combobox,
@@ -34,6 +35,7 @@ export default function ModelSettings({
   onClose,
   onClear,
 }: Props) {
+  useLocale();
   const [draft, setDraft] = useState(config);
   const [models, setModels] = useState<string[]>([]);
   const [modelQuery, setModelQuery] = useState("");
@@ -68,14 +70,17 @@ export default function ModelSettings({
         setModels(result.models);
         setStatus({
           ok: true,
-          text: `${result.models.length} models found. Choose a vision-capable model for sketches.`,
+          text: t(
+            "{{count}} models found. Choose a vision-capable model for sketches.",
+            { count: result.models.length },
+          ),
         });
       } else {
         let reply = "";
         await testConnection(draft, controller.signal, (text) => {
           if (controller.signal.aborted) return;
           reply += text;
-          setStatus({ ok: true, text: `Model reply: ${reply}` });
+          setStatus({ ok: true, text: t("Model reply: {{reply}}", { reply }) });
         });
         setStatus({
           ok: true,
@@ -121,18 +126,19 @@ export default function ModelSettings({
           <button
             type="button"
             className="icon-button"
-            aria-label="Close model settings"
+            aria-label={t("Close model settings")}
             onClick={onClose}
           >
             <X size={20} />
           </button>
         </div>
-        <h2>Connect your AI</h2>
+        <h2>{t("Connect your AI")}</h2>
         <p className="muted">
-          Bring your own model. Make it your drawing assistant.
+          {t("Bring your own model. Make it your drawing assistant.")}
         </p>
         <label className="field-label">
-          Provider <span>OpenAI-compatible</span>
+          {t("Provider")}
+          <span>{t("OpenAI-compatible")}</span>
         </label>
         <div className="provider-options">
           <button
@@ -151,11 +157,11 @@ export default function ModelSettings({
             }
             onClick={() => field("baseURL", "")}
           >
-            NewAPI / Custom
+            {t("NewAPI / Custom")}
           </button>
         </div>
         <label className="field-label" htmlFor="base-url">
-          Base URL
+          {t("Base URL")}
         </label>
         <input
           id="base-url"
@@ -166,7 +172,7 @@ export default function ModelSettings({
           onChange={(e) => field("baseURL", e.target.value)}
         />
         <label className="field-label" htmlFor="api-key">
-          API key
+          {t("API key")}
         </label>
         <div className="input-with-action">
           <input
@@ -180,7 +186,7 @@ export default function ModelSettings({
           />
           <button
             type="button"
-            aria-label={showKey ? "Hide API key" : "Show API key"}
+            aria-label={showKey ? t("Hide API key") : t("Show API key")}
             onClick={() => setShowKey(!showKey)}
           >
             {showKey ? <EyeOff size={17} /> : <Eye size={17} />}
@@ -188,7 +194,7 @@ export default function ModelSettings({
         </div>
         <div className="field-row">
           <label className="field-label" htmlFor="model-id">
-            Model
+            {t("Model")}
           </label>
           <button
             type="button"
@@ -201,7 +207,7 @@ export default function ModelSettings({
             ) : (
               <RefreshCw size={13} />
             )}{" "}
-            Discover models
+            {t("Discover models")}
           </button>
         </div>
         <Portal.Group target={dialog}>
@@ -220,7 +226,7 @@ export default function ModelSettings({
                     required
                     autoComplete="off"
                     aria-describedby="model-hint"
-                    placeholder="Enter or select a model"
+                    placeholder={t("Enter or select a model")}
                     displayValue={(model: string) => model}
                     onChange={(e) => {
                       setModelQuery(e.target.value);
@@ -233,7 +239,7 @@ export default function ModelSettings({
                   <ComboboxButton
                     ref={modelButton}
                     className="model-toggle"
-                    aria-label="Show models"
+                    aria-label={t("Show models")}
                     onClick={() => setModelQuery("")}
                   >
                     <ChevronDown size={15} aria-hidden="true" />
@@ -243,7 +249,7 @@ export default function ModelSettings({
                   anchor={{ to: "bottom start", gap: 6, padding: 12 }}
                   modal={false}
                   className="model-options"
-                  aria-label="Models"
+                  aria-label={t("Models")}
                 >
                   {filteredModels.map((model) => (
                     <ComboboxOption
@@ -265,7 +271,8 @@ export default function ModelSettings({
                       className="model-option model-custom"
                     >
                       <span>
-                        Use “{query}”<small>Custom model ID</small>
+                        {t("Use “{{model}}”", { model: query })}
+                        <small>{t("Custom model ID")}</small>
                       </span>
                       <Check
                         size={14}
@@ -276,12 +283,12 @@ export default function ModelSettings({
                   )}
                   {!models.length && !query && (
                     <p className="model-empty">
-                      Discover models above, or type a custom model ID.
+                      {t("Discover models above, or type a custom model ID.")}
                     </p>
                   )}
                   {!!models.length && !filteredModels.length && (
                     <p className="model-empty">
-                      No discovered models match your search.
+                      {t("No discovered models match your search.")}
                     </p>
                   )}
                 </ComboboxOptions>
@@ -290,7 +297,7 @@ export default function ModelSettings({
           </Combobox>
         </Portal.Group>
         <p className="field-hint" id="model-hint">
-          Use a model with image input to interpret hand-drawn sketches.
+          {t("Use a model with image input to interpret hand-drawn sketches.")}
         </p>
         {status && (
           <div
@@ -302,15 +309,15 @@ export default function ModelSettings({
             ) : (
               status.ok && <Check size={16} />
             )}
-            {status.text}
+            {t(status.text)}
           </div>
         )}
         <div className="privacy-note">
           <ShieldCheck size={19} />
           <p>
-            Settings, including your key, are saved in this browser. Requests
-            share them only with the app server and your provider. Drawing code
-            cannot access them. Clear saved settings below to remove them.
+            {t(
+              "Settings, including your key, are saved in this browser. Requests share them only with the app server and your provider. Drawing code cannot access them. Clear saved settings below to remove them.",
+            )}
           </p>
         </div>
         <div className="dialog-actions">
@@ -330,10 +337,11 @@ export default function ModelSettings({
             ) : (
               <PlugZap size={15} />
             )}{" "}
-            {busy === "test" ? "Cancel test" : "Test connection"}
+            {busy === "test" ? t("Cancel test") : t("Test connection")}
           </button>
           <button type="submit" className="button primary" disabled={!!busy}>
-            Save settings <Check size={15} />
+            {t("Save settings")}
+            <Check size={15} />
           </button>
         </div>
         <button
@@ -342,7 +350,7 @@ export default function ModelSettings({
           disabled={!!busy}
           onClick={onClear}
         >
-          Clear saved settings
+          {t("Clear saved settings")}
         </button>
         <a
           className="settings-help"
@@ -350,7 +358,8 @@ export default function ModelSettings({
           target="_blank"
           rel="noreferrer"
         >
-          About NewAPI <ExternalLink size={12} />
+          {t("About NewAPI")}
+          <ExternalLink size={12} />
         </a>
       </form>
     </dialog>

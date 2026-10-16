@@ -78,7 +78,6 @@ export async function runDrawingAgent(options: AgentOptions): Promise<{
     session = new DrawingToolSession(
       { ...context.source, html },
       drawing,
-      context.selectedId,
       options.validate,
       options.isCurrent,
     );
@@ -218,7 +217,7 @@ export async function runDrawingAgent(options: AgentOptions): Promise<{
           kind: "validation",
           status,
           detail:
-            "Sandbox execution, millimeter scale, SVG structure and edit scope checks.",
+            "Sandbox execution, millimeter scale and SVG structure checks.",
         }),
       );
       const feedback = JSON.parse(output);

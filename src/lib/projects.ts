@@ -35,7 +35,14 @@ const messageSchema = z
     text: z.string(),
     id: z.string().optional(),
     status: z
-      .enum(["streaming", "validating", "complete", "cancelled", "error"])
+      .enum([
+        "streaming",
+        "validating",
+        "reviewing",
+        "complete",
+        "cancelled",
+        "error",
+      ])
       .optional(),
     code: z.string().optional(),
     received: z.number().optional(),
@@ -46,7 +53,9 @@ const messageSchema = z
     ...message,
     activities: settleActivities(message.activities, "cancelled"),
     status:
-      message.status === "streaming" || message.status === "validating"
+      message.status === "streaming" ||
+      message.status === "validating" ||
+      message.status === "reviewing"
         ? ("cancelled" as const)
         : message.status,
   }));
@@ -88,14 +97,15 @@ export const welcome = {
 export function newProject(
   drawing: Drawing | null = null,
   existingNames: readonly string[] = [],
+  untitledName = "Untitled drawing",
 ): Project {
   if (drawing)
     drawing = { ...drawing, revision: drawing.revision || crypto.randomUUID() };
   const names = new Set(existingNames.map((name) => name.toLocaleLowerCase()));
-  let name = "Untitled drawing";
+  let name = untitledName;
   let suffix = 2;
   while (names.has(name.toLocaleLowerCase()))
-    name = `Untitled drawing ${suffix++}`;
+    name = `${untitledName} ${suffix++}`;
   const createdAt = Date.now();
   return {
     id: crypto.randomUUID(),

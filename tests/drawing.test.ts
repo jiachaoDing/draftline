@@ -77,16 +77,12 @@ describe("millimeter vector drawing contract", () => {
     );
   });
   it("patches the selected circle and preserves all unrelated geometry", () => {
-    const result = applyPatches(
-      EXAMPLE_SVG,
-      [
-        {
-          id: "hole-top-left",
-          svg: '<circle id="hole-top-left" data-label="Top left hole" cx="20" cy="20" r="7" />',
-        },
-      ],
-      "hole-top-left",
-    );
+    const result = applyPatches(EXAMPLE_SVG, [
+      {
+        id: "hole-top-left",
+        svg: '<circle id="hole-top-left" data-label="Top left hole" cx="20" cy="20" r="7" />',
+      },
+    ]);
     const before = sanitizeSVG(EXAMPLE_SVG),
       after = sanitizeSVG(result);
     expect(after.querySelector("#hole-top-left")?.getAttribute("r")).toBe("7");
@@ -100,46 +96,34 @@ describe("millimeter vector drawing contract", () => {
         before.querySelector(`#${id}`)?.outerHTML,
       );
   });
-  it("rejects edits to unselected elements and accepts related annotations", () => {
-    expect(() =>
-      applyPatches(
-        EXAMPLE_SVG,
-        [{ id: "hole-top-right", svg: '<circle id="hole-top-right" r="7" />' }],
-        "hole-top-left",
-      ),
-    ).toThrow("unrelated");
-    expect(() =>
-      applyPatches(
-        EXAMPLE_SVG,
-        [
-          {
-            id: "dim-height",
-            svg: '<g id="dim-height" data-for="plate-outline"><text>90</text></g>',
-          },
-        ],
-        "hole-top-left",
-      ),
-    ).toThrow("unrelated");
+  it("accepts coherent object replacements independently from selection context", () => {
     expect(
-      applyPatches(
-        EXAMPLE_SVG,
-        [
-          {
-            id: "dim-hole",
-            svg: '<g id="dim-hole" data-for="hole-top-left"><text>Ø14</text></g>',
-          },
-        ],
-        "hole-top-left",
-      ),
+      applyPatches(EXAMPLE_SVG, [
+        { id: "hole-top-right", svg: '<circle id="hole-top-right" r="7" />' },
+      ]),
+    ).toContain('id="hole-top-right" r="7"');
+    expect(
+      applyPatches(EXAMPLE_SVG, [
+        {
+          id: "dim-height",
+          svg: '<g id="dim-height" data-for="plate-outline"><text>90</text></g>',
+        },
+      ]),
+    ).toContain('id="dim-height"');
+    expect(
+      applyPatches(EXAMPLE_SVG, [
+        {
+          id: "dim-hole",
+          svg: '<g id="dim-hole" data-for="hole-top-left"><text>Ø14</text></g>',
+        },
+      ]),
     ).toContain("Ø14");
   });
   it("rejects identity changes and retains a bounded branching undo history", () => {
     expect(() =>
-      applyPatches(
-        EXAMPLE_SVG,
-        [{ id: "hole-top-left", svg: '<circle id="renamed" r="7" />' }],
-        "hole-top-left",
-      ),
+      applyPatches(EXAMPLE_SVG, [
+        { id: "hole-top-left", svg: '<circle id="renamed" r="7" />' },
+      ]),
     ).toThrow("IDs");
     expect(pushHistory({ items: ["a", "b", "c"], index: 0 }, "d")).toEqual({
       items: ["a", "d"],

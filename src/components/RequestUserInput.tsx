@@ -1,3 +1,4 @@
+import { t, useLocale } from "../lib/i18n";
 // Web adaptation of Codex's RequestUserInputOverlay state machine (Apache-2.0).
 // See third_party/codex/README.md for upstream sources and modifications.
 // Copyright 2025 OpenAI
@@ -28,6 +29,7 @@ export default function RequestUserInput({
   onSubmit,
   onCancel,
 }: Props) {
+  useLocale();
   const root = useRef<HTMLDivElement>(null);
   const notes = useRef<HTMLTextAreaElement>(null);
   const customInput = useRef<HTMLTextAreaElement>(null);
@@ -37,8 +39,8 @@ export default function RequestUserInput({
   const options = [
     ...question.options,
     {
-      label: "Custom answer",
-      description: "Enter your exact measurement or answer.",
+      label: t("Custom answer"),
+      description: t("Enter your exact measurement or answer."),
     },
   ];
   useEffect(() => {
@@ -192,17 +194,18 @@ export default function RequestUserInput({
     <div
       className="user-input-panel"
       role="region"
-      aria-label="Question from assistant"
+      aria-label={t("Question from assistant")}
       tabIndex={-1}
       ref={root}
       onKeyDown={keyboard}
     >
       <div className="user-input-heading">
         <span>
-          <CircleHelp size={15} /> Input needed
+          <CircleHelp size={15} />
+          {t("Input needed")}
         </span>
         <button
-          aria-label="Cancel questions"
+          aria-label={t("Cancel questions")}
           disabled={disabled}
           onClick={onCancel}
         >
@@ -211,10 +214,12 @@ export default function RequestUserInput({
       </div>
       {state.confirmUnanswered ? (
         <div className="user-input-confirm" role="alert">
-          <h3>Submit with unanswered questions?</h3>
+          <h3>{t("Submit with unanswered questions?")}</h3>
           <p>
-            {state.answers.filter((a) => !a.committed).length} unanswered. Only
-            explicitly submitted answers will be sent.
+            {t(
+              "{{count}} unanswered. Only explicitly submitted answers will be sent.",
+              { count: state.answers.filter((a) => !a.committed).length },
+            )}
           </p>
           <div className="user-input-actions">
             <button
@@ -228,20 +233,20 @@ export default function RequestUserInput({
                 })
               }
             >
-              Go back
+              {t("Go back")}
             </button>
             <button
               className="primary"
               disabled={disabled}
               onClick={() => onSubmit(collectAnswers(args, state))}
             >
-              Proceed
+              {t("Proceed")}
             </button>
           </div>
         </div>
       ) : (
         <>
-          <nav className="user-input-progress" aria-label="Questions">
+          <nav className="user-input-progress" aria-label={t("Questions")}>
             {args.questions.map((q, i) => (
               <button
                 key={q.id}
@@ -284,8 +289,10 @@ export default function RequestUserInput({
           {isCustom && (
             <textarea
               ref={customInput}
-              aria-label="Custom answer"
-              placeholder="Enter your exact measurement or answer (required)"
+              aria-label={t("Custom answer")}
+              placeholder={t(
+                "Enter your exact measurement or answer (required)",
+              )}
               required
               rows={2}
               disabled={disabled}
@@ -299,8 +306,8 @@ export default function RequestUserInput({
           {answer.notesVisible ? (
             <textarea
               ref={notes}
-              aria-label="Answer notes"
-              placeholder="Optional notes about your answer"
+              aria-label={t("Answer notes")}
+              placeholder={t("Optional notes about your answer")}
               rows={2}
               disabled={disabled}
               maxLength={8000}
@@ -315,7 +322,7 @@ export default function RequestUserInput({
               disabled={disabled}
               onClick={openNotes}
             >
-              Add optional notes
+              {t("Add optional notes")}
             </button>
           )}
           <div className="user-input-actions">
@@ -323,16 +330,18 @@ export default function RequestUserInput({
               disabled={disabled || args.questions.length === 1}
               onClick={() => move(-1)}
             >
-              <ArrowLeft size={13} /> Back
+              <ArrowLeft size={13} />
+              {t("Back")}
             </button>
             <button
               disabled={disabled || args.questions.length === 1}
               onClick={() => move(1)}
             >
-              Next <ArrowRight size={13} />
+              {t("Next")}
+              <ArrowRight size={13} />
             </button>
             <button disabled={disabled} onClick={() => advance(null)}>
-              Skip
+              {t("Skip")}
             </button>
             <button
               className="primary"
@@ -342,13 +351,14 @@ export default function RequestUserInput({
               onClick={() => advance()}
             >
               {state.index === args.questions.length - 1
-                ? "Submit answers"
-                : "Submit answer"}
+                ? t("Submit answers")
+                : t("Submit answer")}
             </button>
           </div>
           <p className="user-input-hints">
-            ↑↓ select · ←→ questions · Tab notes · Enter submit ·
-            PageUp/PageDown questions · Esc returns from input
+            {t(
+              "↑↓ select · ←→ questions · Tab notes · Enter submit · PageUp/PageDown questions · Esc returns from input",
+            )}
           </p>
         </>
       )}

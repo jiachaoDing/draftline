@@ -1,3 +1,4 @@
+import { t, useLocale } from "../lib/i18n";
 import {
   forwardRef,
   useCallback,
@@ -9,22 +10,31 @@ import {
 } from "react";
 import { buildSandbox } from "../lib/sandbox";
 import { cleanDrawing, listElements, sanitizeSVG } from "../lib/drawing";
-import type { Snapshot } from "../lib/contracts";
+import {
+  EMPTY_SELECTION,
+  selectionSchema,
+  type SelectionState,
+  type Snapshot,
+} from "../lib/contracts";
 
 export type PreviewHandle = { send: (type: string, payload?: unknown) => void };
 type Props = {
   title?: string;
   html: string;
   onSnapshot: (snapshot: Snapshot) => void;
-  onSelection: (id: string | null) => void;
+  onSelection: (selection: SelectionState) => void;
+  onCommand?: (command: string) => void;
   onError: (message: string) => void;
   onZoom: (zoom: number) => void;
-  selectedId: string | null;
+  selection?: SelectionState;
+  locked?: boolean;
+  changedIds?: string[];
   layers: { geometry: boolean; dimensions: boolean; presentation: boolean };
   mode: "select" | "pan";
 };
 export const Preview = forwardRef<PreviewHandle, Props>(
   function Preview(props, ref) {
+    useLocale();
     const frame = useRef<HTMLIFrameElement>(null);
     const currentProps = useRef(props);
     currentProps.current = props;
@@ -75,11 +85,17 @@ export const Preview = forwardRef<PreviewHandle, Props>(
             currentProps.current.onError((error as Error).message);
           }
         }
+        if (type === "selection") {
+          const selection = selectionSchema.safeParse(payload);
+          if (selection.success)
+            currentProps.current.onSelection(selection.data);
+        }
         if (
-          type === "selection" &&
-          (typeof payload === "string" || payload === null)
+          type === "command" &&
+          typeof payload === "string" &&
+          !currentProps.current.locked
         )
-          currentProps.current.onSelection(payload);
+          currentProps.current.onCommand?.(payload);
         if (
           type === "zoom" &&
           typeof payload === "number" &&
@@ -94,7 +110,9 @@ export const Preview = forwardRef<PreviewHandle, Props>(
           const p = currentProps.current;
           send("layers", p.layers);
           send("mode", p.mode);
-          send("select", p.selectedId);
+          send("select", p.selection || EMPTY_SELECTION);
+          send("locked", !!p.locked);
+          send("changes", p.changedIds || []);
         }
       };
       window.addEventListener("message", handle);
@@ -104,12 +122,20 @@ export const Preview = forwardRef<PreviewHandle, Props>(
       };
     }, [channel, send]);
     useEffect(() => send("layers", props.layers), [props.layers, send]);
-    useEffect(() => send("select", props.selectedId), [props.selectedId, send]);
+    useEffect(
+      () => send("select", props.selection || EMPTY_SELECTION),
+      [props.selection, send],
+    );
+    useEffect(() => send("locked", !!props.locked), [props.locked, send]);
+    useEffect(
+      () => send("changes", props.changedIds || []),
+      [props.changedIds, send],
+    );
     useEffect(() => send("mode", props.mode), [props.mode, send]);
     return (
       <iframe
         ref={frame}
-        title={props.title || "Technical drawing preview"}
+        title={props.title || t("Technical drawing preview")}
         sandbox="allow-scripts"
         referrerPolicy="no-referrer"
         srcDoc={srcDoc}

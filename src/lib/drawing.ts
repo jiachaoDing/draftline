@@ -6,7 +6,23 @@ import {
   type SheetInfo,
 } from "./presentation";
 
-const SHAPES = "path,circle,ellipse,rect,line,polygon,polyline";
+const SHAPES = "path,circle,ellipse,rect,line,polygon,polyline,text,use";
+const OBJECTS = `${SHAPES},g`;
+
+export function ensureObjectIds(svg: SVGSVGElement) {
+  const ids = new Set([...svg.querySelectorAll("[id]")].map((node) => node.id));
+  let counter = 1;
+  for (const node of svg.querySelectorAll("#geometry :is(g,text,use)")) {
+    if (node.id || node.closest("defs,clipPath,mask")) continue;
+    let id: string;
+    do {
+      id = `object-${node.localName}-${counter++}`;
+    } while (ids.has(id));
+    node.id = id;
+    ids.add(id);
+  }
+  return svg;
+}
 export function sanitizeSVG(source: string): SVGSVGElement {
   const clean = DOMPurify.sanitize(source, {
     USE_PROFILES: { svg: true },
@@ -135,7 +151,9 @@ export function validateSVG(svg: SVGSVGElement) {
 
 export function cleanDrawing(source: string) {
   return serialize(
-    validateSVG(removePresentation(validateSVG(sanitizeSVG(source)))),
+    validateSVG(
+      removePresentation(validateSVG(ensureObjectIds(sanitizeSVG(source)))),
+    ),
   );
 }
 export function presentationSVG(source: string, info: SheetInfo = {}) {
@@ -150,63 +168,57 @@ export function svgToHTML(svg: string) {
 
 export function listElements(svg: SVGSVGElement): ElementInfo[] {
   return [
-    ...svg.querySelectorAll(`#geometry :is(${SHAPES})[id],#dimensions > g[id]`),
-  ].map((node) => ({
-    id: node.id,
-    tag: node.localName,
-    layer:
-      node.closest("[data-layer]")?.getAttribute("data-layer") || "geometry",
-    label: node.getAttribute("data-label") || node.id.replace(/[-_]/g, " "),
-    attributes: Object.fromEntries(
-      [...node.attributes]
-        .filter(
-          (a) => !["id", "data-for", "data-layer", "xmlns"].includes(a.name),
-        )
-        .map((a) => [a.name, a.value]),
+    ...svg.querySelectorAll(
+      `#geometry :is(${OBJECTS})[id],#dimensions > g[id]`,
     ),
-  }));
+  ]
+    .filter((node) => !node.closest("defs,clipPath,mask"))
+    .map((node) => ({
+      id: node.id,
+      tag: node.localName,
+      layer:
+        node.closest("[data-layer]")?.getAttribute("data-layer") || "geometry",
+      label: node.getAttribute("data-label") || node.id.replace(/[-_]/g, " "),
+      attributes: Object.fromEntries(
+        [...node.attributes]
+          .filter(
+            (a) => !["id", "data-for", "data-layer", "xmlns"].includes(a.name),
+          )
+          .map((a) => [a.name, a.value]),
+      ),
+      parentId: node.parentElement?.closest("g[id]")?.id,
+      childIds: [...node.children]
+        .filter((child) => child.matches(OBJECTS) && child.id)
+        .map((child) => child.id),
+    }));
 }
 
 export function applyPatches(
   source: string,
   patches: Extract<AIResult, { kind: "patch" }>["patches"],
-  selectedId: string,
 ) {
   const svg = validateSVG(sanitizeSVG(source));
-  const selected = [...svg.querySelectorAll("[id]")].find(
-    (el) => el.id === selectedId,
-  );
-  if (
-    !selected ||
-    ["drawing", "geometry", "dimensions", "presentation"].includes(selectedId)
-  )
-    throw new Error(
-      "Select a drawing element before applying a targeted edit.",
-    );
-  const selectedIds = new Set([
-    selected.id,
-    ...[...selected.querySelectorAll("[id]")].map((el) => el.id),
-  ]);
-  const allowed = new Set([selectedId]);
-  for (const dimension of svg.querySelectorAll("#dimensions > g[data-for]")) {
-    if (
-      dimension
-        .getAttribute("data-for")!
-        .split(/\s+/)
-        .some((id) => selectedIds.has(id))
-    )
-      allowed.add(dimension.id);
-  }
   const patched = new Set<string>();
   for (const patch of patches) {
-    if (!allowed.has(patch.id) || patched.has(patch.id))
-      throw new Error(
-        `The edit tried to change an unrelated element (${patch.id}). Clear selection for a whole-drawing edit.`,
-      );
-    patched.add(patch.id);
     const old = [...svg.querySelectorAll("[id]")].find(
       (el) => el.id === patch.id,
-    )!;
+    );
+    if (
+      !old ||
+      ["drawing", "geometry", "dimensions", "presentation"].includes(
+        patch.id,
+      ) ||
+      patched.has(patch.id) ||
+      [...old.querySelectorAll("[id]")].some((child) => patched.has(child.id))
+    )
+      throw new Error("Patch targets must be existing, distinct object IDs.");
+    let parent = old.parentElement;
+    while (parent && parent.id !== "drawing") {
+      if (patched.has(parent.id))
+        throw new Error("Patch targets must not overlap.");
+      parent = parent.parentElement;
+    }
+    patched.add(patch.id);
     const wrapper = sanitizeSVG(
       `<svg xmlns="http://www.w3.org/2000/svg">${patch.svg}</svg>`,
     );
@@ -234,80 +246,6 @@ export function applyPatches(
     old.replaceWith(replacement);
   }
   return serialize(validateSVG(svg));
-}
-
-/** Verify a source patch against the same selected-element policy as SVG replacements. */
-export function mergeSelectedEdit(
-  before: string,
-  after: string,
-  selectedId: string,
-) {
-  const old = validateSVG(sanitizeSVG(before));
-  const next = validateSVG(sanitizeSVG(after));
-  const selected = [...old.querySelectorAll("[id]")].find(
-    (node) => node.id === selectedId,
-  );
-  if (!selected) throw new Error("The selected element no longer exists.");
-  const ids = new Set([
-    selectedId,
-    ...[...selected.querySelectorAll("[id]")].map((node) => node.id),
-  ]);
-  const allowed = [
-    selectedId,
-    ...[...old.querySelectorAll("#dimensions > g[data-for]")]
-      .filter((node) =>
-        node
-          .getAttribute("data-for")!
-          .split(/\s+/)
-          .some((id) => ids.has(id)),
-      )
-      .map((node) => node.id),
-  ];
-  return applyPatches(
-    before,
-    allowed.map((id) => {
-      const node = [...next.querySelectorAll("[id]")].find(
-        (node) => node.id === id,
-      );
-      if (!node) throw new Error("The edit removed a stable element ID.");
-      return { id, svg: serialize(node) };
-    }),
-    selectedId,
-  );
-}
-
-export function assertSelectedEdit(
-  before: string,
-  after: string,
-  selectedId: string,
-) {
-  const next = validateSVG(sanitizeSVG(after));
-  const expected = mergeSelectedEdit(before, after, selectedId);
-  const expectedNode = sanitizeSVG(expected);
-  if (!expectedNode.isEqualNode(next)) {
-    const mismatch = [
-      expectedNode,
-      ...expectedNode.querySelectorAll("[id]"),
-    ].find((node) => {
-      const other = [next, ...next.querySelectorAll("[id]")].find(
-        (el) => el.id === node.id,
-      );
-      return (
-        !other ||
-        node
-          .getAttributeNames()
-          .some(
-            (name) => node.getAttribute(name) !== other.getAttribute(name),
-          ) ||
-        other
-          .getAttributeNames()
-          .some((name) => node.getAttribute(name) !== other.getAttribute(name))
-      );
-    });
-    throw new Error(
-      `The edit changed unrelated elements${mismatch ? ` (${mismatch.id})` : " (structure or text)"}. Only the selection and associated dimensions may change.`,
-    );
-  }
 }
 
 export function exportSVG(

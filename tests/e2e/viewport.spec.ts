@@ -27,18 +27,30 @@ async function expectViewportLayout(page: Page) {
             (element) =>
               element.scrollWidth <= width && element.scrollHeight <= height,
           ),
-          panelsFit: panels.every((selector) => {
+          panelsOutsideViewport: panels.flatMap((selector) => {
             const bounds = document
               .querySelector(selector)!
               .getBoundingClientRect();
-            return (
+            const fits =
               bounds.width > 0 &&
               bounds.height > 0 &&
               bounds.x >= 0 &&
               bounds.y >= 0 &&
               bounds.right <= width + 1 &&
-              bounds.bottom <= height + 1
-            );
+              bounds.bottom <= height + 1;
+            return fits
+              ? []
+              : [
+                  {
+                    selector,
+                    x: bounds.x,
+                    y: bounds.y,
+                    right: bounds.right,
+                    bottom: bounds.bottom,
+                    width,
+                    height,
+                  },
+                ];
           }),
           pagePosition: [window.scrollX, window.scrollY],
         };
@@ -47,7 +59,7 @@ async function expectViewportLayout(page: Page) {
     .toEqual({
       appFits: true,
       rootFits: true,
-      panelsFit: true,
+      panelsOutsideViewport: [],
       pagePosition: [0, 0],
     });
 }

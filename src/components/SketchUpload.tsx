@@ -1,3 +1,4 @@
+import { t, useLocale } from "../lib/i18n";
 import { useRef } from "react";
 import { ImagePlus, Upload, X } from "lucide-react";
 export type Sketch = { data: string; name: string };
@@ -13,6 +14,7 @@ export default function SketchUpload({
   onClear,
   disabled,
 }: Props) {
+  useLocale();
   const input = useRef<HTMLInputElement>(null);
   return (
     <div
@@ -31,7 +33,7 @@ export default function SketchUpload({
     >
       <input
         ref={input}
-        aria-label="Upload sketch image"
+        aria-label={t("Upload sketch image")}
         type="file"
         accept="image/png,image/jpeg,image/webp"
         hidden
@@ -42,13 +44,13 @@ export default function SketchUpload({
       />
       {sketch ? (
         <>
-          <img src={sketch.data} alt="Uploaded sketch" />
+          <img src={sketch.data} alt={t("Uploaded sketch")} />
           <div className="sketch-caption">
             <span title={sketch.name}>{sketch.name}</span>
             <button
               className="icon-button"
               disabled={disabled}
-              aria-label="Remove sketch"
+              aria-label={t("Remove sketch")}
               onClick={onClear}
             >
               <X size={14} />
@@ -59,7 +61,8 @@ export default function SketchUpload({
             disabled={disabled}
             onClick={() => input.current?.click()}
           >
-            <Upload size={12} /> Replace
+            <Upload size={12} />
+            {t("Replace")}
           </button>
         </>
       ) : (
@@ -71,16 +74,16 @@ export default function SketchUpload({
           <div className="upload-icon">
             <ImagePlus size={24} strokeWidth={1.6} />
           </div>
-          <strong>Attach reference sketch</strong>
+          <strong>{t("Attach reference sketch")}</strong>
           <span>
-            or <b>browse files</b> to upload
+            {t("or")} <b>{t("browse files")}</b> {t("to upload")}
           </span>
-          <small>PNG, JPG, WebP · up to 8 MB</small>
+          <small>{t("PNG, JPG, WebP · up to 8 MB")}</small>
         </button>
       )}
       {!sketch && (
         <div className="paste-hint">
-          You can also paste an image <kbd>Ctrl V</kbd>
+          {t("You can also paste an image")} <kbd>Ctrl V</kbd>
         </div>
       )}
     </div>

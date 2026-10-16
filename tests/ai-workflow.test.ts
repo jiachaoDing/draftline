@@ -85,14 +85,14 @@ describe("drawing request and commit boundaries", () => {
     expect(EXAMPLE).toEqual(before);
   });
 
-  it("rejects a whole-drawing replacement while an element is selected", () => {
-    expect(() =>
+  it("keeps a full replacement as a validated candidate even with selection context", () => {
+    expect(
       drawingChange(
         complete,
         drawingContext("Change hole", [], EXAMPLE, undefined, "hole-top-left"),
         EXAMPLE,
       ),
-    ).toThrow("whole drawing during a selected edit");
+    ).toMatchObject({ kind: "validate" });
   });
 
   it("applies a targeted patch to the request snapshot, retaining metadata and unrelated geometry", () => {
@@ -124,18 +124,31 @@ describe("drawing request and commit boundaries", () => {
     expect(svg.querySelector("#hole-top-right")!.getAttribute("r")).toBe("5");
     expect(change.drawing.notes).toEqual(["Material: steel"]);
     expect(change.drawing.title).toBe(EXAMPLE.title);
-    expect(() =>
+    expect(
       drawingChange(result, { ...input, selectedId: undefined }, EXAMPLE),
-    ).toThrow("without a selected element");
-    expect(() =>
-      drawingChange(
-        {
-          ...result,
-          patches: [{ ...result.patches[0], id: "hole-top-right" }],
-        },
-        input,
-        EXAMPLE,
-      ),
-    ).toThrow("unrelated element");
+    ).toMatchObject({ kind: "commit" });
+    const broader = drawingChange(
+      {
+        ...result,
+        patches: [
+          {
+            id: "hole-top-right",
+            svg: result.patches[0].svg.replaceAll(
+              "hole-top-left",
+              "hole-top-right",
+            ),
+          },
+        ],
+      },
+      input,
+      EXAMPLE,
+    );
+    expect(broader.kind).toBe("commit");
+    if (broader.kind === "commit")
+      expect(
+        sanitizeSVG(broader.drawing.svg)
+          .querySelector("#hole-top-right")
+          ?.getAttribute("r"),
+      ).toBe("7");
   });
 });

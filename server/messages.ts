@@ -1,6 +1,7 @@
 import type OpenAI from "openai";
 import type { DrawingRequest } from "../src/lib/contracts";
 import { DRAWING_PROMPT, EDIT_PROMPT, SOURCE_EDIT_PROMPT } from "./prompts";
+import { sourceSelectionContext } from "../src/lib/source-inspection";
 
 /** Build provider messages from validated input. Provider settings stay outside prompts. */
 export function drawingMessages(
@@ -12,6 +13,13 @@ export function drawingMessages(
       text: `${input.instruction}\n${input.source ? `Virtual source: drawing.html\nRevision: ${input.source.revision}\nLines: ${input.source.html.split("\n").length}\nSelected element: ${input.selectedId || "none; whole-drawing edit permitted"}\nUse read_source/search_source to inspect the source.` : input.svg ? `Current SVG:\n${input.svg}\nSelected element: ${input.selectedId || "none; whole-drawing edit permitted"}` : ""}\nExisting user-supplied manufacturing notes: ${JSON.stringify(input.notes)}`,
     },
   ];
+  const selectedIds =
+    input.selectedIds || (input.selectedId ? [input.selectedId] : []);
+  if (input.source)
+    content.push({
+      type: "text",
+      text: `Selection is context, not an edit boundary. Infer the smallest appropriate scope from the user's request. Object hierarchy and related dimensions:\n${JSON.stringify(sourceSelectionContext(input.source, selectedIds))}`,
+    });
   if (input.image)
     content.push({
       type: "image_url",
@@ -61,11 +69,14 @@ export function drawingMessages(
     {
       role: "system",
       content:
-        input.mode === "edit"
+        (input.mode === "edit"
           ? input.source
             ? SOURCE_EDIT_PROMPT
             : EDIT_PROMPT
-          : DRAWING_PROMPT,
+          : DRAWING_PROMPT) +
+        (input.language
+          ? `\nRespond in ${input.language === "zh-CN" ? "Simplified Chinese" : "English"} for user-facing replies, drawing titles, summaries, clarification questions and option descriptions. Preserve source/tool identifiers, user-provided content and measurements. Keep JSON keys and tool names unchanged.`
+          : ""),
     },
     ...input.history.map((message) => ({
       role: message.role,

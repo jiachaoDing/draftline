@@ -35,6 +35,7 @@ export function drawingContext(
   image?: string,
   selectedId?: string,
   clarification?: DrawingContext | null,
+  selectedIds?: string[],
 ): DrawingContext {
   const history = conversationHistory(messages);
   if (clarification)
@@ -49,6 +50,7 @@ export function drawingContext(
     image,
     svg: drawing?.svg,
     selectedId,
+    selectedIds: selectedIds || (selectedId ? [selectedId] : []),
     notes: drawing?.notes || [],
     toolTurns: [],
     agentTurns: [],
@@ -72,11 +74,9 @@ export function drawingChange(
   | { kind: "commit"; drawing: Drawing }
   | { kind: "validate"; candidate: Omit<Drawing, "svg"> } {
   if (result.kind === "patch") {
-    if (!input.selectedId || !input.svg || !drawing)
-      throw new Error(
-        "The model returned a targeted edit without a selected element. Try again.",
-      );
-    const svg = applyPatches(input.svg, result.patches, input.selectedId);
+    if (!input.svg || !drawing)
+      throw new Error("Create a drawing before editing it.");
+    const svg = applyPatches(input.svg, result.patches);
     return {
       kind: "commit",
       drawing: {
@@ -88,10 +88,6 @@ export function drawingChange(
       },
     };
   }
-  if (input.mode === "edit" && input.selectedId)
-    throw new Error(
-      "The model tried to replace the whole drawing during a selected edit. Clear selection for a whole-drawing edit.",
-    );
   return {
     kind: "validate",
     candidate: {

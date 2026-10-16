@@ -201,14 +201,10 @@ test.beforeAll(async () => {
       );
     } else if (last.tool_call_id === "scale") {
       patch(
-        "scope",
-        radiusPatch(
-          inspectedHTML(JSON.parse(read.content).text),
-          "hole-top-right",
-          "9",
-        ),
+        "identity",
+        '*** Begin Patch\n*** Update File: drawing.html\n@@\n-      id="hole-top-right"\n+      id="hole-top-left"\n*** End Patch',
       );
-    } else if (last.tool_call_id === "scope") {
+    } else if (last.tool_call_id === "identity") {
       patch(
         "stale",
         radiusPatch(
@@ -492,7 +488,7 @@ test("stopping while tool arguments stream marks queued activities stopped, incl
   expect(requests).toHaveLength(1);
 });
 
-test("real provider loop retries patch/validation/scope/revision errors, then synchronizes history, storage, code and export", async ({
+test("real provider loop retries patch/validation/identity/revision errors, then synchronizes history, storage, code and export", async ({
   page,
 }) => {
   const frame = await open(page);
@@ -524,7 +520,7 @@ test("real provider loop retries patch/validation/scope/revision errors, then sy
     expect.arrayContaining([
       expect.stringContaining("Failed to find expected lines"),
       expect.stringContaining("scale"),
-      expect.stringContaining("unrelated"),
+      expect.stringContaining("unique"),
       expect.stringContaining("Revision conflict"),
       expect.stringContaining("Ambiguous"),
     ]),

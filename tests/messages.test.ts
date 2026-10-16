@@ -21,6 +21,33 @@ const config = {
 };
 
 describe("provider message construction", () => {
+  it("requests localized replies and questions without changing source context or tool contracts", () => {
+    for (const language of ["en", "zh-CN"] as const) {
+      const input = drawingRequestSchema.parse({
+        config,
+        mode: "generate",
+        instruction: "板件宽 120 mm",
+        language,
+      });
+      const messages = drawingMessages(input);
+      expect(messages[0].content).toContain(
+        language === "zh-CN" ? "Simplified Chinese" : "English",
+      );
+      expect(messages[0].content).toContain(
+        "Keep JSON keys and tool names unchanged",
+      );
+      expect(JSON.stringify(messages)).toContain("板件宽 120 mm");
+      expect(JSON.stringify(messages)).not.toContain(config.apiKey);
+    }
+    expect(
+      drawingRequestSchema.safeParse({
+        config,
+        mode: "generate",
+        instruction: "Draw",
+        language: "invalid",
+      }).success,
+    ).toBe(false);
+  });
   it("keeps credentials and settings outside prompts while carrying the sketch and drawing context", () => {
     const input = drawingRequestSchema.parse({
       config,

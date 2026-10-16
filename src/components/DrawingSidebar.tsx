@@ -1,3 +1,4 @@
+import { t, useLocale } from "../lib/i18n";
 import { useEffect, useRef, useState } from "react";
 import {
   Dialog,
@@ -34,6 +35,7 @@ export default function DrawingSidebar({
   onDelete,
   onHelp,
 }: Props) {
+  useLocale();
   const [mobile, setMobile] = useState(
     () => window.matchMedia("(max-width: 700px)").matches,
   );
@@ -71,12 +73,13 @@ export default function DrawingSidebar({
             disabled={disabled}
             onClick={() => openDrawing()}
           >
-            <SquarePen size={18} /> New Drawing
+            <SquarePen size={18} />
+            {t("New Drawing")}
           </button>
           {mobile && (
             <button
               className="icon-button"
-              aria-label="Close sidebar"
+              aria-label={t("Close sidebar")}
               onClick={() => onToggle(false)}
             >
               <X size={18} />
@@ -87,15 +90,15 @@ export default function DrawingSidebar({
           <Search size={16} />
           <input
             type="search"
-            aria-label="Search drawings"
-            placeholder="Search drawings"
+            aria-label={t("Search drawings")}
+            placeholder={t("Search drawings")}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
           {query && (
             <button
               className="icon-button"
-              aria-label="Clear drawing search"
+              aria-label={t("Clear drawing search")}
               onClick={() => setQuery("")}
             >
               <X size={14} />
@@ -103,8 +106,8 @@ export default function DrawingSidebar({
           )}
         </div>
       </div>
-      <h2 className="drawings-label">Drawings</h2>
-      <nav className="drawings-scroll" aria-label="Drawing projects">
+      <h2 className="drawings-label">{t("Drawings")}</h2>
+      <nav className="drawings-scroll" aria-label={t("Drawing projects")}>
         <ProjectList
           key={activeId}
           projects={matching}
@@ -116,7 +119,7 @@ export default function DrawingSidebar({
           onDelete={onDelete}
         />
         {!matching.length && (
-          <p className="drawing-search-empty">No drawings found.</p>
+          <p className="drawing-search-empty">{t("No drawings found.")}</p>
         )}
       </nav>
       <div className="sidebar-footer">
@@ -127,7 +130,8 @@ export default function DrawingSidebar({
             onHelp();
           }}
         >
-          <CircleHelp size={16} /> How it works
+          <CircleHelp size={16} />
+          {t("How it works")}
         </button>
       </div>
     </>
@@ -146,7 +150,7 @@ export default function DrawingSidebar({
         <Dialog
           onClose={() => onToggle(false)}
           className="sidebar-drawer"
-          aria-label="Drawing navigation"
+          aria-label={t("Drawing navigation")}
         >
           <DialogBackdrop transition className="sidebar-backdrop" />
           <DialogPanel
@@ -164,7 +168,7 @@ export default function DrawingSidebar({
     <aside
       id="drawing-sidebar"
       className="left-panel"
-      aria-label="Drawing navigation"
+      aria-label={t("Drawing navigation")}
       inert={!open}
     >
       {content}

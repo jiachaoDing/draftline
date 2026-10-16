@@ -81,13 +81,27 @@ export type ElementInfo = {
   layer: string;
   label: string;
   attributes: Record<string, string>;
+  parentId?: string;
+  childIds?: string[];
 };
+export const selectionSchema = z.object({
+  ids: z.array(z.string().min(1).max(200)).max(500),
+  rootId: z.string().min(1).max(200).nullable(),
+});
+export type SelectionState = z.infer<typeof selectionSchema>;
+export const EMPTY_SELECTION: SelectionState = { ids: [], rootId: null };
 export type Snapshot = { svg: string; elements: ElementInfo[] };
 export type ChatMessage = {
   role: "user" | "assistant";
   text: string;
   id?: string;
-  status?: "streaming" | "validating" | "complete" | "cancelled" | "error";
+  status?:
+    | "streaming"
+    | "validating"
+    | "reviewing"
+    | "complete"
+    | "cancelled"
+    | "error";
   code?: string;
   received?: number;
   activities?: AgentActivity[];
@@ -96,6 +110,7 @@ export type ChatMessage = {
 
 export const drawingRequestSchema = z.object({
   config: configSchema,
+  language: z.enum(["en", "zh-CN"]).optional(),
   mode: z.enum(["generate", "edit"]),
   instruction: z.string().min(1).max(8000),
   image: z
@@ -105,6 +120,7 @@ export const drawingRequestSchema = z.object({
     .optional(),
   svg: z.string().max(600_000).optional(),
   selectedId: z.string().max(200).optional(),
+  selectedIds: z.array(z.string().min(1).max(200)).max(500).optional(),
   notes: notesSchema,
   source: sourceSchema.optional(),
   agentTurns: z.array(agentTurnSchema).max(16).default([]),

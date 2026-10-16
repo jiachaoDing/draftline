@@ -29,7 +29,7 @@ const call = (id: string, name: string, args: unknown) => ({
   name,
   arguments: JSON.stringify(args),
 });
-async function session(selectedId?: string, current = () => true) {
+async function session(current = () => true) {
   return new DrawingToolSession(
     {
       path: "drawing.html",
@@ -37,7 +37,6 @@ async function session(selectedId?: string, current = () => true) {
       html: await formatDrawingSource(EXAMPLE.html),
     },
     EXAMPLE,
-    selectedId,
     validate,
     current,
   );
@@ -242,8 +241,8 @@ describe("versioned virtual source tools", () => {
     ).toBe(true);
     expect(tools.source.revision).not.toBe("base");
   });
-  it("preserves unrelated elements and rejects selected-scope violations and ID removal", async () => {
-    const tools = await session("hole-top-left");
+  it("stages broader source edits independently from the selected context and reports structural changes", async () => {
+    const tools = await session();
     const before = tools.source.html;
     await tools.execute(
       call("read", "read_source", { file_path: "drawing.html" }),
@@ -256,14 +255,22 @@ describe("versioned virtual source tools", () => {
           call("bad", "apply_patch", { revision: "base", patch }),
           signal(),
         ),
-      ).error,
-    ).toContain("unrelated");
-    expect(tools.source.html).toBe(before);
+      ).ok,
+    ).toBe(true);
+    expect(
+      sanitizeSVG(tools.drawing.svg)
+        .querySelector("#hole-top-right")
+        ?.getAttribute("r"),
+    ).toBe("9");
+    await tools.execute(
+      call("read-current", "read_source", { file_path: "drawing.html" }),
+      signal(),
+    );
     const good = JSON.parse(
       await tools.execute(
         call("good", "apply_patch", {
-          revision: "base",
-          patch: radiusPatch(before, "hole-top-left", "7"),
+          revision: tools.source.revision,
+          patch: radiusPatch(tools.source.html, "hole-top-left", "7"),
         }),
         signal(),
       ),
@@ -271,17 +278,14 @@ describe("versioned virtual source tools", () => {
     expect(good, JSON.stringify(good)).toHaveProperty("ok", true);
     const svg = sanitizeSVG(tools.drawing.svg);
     expect(svg.querySelector("#hole-top-left")!.getAttribute("r")).toBe("7");
-    for (const id of [
-      "hole-top-right",
-      "hole-bottom-left",
-      "plate-outline",
-      "arrow",
-    ])
+    for (const id of ["hole-bottom-left", "plate-outline", "arrow"])
       expect(
-        svg
+        svg.querySelector(`#${id}`)!.outerHTML.replace(/>\s+</g, "><"),
+      ).toBe(
+        sanitizeSVG(EXAMPLE.svg)
           .querySelector(`#${id}`)!
-          .isEqualNode(sanitizeSVG(EXAMPLE.svg).querySelector(`#${id}`)),
-      ).toBe(true);
+          .outerHTML.replace(/>\s+</g, "><"),
+      );
     const changed = structuredClone(tools.source);
     await tools.execute(
       call("read2", "read_source", { file_path: "drawing.html" }),
@@ -298,11 +302,12 @@ describe("versioned virtual source tools", () => {
       ),
     );
     expect(result.ok).toBe(false);
+    expect(result.error).toContain("references");
     expect(tools.source).toEqual(changed);
   });
   it("rejects a committed revision change during asynchronous validation", async () => {
     let current = true;
-    const tools = await session(undefined, () => current);
+    const tools = await session(() => current);
     await tools.execute(
       call("read", "read_source", { file_path: "drawing.html" }),
       signal(),

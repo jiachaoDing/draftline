@@ -7,13 +7,7 @@ import {
 } from "./agent-contracts";
 import type { Drawing } from "./contracts";
 import { applyCodexPatch } from "./codex-patch";
-import {
-  assertSelectedEdit,
-  mergeSelectedEdit,
-  cleanDrawing,
-  serialize,
-  svgToHTML,
-} from "./drawing";
+import { cleanDrawing, svgToHTML } from "./drawing";
 import { formatDrawingSource } from "./format-source";
 import { readSource, searchSource, sourceInfo } from "./source-inspection";
 import { ZodError } from "zod";
@@ -56,7 +50,6 @@ export class DrawingToolSession {
   constructor(
     public source: VirtualSource,
     public drawing: Drawing,
-    private selectedId: string | undefined,
     private validate: SourceValidator,
     private isCurrent: () => boolean,
   ) {}
@@ -110,19 +103,8 @@ export class DrawingToolSession {
         throw new Error("The patched source is too large.");
       validating = true;
       onValidation?.("running");
-      let svg = await this.validate(html, signal);
+      const svg = cleanDrawing(await this.validate(html, signal));
       signal.throwIfAborted();
-      if (this.selectedId) {
-        const baseline = new DOMParser()
-          .parseFromString(this.source.html, "text/html")
-          .querySelector("svg")!;
-        assertSelectedEdit(
-          cleanDrawing(serialize(baseline)),
-          svg,
-          this.selectedId,
-        );
-        svg = mergeSelectedEdit(this.drawing.svg, svg, this.selectedId);
-      }
       const canonical = await formatDrawingSource(svgToHTML(svg));
       signal.throwIfAborted();
       if (!this.isCurrent())

@@ -1,7 +1,9 @@
+import { t, useLocale } from "../lib/i18n";
 import { useEffect, useRef } from "react";
 import { ArrowLeft, Code2, Sparkles } from "lucide-react";
 import type { ChatMessage } from "../lib/contracts";
 import AgentActivities from "./AgentActivities";
+import { welcome } from "../lib/projects";
 
 type Props = {
   messages: ChatMessage[];
@@ -18,6 +20,7 @@ export default function ChatTranscript({
   validating,
   onSuggest,
 }: Props) {
+  useLocale();
   const transcript = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const panel = transcript.current;
@@ -33,11 +36,11 @@ export default function ChatTranscript({
             <span />
             <Sparkles size={18} />
           </div>
-          <h3>Your idea, engineered.</h3>
+          <h3>{t("Your idea, engineered.")}</h3>
           <p>
-            Describe a part or a change in plain language.
+            {t("Describe a part or a change in plain language.")}
             <br />
-            I’ll take care of the geometry.
+            {t("I’ll take care of the geometry.")}
           </p>
         </div>
       )}
@@ -53,19 +56,25 @@ export default function ChatTranscript({
               <figure className="message-reference">
                 <img
                   src={message.reference.data}
-                  alt={`Reference: ${message.reference.name}`}
+                  alt={t("Reference: {{name}}", {
+                    name: message.reference.name,
+                  })}
                 />
                 <figcaption>{message.reference.name}</figcaption>
               </figure>
             )}
             <span className="message-text">
-              {message.text ||
+              {(index === 0 &&
+              message.role === "assistant" &&
+              message.text === welcome.text
+                ? t(welcome.text)
+                : message.text) ||
                 (message.status === "streaming"
                   ? message.activities?.length
                     ? ""
-                    : "Connecting to your model…"
+                    : t("Connecting to your model…")
                   : message.status === "cancelled"
-                    ? "Generation stopped."
+                    ? t("Generation stopped.")
                     : "")}
             </span>
             {message.activities && (
@@ -86,8 +95,9 @@ export default function ChatTranscript({
                 open={message.status === "streaming"}
               >
                 <summary>
-                  <Code2 size={12} /> Receiving drawing code ·{" "}
-                  {message.received?.toLocaleString()} characters
+                  <Code2 size={12} />
+                  {t("Receiving drawing code ·")}{" "}
+                  {message.received?.toLocaleString()} {t("characters")}
                 </summary>
                 <pre>{message.code}</pre>
               </details>
@@ -99,13 +109,15 @@ export default function ChatTranscript({
                       (step) =>
                         step.status === "running" && step.kind !== "model",
                     )
-                    ? "Working on your drawing"
-                    : "Waiting for model response"
+                    ? t("Working on your drawing")
+                    : t("Waiting for model response")
                   : message.status === "validating"
-                    ? "Checking the completed drawing"
-                    : message.status === "cancelled"
-                      ? "Stopped"
-                      : "Response incomplete — drawing unchanged"}
+                    ? t("Checking the completed drawing")
+                    : message.status === "reviewing"
+                      ? t("Review proposed changes before applying")
+                      : message.status === "cancelled"
+                        ? t("Stopped")
+                        : t("Response incomplete — drawing unchanged")}
               </small>
             )}
           </div>
@@ -113,7 +125,7 @@ export default function ChatTranscript({
       ))}
       {messages.length === 1 && (
         <div className="suggestions">
-          <span>TRY ASKING</span>
+          <span>{t("TRY ASKING")}</span>
           {(hasDrawing
             ? [
                 "Make the plate 140 mm wide",
@@ -125,8 +137,8 @@ export default function ChatTranscript({
                 "Create a Ø50 mm disk with a Ø10 center hole",
               ]
           ).map((text) => (
-            <button key={text} onClick={() => onSuggest(text)}>
-              {text}
+            <button key={text} onClick={() => onSuggest(t(text))}>
+              {t(text)}
               <ArrowLeft size={12} />
             </button>
           ))}
@@ -138,8 +150,8 @@ export default function ChatTranscript({
           <span />
           <span />{" "}
           {validating
-            ? "Validating geometry"
-            : "Receiving your model’s response"}
+            ? t("Validating geometry")
+            : t("Receiving your model’s response")}
         </div>
       )}
     </div>

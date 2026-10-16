@@ -1,8 +1,10 @@
+import { t, useLocale } from "../lib/i18n";
 import { Check, ChevronRight, Circle, CircleAlert, Square } from "lucide-react";
 import { activityLabel, type AgentActivity } from "../lib/agent-activity";
 import "./agent-activities.css";
 
 function ActivityStep({ activity }: { activity: AgentActivity }) {
+  useLocale();
   const Icon =
     activity.status === "completed"
       ? Check
@@ -21,10 +23,10 @@ function ActivityStep({ activity }: { activity: AgentActivity }) {
       <summary>
         <Icon size={12} aria-hidden="true" />
         <span>
-          {activityLabel(activity)}
+          {t(activityLabel(activity))}
           {activity.status === "running" ? "…" : ""}
         </span>
-        <small>{activity.status}</small>
+        <small>{t(activity.status)}</small>
         <ChevronRight
           className="activity-chevron"
           size={10}
@@ -32,10 +34,10 @@ function ActivityStep({ activity }: { activity: AgentActivity }) {
         />
       </summary>
       <p>
-        {activity.detail ||
+        {(activity.detail ? t(activity.detail) : "") ||
           (activity.status === "pending"
-            ? "Queued; execution has not started."
-            : "Drawing workflow operation.")}
+            ? t("Queued; execution has not started.")
+            : t("Drawing workflow operation."))}
       </p>
     </details>
   );
@@ -48,6 +50,7 @@ export default function AgentActivities({
   activities: AgentActivity[];
   active: boolean;
 }) {
+  useLocale();
   if (!activities.length) return null;
   const current = active
     ? activities.filter((step) => step.status !== "completed")
@@ -65,19 +68,20 @@ export default function AgentActivities({
     [...current].reverse().find((step) => step.status === "running") ||
     current.at(-1);
   return (
-    <div className="agent-activities" aria-label="Agent activity">
+    <div className="agent-activities" aria-label={t("Agent activity")}>
       <span className="activity-announcement" role="status" aria-live="polite">
         {latest
-          ? `${activityLabel(latest)} · ${latest.status}`
-          : `${completed} activities completed${failed ? `, ${failed} failed` : ""}`}
+          ? `${t(activityLabel(latest))} · ${t(latest.status)}`
+          : t("{{count}} activities completed", { count: completed }) +
+            (failed ? t(" · {{count}} failed", { count: failed }) : "")}
       </span>
       {finished.length > 0 && (
         <details key={String(active)} className="agent-history">
           <summary>
-            Activity · {completed} completed
-            {failed > 0 && ` · ${failed} failed`}
-            {stopped > 0 && ` · ${stopped} stopped`}
-            {retries > 0 && ` · ${retries} retries`}
+            {t("Activity · {{count}} completed", { count: completed })}
+            {failed > 0 && t(" · {{count}} failed", { count: failed })}
+            {stopped > 0 && t(" · {{count}} stopped", { count: stopped })}
+            {retries > 0 && t(" · {{count}} retries", { count: retries })}
           </summary>
           {finished.map((activity) => (
             <ActivityStep key={activity.id} activity={activity} />

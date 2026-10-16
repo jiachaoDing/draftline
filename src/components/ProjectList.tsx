@@ -1,3 +1,4 @@
+import { t, useLocale } from "../lib/i18n";
 import { useRef, useState } from "react";
 import {
   Dialog,
@@ -31,6 +32,7 @@ export default function ProjectList({
   onRename,
   onDelete,
 }: Props) {
+  useLocale();
   const [renaming, setRenaming] = useState<string | null>(null);
   const [projectName, setProjectName] = useState("");
   const [deleting, setDeleting] = useState<Project | null>(null);
@@ -42,7 +44,7 @@ export default function ProjectList({
 
   return (
     <>
-      <ul className="project-list" aria-label="Drawings">
+      <ul className="project-list" aria-label={t("Drawings")}>
         {projects.map((project) => (
           <li
             key={project.id}
@@ -59,7 +61,7 @@ export default function ProjectList({
                 }}
               >
                 <input
-                  aria-label="Project name"
+                  aria-label={t("Project name")}
                   autoFocus
                   onFocus={(event) => event.currentTarget.select()}
                   maxLength={120}
@@ -72,7 +74,7 @@ export default function ProjectList({
                 />
                 <button
                   className="icon-button"
-                  aria-label="Save project name"
+                  aria-label={t("Save project name")}
                   disabled={disabled || !projectName.trim()}
                 >
                   <Check size={15} />
@@ -80,7 +82,7 @@ export default function ProjectList({
                 <button
                   type="button"
                   className="icon-button"
-                  aria-label="Cancel rename"
+                  aria-label={t("Cancel rename")}
                   onClick={() => finishRename(project.id)}
                 >
                   <X size={15} />
@@ -90,7 +92,9 @@ export default function ProjectList({
               <>
                 <button
                   className="project-open"
-                  aria-label={`Open drawing ${project.name}`}
+                  aria-label={t("Open drawing {{name}}", {
+                    name: project.name,
+                  })}
                   aria-current={activeId === project.id ? "page" : undefined}
                   title={project.name}
                   disabled={disabled}
@@ -105,8 +109,10 @@ export default function ProjectList({
                       else actionButtons.current.delete(project.id);
                     }}
                     className="icon-button project-action"
-                    aria-label={`Drawing actions for ${project.name}`}
-                    title="Drawing actions"
+                    aria-label={t("Drawing actions for {{name}}", {
+                      name: project.name,
+                    })}
+                    title={t("Drawing actions")}
                     disabled={disabled}
                   >
                     <MoreHorizontal size={17} />
@@ -115,23 +121,29 @@ export default function ProjectList({
                     <MenuItem>
                       <button
                         disabled={disabled}
-                        aria-label={`Rename drawing ${project.name}`}
+                        aria-label={t("Rename drawing {{name}}", {
+                          name: project.name,
+                        })}
                         onClick={() => {
                           setRenaming(project.id);
                           setProjectName(project.name);
                         }}
                       >
-                        <Pencil size={15} /> Rename
+                        <Pencil size={15} />
+                        {t("Rename")}
                       </button>
                     </MenuItem>
                     <MenuItem>
                       <button
                         className="danger-action"
                         disabled={disabled}
-                        aria-label={`Delete drawing ${project.name}`}
+                        aria-label={t("Delete drawing {{name}}", {
+                          name: project.name,
+                        })}
                         onClick={() => setDeleting(project)}
                       >
-                        <Trash2 size={15} /> Delete
+                        <Trash2 size={15} />
+                        {t("Delete")}
                       </button>
                     </MenuItem>
                   </MenuItems>
@@ -151,10 +163,10 @@ export default function ProjectList({
         <DialogBackdrop className="project-dialog-backdrop" />
         <div className="project-dialog-position">
           <DialogPanel className="project-dialog-panel">
-            <DialogTitle>Delete drawing?</DialogTitle>
+            <DialogTitle>{t("Delete drawing?")}</DialogTitle>
             <p>
-              <strong>{deleting?.name}</strong> and its conversation will be
-              permanently deleted.
+              <strong>{deleting?.name}</strong>{" "}
+              {t("and its conversation will be permanently deleted.")}
             </p>
             <div className="project-dialog-actions">
               <button
@@ -163,7 +175,7 @@ export default function ProjectList({
                 disabled={projectBusy}
                 onClick={() => setDeleting(null)}
               >
-                Keep
+                {t("Keep")}
               </button>
               <button
                 className="button delete-project"
@@ -175,7 +187,7 @@ export default function ProjectList({
                     });
                 }}
               >
-                Delete
+                {t("Delete")}
               </button>
             </div>
           </DialogPanel>

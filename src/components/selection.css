@@ -1,0 +1,110 @@
+.selection-panel {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+}
+.selection-breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  color: #71819b;
+  margin-bottom: 7px;
+}
+.selection-breadcrumbs button {
+  padding: 3px 0;
+}
+.selection-breadcrumbs button:hover {
+  color: var(--blue);
+}
+.object-tree summary {
+  cursor: pointer;
+  padding: 5px 0;
+}
+.object-tree summary small {
+  float: right;
+  color: #87909f;
+}
+.object-tree > ul {
+  max-height: 180px;
+  overflow: auto;
+  margin: 7px 0;
+}
+.object-tree ul {
+  list-style: none;
+  padding: 0;
+}
+.object-tree-row {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  width: 100%;
+  padding: 6px;
+  text-align: left;
+  border-radius: 4px;
+}
+.object-tree-row > span:nth-child(2) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.object-tree-row small {
+  margin-left: auto;
+  color: #8b97a7;
+}
+.object-tree-row[aria-pressed="true"] {
+  background: #eaf0ff;
+  color: var(--blue);
+}
+.selection-panel .selection-card {
+  margin: 8px 0 0;
+  padding: 10px;
+}
+.selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 8px 0;
+}
+.selection-actions > button:not(.button) {
+  border: 1px solid #dce1ea;
+  border-radius: 4px;
+  padding: 5px 7px;
+  background: white;
+}
+.selection-instructions {
+  color: #87909f;
+  font-size: 9px;
+  margin-top: 7px;
+  line-height: 1.6;
+}
+.scope-review {
+  padding: 16px;
+  border: 1px solid #efcd89;
+  border-radius: 8px;
+  margin: 12px;
+  background: #fffbf1;
+}
+.scope-review p {
+  margin-top: 8px;
+  line-height: 1.6;
+  font-size: 11px;
+}
+.scope-review-counts {
+  color: #975f12;
+  margin: 12px 0;
+  font-size: 11px;
+}
+.scope-review ul {
+  max-height: 130px;
+  overflow: auto;
+  padding-left: 18px;
+  font-size: 11px;
+}
+.scope-review li {
+  padding: 3px 0;
+  overflow-wrap: anywhere;
+}
+.reply-status.reviewing {
+  color: #975f12;
+}

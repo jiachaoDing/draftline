@@ -12,6 +12,7 @@ describe("preview startup bridge", () => {
     const root = createRoot(container);
     const onSnapshot = vi.fn();
     const onError = vi.fn();
+    const onSelection = vi.fn();
     function FrameStartup() {
       useLayoutEffect(() => {
         const frame = container.querySelector("iframe")!;
@@ -33,6 +34,23 @@ describe("preview startup bridge", () => {
         dispatch(frame.contentWindow, "wrong-channel");
         expect(onSnapshot).not.toHaveBeenCalled();
         dispatch(frame.contentWindow, channel);
+        const selectionEvent = (source: Window | null, payload: unknown) =>
+          window.dispatchEvent(
+            new MessageEvent("message", {
+              source,
+              data: { channel, type: "selection", payload },
+            }),
+          );
+        selectionEvent(window, { ids: ["hole-top-left"], rootId: null });
+        selectionEvent(frame.contentWindow, {
+          ids: "not-an-array",
+          rootId: null,
+        });
+        expect(onSelection).not.toHaveBeenCalled();
+        selectionEvent(frame.contentWindow, {
+          ids: ["hole-top-left", "hole-top-right"],
+          rootId: null,
+        });
       }, []);
       return null;
     }
@@ -46,9 +64,9 @@ describe("preview startup bridge", () => {
               html: EXAMPLE.html,
               onSnapshot,
               onError,
-              onSelection: () => {},
+              onSelection,
               onZoom: () => {},
-              selectedId: null,
+              selection: { ids: [], rootId: null },
               layers: { geometry: true, dimensions: true, presentation: true },
               mode: "select",
             }),
@@ -59,6 +77,10 @@ describe("preview startup bridge", () => {
       expect(onSnapshot).toHaveBeenCalledTimes(1);
       expect(onSnapshot.mock.calls[0][0].svg).toContain('id="hole-top-left"');
       expect(onError).not.toHaveBeenCalled();
+      expect(onSelection).toHaveBeenCalledExactlyOnceWith({
+        ids: ["hole-top-left", "hole-top-right"],
+        rootId: null,
+      });
     } finally {
       await act(async () => root.unmount());
       container.remove();
