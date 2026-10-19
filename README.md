@@ -1,121 +1,122 @@
-# Draftline — AI Drawing Studio
+<p align="center">
+  <img src="docs/images/cover.png" alt="Draftline：从草图与尺寸描述到可编辑 SVG 图纸" width="100%" />
+</p>
 
-A working sketch → drawing → edit → SVG application. AI writes inline HTML, SVG, and synchronous JavaScript for initial drawings, then inspects and patches the current drawing's versioned source using the original OpenAI Codex Rust patch engine compiled to WebAssembly.
+<p align="center">
+  <strong>用自然语言画图，让每一次修改都有据可循。</strong><br />
+  将草图、参考文件和尺寸要求，转为可继续编辑的毫米级 SVG 图纸。
+</p>
 
-## Run locally
+<p align="center">
+  <a href="https://draftline.anxinsm.com">在线体验</a> ·
+  <a href="#快速开始">快速开始</a> ·
+  <a href="docs/user-guide.md">使用指南</a> ·
+  <a href="README.en.md">English</a>
+</p>
 
-Requires Node.js 24.11+ and npm. All project files use UTF-8. For code changes, start with [AGENTS.md](AGENTS.md), the [architecture map](docs/architecture.md), and the [development guide](docs/development.md).
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2563eb" alt="MIT License" /></a>
+  <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-strict-3178c6" alt="Strict TypeScript" /></a>
+  <a href="wrangler.jsonc"><img src="https://img.shields.io/badge/deploy-Cloudflare_Workers-f38020" alt="Cloudflare Workers" /></a>
+</p>
 
-```powershell
+![Draftline 实际界面：项目列表、可编辑图纸与 AI 对话](docs/images/workspace.png)
+
+## Draftline 能做什么
+
+Draftline 是一个开源的 AI 绘图工作台。你提供草图与尺寸，AI 生成图纸；选中对象后，还能通过对话继续修改。每张图纸保留自己的对话、参考文件和撤销历史。
+
+| 能力          | 使用方式                                                                       |
+| ------------- | ------------------------------------------------------------------------------ |
+| 草图 → 图纸   | 输入文字或附上图片、SVG、PDF、DXF、文本；缺少关键尺寸时，AI 会先提问           |
+| 局部修改      | 点选、框选或进入分组，让 AI 调整相关对象；超出选区的修改先交由你审阅           |
+| 可编辑源代码  | 在 Code 编辑器中查看、修改、格式化 HTML / SVG / JavaScript，并在沙箱验证后应用 |
+| 毫米 SVG 导出 | 1 个 SVG 单位对应 1 mm；导出纯几何，或包含尺寸、标题栏和技术说明的完整图纸     |
+| 独立项目      | 自动保存图纸、对话、附件与草稿；支持撤销 / 重做，生成时也可切换项目            |
+| 自选模型      | 配置 OpenAI 兼容接口或 NewAPI，使用自己的 API Key；回复与绘图过程流式呈现      |
+| 中英双语      | 默认简体中文，可即时切换英文；桌面、平板与手机均有对应布局                     |
+
+## 先体验，再接入模型
+
+1. 打开 **[在线工作台](https://draftline.anxinsm.com)**，查看四个可编辑示例。
+2. 在 **模型设置** 中填写 Base URL、API Key 和模型名称，测试连接。
+3. 新建图纸，描述尺寸或上传参考文件；回答 AI 的测量问题。
+4. 选中对象继续修改，审阅变更后导出 SVG。
+
+例如，可以先描述：
+
+> 画一块 120 × 80 mm 的矩形板，四角圆角半径 8 mm。中心开一个直径 20 mm 的圆孔，标注外形与孔径。
+
+使用支持**流式工具调用**的模型；图片或 PDF 输入还需要模型及接口支持对应文件类型。每次最多附上 10 个文件，总计 8 MB。模型 API 的使用费用由你的服务商收取。
+
+## 快速开始
+
+需要 **Node.js 24.11+** 和 npm。
+
+```bash
+git clone https://github.com/jiachaoDing/draftline.git
+cd draftline
 npm ci
 npm run dev
 ```
 
-Open http://127.0.0.1:3000. The API runs on loopback port 3001. In **Model settings**, enter your OpenAI-compatible Base URL and API key, then discover models. Click the Model field or its arrow to browse the full list, type to filter, and select with the mouse or keyboard. Custom model IDs can also be typed and saved directly. Test the connection before drawing. Use a model with streamed function calling and image support for sketches.
+打开 <http://127.0.0.1:3000>，在模型设置中配置接口。开发 API 运行在本机 `3001` 端口，由 Vite 代理。
 
-Use the language selector in the header to switch between **English** and **简体中文** immediately. A first visit defaults to Simplified Chinese; an explicit selection is remembered in this browser. Navigation, settings, drawing tools, assistant controls, clarification forms and common errors follow the selected language. New AI requests ask for replies, titles and measurement questions in that language. Existing drawing content, names, conversations and answer drafts retain their original text. Chinese input composition keeps its text and caret stable during background autosaves; each drawing restores its own unsent draft. SVG download filenames preserve Chinese titles.
+| 服务                     | Base URL 示例                                               |
+| ------------------------ | ----------------------------------------------------------- |
+| OpenAI                   | `https://api.openai.com/v1`                                 |
+| NewAPI / OpenAI 兼容服务 | `https://your-api.example.com/v1`，保留服务商要求的路径前缀 |
 
-OpenAI uses `https://api.openai.com/v1`. For [NewAPI](https://github.com/QuantumNous/new-api), use your instance's HTTPS URL including its API prefix, usually `/v1`. An empty URL path is normalized to `/v1`; custom prefixes are preserved. Development also accepts HTTP endpoints on localhost, useful for testing a local compatible provider. The production server accepts public HTTPS endpoints.
+开发环境支持本机 HTTP 模型接口；生产环境使用公开 HTTPS 接口。
 
-1. Use **New Drawing** in the left sidebar to start with an empty canvas and a fresh conversation. Blank drawings receive distinct names. Search drawings by name in the sidebar; drawings are ordered by creation time, newest first, and keep their position when opened, edited or renamed. The header's sidebar button collapses navigation to give the canvas more room, and opens a navigation drawer on mobile. A fresh browser workspace starts with four editable samples named 样例1 through 样例4: a rounded plate, a saddle bag, an arc plate with side tabs and a three-view handbag drawing. Each includes its reference, successful conversation and drawing revisions; failed replies and operations are removed from these curated samples. Initialization preserves existing workspaces and restores a saved single drawing when present.
-2. Describe a part and its dimensions in the right-side assistant. Use the paperclip, drag files onto the composer, or paste images/files into its input. Attach up to ten files totaling 8 MB: PNG/JPEG/WebP images, SVG, PDF, DXF and text. Each attachment has a preview or file card and can be removed separately. assistant-ui reads image/text attachments; SVG and DXF travel as text, and PDF travels as a native file part requiring PDF input support from the chosen model endpoint. Sent attachments remain on their original message; the next message starts with an empty attachment list. **Try an example** adds a real sketch and explicit measurements. When the model requests clarification, the input area shows one question at a time. Select a predefined answer or **Custom answer**, which immediately opens and focuses a required text field. **Add optional notes** supplements either answer. Back/Next and question headers let you review drafts; custom text survives navigation, refresh and project switches. Submitting the final answer automatically resumes drawing with its original references.
-3. Click an object to select its whole group; drag a rectangle around objects to select them together, and Shift-click to add or remove objects. Double-click or **Enter group** to edit nested contents; Ctrl/Cmd-click reaches an individual path or text element. The canvas toolbar **Objects and groups** button toggles a resizable floating hierarchy panel at the upper left. Its list scrolls independently and follows canvas selection; selecting a tree row highlights the canvas. A lightweight canvas toolbar shows the selection name/count, grouping and hierarchy actions. The assistant composer shows only a removable selection indicator; an empty selection targets the whole drawing. The breadcrumb returns to the entire drawing. **Group** and **Ungroup** use drawing undo history. Use the hand tool to pan and the wheel or buttons to zoom. Describe the desired change in the assistant: selection provides context, and AI can choose related objects or the complete visual object. Broader changes show amber outlines and a change list with **Apply AI changes** / **Discard proposal** before saving.
-4. Reopen drawings from the sidebar to continue their own conversation. Autosave runs silently in the background; storage failures show an error notification. Each project saves its drawing revisions, conversation and message attachments, composer draft and attachments, layer visibility, pending questions and per-question answer drafts automatically in this browser. Switch or create drawings while AI works: streaming, tools, validation and proposals stay with their original project. That drawing's editing actions are temporarily locked; inspection, pan and zoom remain available, and other drawings stay editable. Activity indicators identify running projects. Hover over or focus a drawing to reveal its **Drawing actions** menu, then choose **Rename** or **Delete**. Touch screens show the menu button directly. Confirming deletion removes that drawing and conversation; deleting the last project opens a fresh drawing. A drawing with an active task or unreviewed proposal must be stopped or resolved before deletion. Refresh restores received messages and questions, marking unfinished requests stopped.
-5. Use **Drawing layers** in the canvas toolbar to show or hide geometry, dimensions and sheet information. Export geometry only or a finished drawing with dimensions, title block, and technical notes. Layer visibility changes only the preview; export uses the original drawing.
+## 部署到 Cloudflare Workers
 
-The workspace fills the browser viewport. Drawing navigation, chat history, assistant controls and source code scroll within their own panels. On tablet, navigation stays beside a canvas/chat split; mobile stacks the canvas and assistant within the screen and opens navigation in a drawer.
+前端通过 **Workers Static Assets** 提供，Hono API 运行在同一个 Worker 下。
 
-Keyboard shortcuts: `V` select, `H` pan, `Ctrl/Cmd Z` undo, `Ctrl/Cmd Shift Z` redo, `Ctrl/Cmd A` select all at the current group level, `Ctrl/Cmd G` group, `Ctrl/Cmd Shift G` ungroup, `Escape` exit a group or clear selection, `Enter` enter the selected group on the canvas / send from the composer, `Shift Enter` newline. In the **Code** tab, CodeMirror 6 provides HTML/SVG and embedded JavaScript/CSS highlighting, line numbers, automatic word wrapping, indentation, search and editor undo/redo. Prettier automatically formats each committed drawing's source with two-space indentation and line breaks. Use **Format** to tidy a draft and **Apply code** to validate it in the drawing sandbox and update the preview. Formatting errors retain the draft; invalid drawings retain the current preview. Editor shortcuts apply to the source while the editor has focus.
-
-## Streaming AI interaction
-
-Ordinary conversation, missing-dimension clarification, drawing generation, selected-element edits, and model connection tests all use one end-to-end streaming transport. The official SDK requests Chat Completions with `stream: true`; Hono forwards each content delta immediately as SSE. Provider URL and model selection work with OpenAI-compatible and NewAPI endpoints. See [official OpenAI streaming documentation](https://developers.openai.com/api/docs/guides/streaming-responses).
-
-The browser reads SSE with `eventsource-parser` and decodes display-only partial JSON with `partial-json`. Human-readable answers appear progressively as actual network content arrives. Generated HTML/SVG and patches appear as plain text while receiving. A terminal successful model completion and validated response are required before applying an edit. Complete generated HTML is executed and checked in a hidden isolated preview; only the verified SVG is committed to the visible canvas and undo history.
-
-For subsequent modifications, the assistant can call `read_source`, `search_source` and `apply_patch` repeatedly within one user request. Inspection returns numbered HTML/SVG lines, selected-element context, associated dimensions and a revision token. Patches use Codex's `*** Begin Patch` / `*** Update File: drawing.html` / `@@` format. The browser executes the original Rust parser, matching and update algorithms through WASM, validates each candidate in the drawing sandbox, and returns success or errors to the model for correction and retry. Only the current virtual `drawing.html` is accessible. Each patch must use the inspected revision and unique context; selected edits preserve unrelated elements. A successful final model response sends validated changes to the commit/review path. Applied changes form one undo step; broader proposals commit after Apply AI changes. The loop allows 16 tool rounds and keeps full HTML available for drawing creation and whole-drawing regeneration.
-
-The assistant shows activity immediately on submission and separates waiting for the model from actual tool execution. Streamed tool names appear as pending while arguments arrive; reading, searching, patch application and sandbox validation report their real running/completed/failed states. Failed modifications and subsequent patch retries remain visible. Expand a step for bounded inspection/check details or its error. Completed steps collapse into an activity summary; ending a request collapses the entire activity list, including failure/retry counts. Activity history is saved with the conversation, and interrupted steps restore as stopped. Activity details contain execution feedback rather than model reasoning.
-
-**Stop generation** cancels the browser request and its upstream model connection. Connection testing also supports streaming replies and cancellation. Interrupted connections, provider errors, malformed responses, token-limit truncation, and unresolved patch failures leave the committed drawing intact and discard staged edits. Partial or cancelled messages stay visible but are excluded from subsequent model history. The model can correct tool failures within the active request; transport failures require an explicit new request.
-
-The server sends a heartbeat every 15 seconds and limits upstream inactivity to 120 seconds. The browser detects a connection that sends no bytes for 45 seconds; heartbeat bytes keep an active connection alive. Streaming responses use `Cache-Control: no-store, no-transform` and `X-Accel-Buffering: no`.
-
-Clarification uses the `request_user_input` function tool through the same Chat Completions API. The server assembles streamed tool arguments and validates them before displaying questions. The browser collects `{answers: {question_id: {answers: [...]}}}` and resumes with the original assistant `tool_calls` and matching `tool_call_id` results, retaining the sketch, selected SVG, notes and previous tool rounds. The model supplies concrete, directly usable options; the client appends one custom-answer choice. An empty options array requests an exact text answer. Options initialize with the first highlighted; highlights and drafts require explicit submission. Custom answers require non-whitespace text and return that text as the answer. Skipped questions trigger an unanswered confirmation and return empty answer arrays if the user proceeds. Optional notes append `user_note: ...` to the chosen label or custom text, matching Codex's notes convention. Multiple tool calls are queued, and follow-up questions use the same flow. A drawing request supports up to 12 clarification rounds.
-
-Question shortcuts: ↑/↓ select, 1–4 submit a predefined option or focus the custom input, ←/→ change questions from the option list, PageUp/PageDown or Ctrl P/N change questions from either input, Tab from the option list opens optional notes or focuses the selected custom input, Enter submits, Shift Enter adds a newline. Arrow keys inside text fields move the caret. Tab/Escape in notes clears notes and returns to options; Escape in the custom input returns to options while retaining its text. **Skip** leaves the current question unanswered. Escape from the question area or **Cancel questions** interrupts clarification. Stopping or failing a continuation retains the questions for explicit retry; refreshing during continuation restores them without replaying the request.
-
-This interaction is adapted from [OpenAI Codex](https://github.com/openai/codex/tree/2f05c0a71f59fb2f05800846351f3e9926c3e52b/codex-rs/tui/src/bottom_pane/request_user_input). The translated state machine, schema, modifications, Apache-2.0 license and upstream notice are documented in [third_party/codex](third_party/codex/README.md). Production builds include these files under `/licenses/codex/`.
-
-The incremental editing engine is pinned to Codex commit [`c22a06c18070c3e33bd2648c7210a00a2a9f6f80`](https://github.com/openai/codex/tree/c22a06c18070c3e33bd2648c7210a00a2a9f6f80). Original Rust sources, fixtures, mechanical adaptations, build hashes and tool-loop design are recorded in [the patch-engine attribution](third_party/codex/apply-patch/README.md). The checked-in WASM artifact runs in both development and production; Rust is needed only to rebuild it.
-
-## Build and verify
-
-```powershell
-npm run verify:all
-npm start
-```
-
-Playwright uses installed Microsoft Edge by default. Set `PLAYWRIGHT_CHANNEL=chromium` and install Playwright Chromium if Edge is unavailable. The browser suite starts a local OpenAI-compatible test service and exercises the actual SDK and server; it requires no paid credentials. It checks image input, model discovery and connection tests, missing-dimension clarification, generated JavaScript, selected-element changes, undo/redo, layer visibility, exports, project context isolation, renaming and deletion, settings updates and clearing, storage failures, credential isolation and mobile layout. A persistent browser profile is closed and relaunched to verify drawing, conversation, draft, settings and 6 MB reference restoration across a full browser restart.
-
-`npm start` serves the production build on loopback port 3000 (`PORT` overrides it). `dist/server/index.js` also exports a Cloudflare-compatible Worker `fetch` handler. The build embeds the small frontend assets into that module so Node and Worker deployments serve the same application. `.openai/hosting.json` identifies its private Sites deployment.
-
-## Cloudflare Workers deployment
-
-The production hostname is `https://draftline.anxinsm.com`. `wrangler.jsonc` deploys the Hono API from `server/worker.ts` and serves `dist/client` through Workers Static Assets. API paths run the Worker first. The build generates static security and cache headers from `server/security.ts`.
-
-```powershell
-npm ci
+```bash
 npx wrangler login
-npm run verify:all
 npm run deploy
 ```
 
-Wrangler provisions the custom hostname and its certificate in the Cloudflare account that manages `anxinsm.com`. For a Git-connected Workers build, set the build command to `npm run build` and the deploy command to `npx wrangler deploy`. Use Node.js 24.11+ in the build environment. Run `npm run build` followed by `npm run dev:worker` to inspect the production routing locally.
+自行部署时，先将 [wrangler.jsonc](wrangler.jsonc) 中的域名改为你在 Cloudflare 管理的域名。Wrangler 会配置自定义域名和 HTTPS 证书。Git 集成的构建命令为 `npm run build`，部署命令为 `npx wrangler deploy`。
 
-## Libraries and architecture
+本机预览生产路由：`npm run build` → `npm run dev:worker`。Node 部署：`npm run build` → `npm start`。更多说明见 [开发指南](docs/development.md#cloudflare-deployment-checks)。
 
-| Responsibility                         | Reused implementation                                                                                                                                                                                |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| UI and build                           | React, Vite, Lucide                                                                                                                                                                                  |
-| Conversation and attachments           | [assistant-ui React primitives, external-store runtime, image/text adapters and Markdown](https://www.assistant-ui.com/docs/runtimes/custom/external-store)                                          |
-| Accessible model selection             | [Headless UI Combobox](https://headlessui.com/react/combobox)                                                                                                                                        |
-| Source editing and formatting          | [CodeMirror 6](https://codemirror.net/), [Prettier standalone](https://prettier.io/docs/browser)                                                                                                     |
-| Incremental AI editing                 | [OpenAI Codex Rust apply-patch](https://github.com/openai/codex/tree/c22a06c18070c3e33bd2648c7210a00a2a9f6f80/codex-rs/apply-patch), browser WASM; [parse5](https://parse5.js.org/) source locations |
-| AI requests and custom API URLs        | [Official OpenAI JavaScript SDK](https://github.com/openai/openai-node) on the server                                                                                                                |
-| Stream framing and incremental display | Hono SSE, eventsource-parser, partial-json                                                                                                                                                           |
-| Portable API routing and body limits   | [Hono](https://github.com/honojs/hono), its Node adapter and body-limit middleware                                                                                                                   |
-| SVG and HTML sanitization              | [DOMPurify](https://github.com/cure53/DOMPurify)                                                                                                                                                     |
-| SVG zoom, pan and fit                  | [svg-pan-zoom](https://github.com/bumbu/svg-pan-zoom)                                                                                                                                                |
-| Marquee selection                      | [Viselect](https://github.com/simonwep/viselect), bundled locally inside the drawing sandbox                                                                                                         |
-| Local project persistence              | [idb](https://github.com/jakearchibald/idb) with IndexedDB                                                                                                                                           |
-| Request and response contracts         | Zod                                                                                                                                                                                                  |
-| Unit and browser checks                | Vitest, jsdom, Playwright                                                                                                                                                                            |
+## 数据与执行
 
-`server/app.ts` forwards user-configured credentials to the chosen provider. `server/stream.ts` handles streaming, cancellation, timeouts, error redaction and final response validation for every AI route. `src/lib/stream.ts` provides the shared browser transport, and `src/lib/stream-preview.ts` decodes partial responses for text display. `server/prompts.ts` contains the drawing contract. `src/lib/sandbox.ts` supplies the isolated preview and interaction bridge. `src/lib/drawing.ts` validates scale and layers, enforces patch boundaries, and serializes export. `src/lib/presentation.ts` lays out sheet information using native SVG and browser font measurement. React holds a bounded 30-revision undo history, including user-supplied manufacturing notes.
+- **浏览器保存项目**：图纸、对话与附件使用 IndexedDB；数据按域名和浏览器配置隔离，重要图纸可导出留存。
+- **自己管理模型凭据**：设置保存在浏览器本地存储，请求时经过应用服务端转发到所选服务商。凭据与图纸、项目记录及导出文件分离。
+- **沙箱验证后提交**：生成代码在隔离 iframe 中执行，经过清理与 SVG 校验后才进入图纸历史。中止、失败或不完整的响应保留已提交的图纸。
+- **尺寸仍需核对**：程序验证图纸结构与比例约定，生成结果的几何关系和工程适用性需要使用者确认。
 
-There is no custom CAD kernel. Native SVG represents paths, circles, curves and holes. JavaScript may construct SVG elements; after execution, a sanitized SVG snapshot becomes the stable, editable drawing source.
+## 技术栈与文档
 
-## License
+| 层次           | 主要实现                                              |
+| -------------- | ----------------------------------------------------- |
+| 界面与对话     | React、TypeScript、Vite、assistant-ui                 |
+| 图纸与编辑     | SVG、CodeMirror 6、Prettier、DOMPurify、svg-pan-zoom  |
+| 增量修改       | OpenAI Codex Rust apply-patch 引擎，编译为浏览器 WASM |
+| API 与流式传输 | Hono、OpenAI JavaScript SDK、SSE、Zod                 |
+| 存储与部署     | IndexedDB / idb、Cloudflare Workers / Static Assets   |
+| 验证           | Vitest、Playwright、Biome                             |
 
-Draftline is licensed under the [MIT License](LICENSE). Third-party code retains its own licenses and notices; see [third_party/codex](third_party/codex/README.md).
+- [使用指南](docs/user-guide.md)：附件、快捷键、分组、澄清问题、导出和安全边界。
+- [架构说明](docs/architecture.md)：模块职责、数据契约和请求生命周期。
+- [开发指南](docs/development.md)：本地检查、浏览器测试、调试与部署。
+- [贡献约定](AGENTS.md)：代码边界和需要保持的行为。
 
-## Drawing contract
+## 参与贡献
 
-- Root: `<svg id="drawing" width="Wmm" height="Hmm" viewBox="x y W H">`. One coordinate unit equals one millimeter. Page size includes annotation margins.
-- Two direct SVG groups: `geometry` with `data-layer="geometry"`, and `dimensions` with `data-layer="dimensions"`.
-- A separate derived `presentation` group contains a bottom title block and technical notes. It uses the drawing title, mm units and 1:1 physical scale. Only explicitly supplied manufacturing requirements are added as notes, alongside a concise instruction to use stated dimensions. Text wraps and sections stack on narrow sheets. The page extends below the drawing while preserving every geometry coordinate. Geometry-only exports retain the original page bounds.
-- All geometry shapes have unique stable IDs. Dimension groups have stable IDs and `data-for` references to related geometry IDs.
-- Paths, text and other parts of one visual object belong in a named SVG group, with nested groups for sub-objects. Selection provides context for the AI's intended target. The model inspects parent groups, related dimensions and surrounding structure, preserves unrelated artwork, and explains its changes. Actual changes beyond the selection's descendants and associated dimensions, or changes to drawing metadata, are reviewed before commit.
-- The model is instructed to ask for essential missing dimensions and choose a minimum sufficient set of annotations. Structure and physical scale are validated by the app; satisfying the requested geometric relationships remains the model's responsibility.
-- Standalone exports preserve millimeter sizes, viewBox coordinates, geometry, markers, fonts, and inline presentation attributes. Zoom transforms and selection highlights belong to the preview.
+欢迎提交 [问题反馈](https://github.com/jiachaoDing/draftline/issues) 或 Pull Request。报告问题时，请附上复现步骤、浏览器版本和最小示例，分享前移除凭据与私人附件。
 
-## Credential and code isolation
+```bash
+npm run verify:all
+```
 
-**Model settings** saves the provider URL, API key and model in browser local storage and restores them on refresh or reopening. Save again to update them, or use **Clear saved settings** to remove all three and disconnect the model. The key field is masked by default. Credentials travel in request bodies to the app server and configured provider; they are excluded from drawing prompts, project records, exports, URLs and logs. Only save credentials on a browser profile you trust. API responses use `Cache-Control: no-store`; requests have body limits and origin checks.
+完整检查包括格式、静态检查、类型、单元测试、构建及浏览器回归。浏览器安装说明见 [开发指南](docs/development.md)。
 
-Projects use IndexedDB through [idb](https://github.com/jakearchibald/idb), keeping reference images outside local storage's small quota. Each project has its own bounded undo history and conversation context. Restored drawing sources are rebuilt from validated, sanitized SVG snapshots; interrupted responses are marked stopped and excluded from AI context. A saved measurement clarification resumes with the current model settings. Storage failures show a visible warning and unsaved status so users can export their work. Browser storage belongs to the current origin and profile; clearing site data removes saved projects and credentials.
+## 许可证与致谢
 
-Generated code runs in an [iframe sandbox](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe) with only `allow-scripts`, giving it an opaque origin. Its CSP uses nonced inline scripts and blocks network connections, external images, fonts, workers, child frames, objects, forms and base URL changes. The parent CSP restricts frame navigation to the app origin. Frame messages are checked by source and an individual preview channel; the bridge provides drawing commands and sanitized SVG snapshots, never credentials. SVG sanitization also removes scripts, event attributes, foreign objects, CSS and external references from patches and exports.
+Draftline 使用 [MIT License](LICENSE)。
 
-Inline scripts are required to finish synchronously. This browser sandbox isolates credentials and origin access; it does not provide a CPU quota for arbitrary JavaScript. The app shows provider errors and invalid drawing responses without replacing the current drawing. Live paid-provider behavior requires the user's model credentials; automated checks use a deterministic compatible test service.
+增量补丁引擎与澄清交互复用了 [OpenAI Codex](https://github.com/openai/codex) 的开源实现；来源、改动与 Apache-2.0 许可声明保存在 [third_party/codex](third_party/codex/README.md) 和 [补丁引擎说明](third_party/codex/apply-patch/README.md) 中。第三方代码保留各自的许可证与声明。
