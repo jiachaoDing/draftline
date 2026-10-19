@@ -1153,74 +1153,72 @@ export default function App() {
               </button>
             </div>
           </div>
+          <div className="canvas-document-heading">
+            <span>{drawing?.title || activeProject?.name}</span>
+            <span className="document-chip">
+              {!drawing
+                ? t("NEW DRAWING")
+                : drawing.summary.startsWith("Example")
+                  ? t("EXAMPLE DRAWING")
+                  : t("VECTOR DRAWING")}
+            </span>
+          </div>
           <div className={`canvas ${tab === "code" ? "show-code" : ""}`}>
-            <div className="canvas-document-heading">
-              <span>{drawing?.title || activeProject?.name}</span>
-              <span className="document-chip">
-                {!drawing
-                  ? t("NEW DRAWING")
-                  : drawing.summary.startsWith("Example")
-                    ? t("EXAMPLE DRAWING")
-                    : t("VECTOR DRAWING")}
-              </span>
-            </div>
-            <div className="drawing-paper">
-              {drawing ? (
-                <Preview
-                  key={activeId}
-                  ref={preview}
-                  html={previewHTML}
-                  onSnapshot={(snapshot) => setElements(snapshot.elements)}
-                  onSelection={(next) => {
-                    if (review) return;
-                    setSelection({
-                      ids: normalizeSelection(next.ids, elements),
-                      rootId: elements.some(
-                        (element) =>
-                          element.id === next.rootId &&
-                          element.tag === "g" &&
-                          element.layer === "geometry",
-                      )
-                        ? next.rootId
-                        : null,
-                    });
-                  }}
-                  onCommand={(command) => {
-                    if (busy || review || userInput || projectBusy) return;
-                    if (command === "group" || command === "ungroup")
-                      changeGrouping(command);
-                    if (command === "undo" && history.index > 0) navigate(-1);
-                    if (
-                      command === "redo" &&
-                      history.index < history.items.length - 1
+            {drawing ? (
+              <Preview
+                key={activeId}
+                ref={preview}
+                html={previewHTML}
+                onSnapshot={(snapshot) => setElements(snapshot.elements)}
+                onSelection={(next) => {
+                  if (review) return;
+                  setSelection({
+                    ids: normalizeSelection(next.ids, elements),
+                    rootId: elements.some(
+                      (element) =>
+                        element.id === next.rootId &&
+                        element.tag === "g" &&
+                        element.layer === "geometry",
                     )
-                      navigate(1);
-                    if (command === "pan" || command === "select")
-                      setMode(command);
-                  }}
-                  onError={(text) => tell(text, true)}
-                  onZoom={setZoom}
-                  selection={selection}
-                  locked={!!review || !!userInput || projectBusy}
-                  changedIds={review?.changes.ids}
-                  layers={layers}
-                  mode={mode}
-                />
-              ) : (
-                <div className="empty-canvas">
-                  <div className="assistant-mark">
-                    <Sparkles size={24} />
-                  </div>
-                  <h2>{t("A fresh page for your next idea.")}</h2>
-                  <p>
-                    {t("Describe your part or attach a sketch")}
-                    <br />
-                    {t("in the drawing assistant to get started.")}
-                  </p>
-                  <span>{t("Precise vectors · millimeter scale")}</span>
+                      ? next.rootId
+                      : null,
+                  });
+                }}
+                onCommand={(command) => {
+                  if (busy || review || userInput || projectBusy) return;
+                  if (command === "group" || command === "ungroup")
+                    changeGrouping(command);
+                  if (command === "undo" && history.index > 0) navigate(-1);
+                  if (
+                    command === "redo" &&
+                    history.index < history.items.length - 1
+                  )
+                    navigate(1);
+                  if (command === "pan" || command === "select")
+                    setMode(command);
+                }}
+                onError={(text) => tell(text, true)}
+                onZoom={setZoom}
+                selection={selection}
+                locked={!!review || !!userInput || projectBusy}
+                changedIds={review?.changes.ids}
+                layers={layers}
+                mode={mode}
+              />
+            ) : (
+              <div className="empty-canvas">
+                <div className="assistant-mark">
+                  <Sparkles size={24} />
                 </div>
-              )}
-            </div>
+                <h2>{t("A fresh page for your next idea.")}</h2>
+                <p>
+                  {t("Describe your part or attach a sketch")}
+                  <br />
+                  {t("in the drawing assistant to get started.")}
+                </p>
+                <span>{t("Precise vectors · millimeter scale")}</span>
+              </div>
+            )}
             {tab === "code" && (
               <div className="code-panel">
                 <div className="code-heading">
@@ -1334,6 +1332,8 @@ export default function App() {
                 <button onClick={cancelGeneration}>{t("Cancel")}</button>
               </div>
             )}
+          </div>
+          <footer className="canvas-footer">
             <div className="canvas-hint">
               <MousePointer2 size={13} />
               <span>
@@ -1370,24 +1370,25 @@ export default function App() {
                 <Focus size={16} />
               </button>
             </div>
-          </div>
-          <div className="canvas-status">
-            <span>
-              <span className="status-dot" />{" "}
-              {review
-                ? t("Review AI changes")
-                : busy
-                  ? t("AI is working")
-                  : t("Ready")}
-              <span className="status-divider">/</span>
-              {elements.filter((e) => e.layer === "geometry").length}{" "}
-              {t("geometry elements")}
-            </span>
-            <span>
-              <span className="scale-icon">↔</span>
-              {t("1 unit = 1 mm")} <span className="status-divider">/</span> SVG
-            </span>
-          </div>
+            <div className="canvas-status">
+              <span>
+                <span className="status-dot" />{" "}
+                {review
+                  ? t("Review AI changes")
+                  : busy
+                    ? t("AI is working")
+                    : t("Ready")}
+                <span className="status-divider">/</span>
+                {elements.filter((e) => e.layer === "geometry").length}{" "}
+                {t("geometry elements")}
+              </span>
+              <span>
+                <span className="scale-icon">↔</span>
+                {t("1 unit = 1 mm")} <span className="status-divider">/</span>{" "}
+                SVG
+              </span>
+            </div>
+          </footer>
         </section>
         <AssistantChat
           key={activeId}

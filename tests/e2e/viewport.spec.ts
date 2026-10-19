@@ -2,6 +2,70 @@ import { waitForProjectSave } from "../helpers/project-storage";
 import { test, expect } from "../helpers/workspace-test";
 import type { Page } from "@playwright/test";
 
+test("drawing fills the work plane and supports pan and zoom at its edges", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  const preview = page.locator('iframe[title="Technical drawing preview"]');
+  const frame = page.frameLocator('iframe[title="Technical drawing preview"]');
+  const plate = frame.locator("#plate-outline");
+  await expect(plate).toBeVisible();
+  await expect(frame.locator("body")).toHaveAttribute("data-mode", "select");
+  for (const [width, height] of [
+    [1440, 900],
+    [390, 844],
+  ]) {
+    await page.setViewportSize({ width, height });
+    await expect
+      .poll(async () => ({
+        preview: await preview.boundingBox(),
+        canvas: await page.locator(".canvas").boundingBox(),
+      }))
+      .toEqual({
+        preview: await page.locator(".canvas").boundingBox(),
+        canvas: await page.locator(".canvas").boundingBox(),
+      });
+    await expect(frame.locator("body")).toHaveCSS(
+      "background-color",
+      "rgba(0, 0, 0, 0)",
+    );
+    await page
+      .getByRole("button", { name: "Fit drawing", exact: true })
+      .click();
+    const before = (await plate.boundingBox())!;
+    const canvas = (await preview.boundingBox())!;
+    await page.getByRole("button", { name: "Pan tool", exact: true }).click();
+    await expect(frame.locator("body")).toHaveAttribute("data-mode", "pan");
+    await page.mouse.move(canvas.x + 8, canvas.y + 8);
+    await page.mouse.down();
+    await page.mouse.move(canvas.x + 48, canvas.y + 38, { steps: 8 });
+    await page.mouse.up();
+    await expect
+      .poll(async () => Math.round((await plate.boundingBox())!.x - before.x))
+      .toBe(40);
+    await expect
+      .poll(async () => Math.round((await plate.boundingBox())!.y - before.y))
+      .toBe(30);
+    const zoom = await page.locator(".zoom-controls").innerText();
+    await page.mouse.wheel(0, -100);
+    await expect(page.locator(".zoom-controls")).not.toHaveText(zoom);
+    await page.getByRole("button", { name: "Reset view", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Select tool", exact: true })
+      .click();
+    await frame.locator("#hole-top-left").click();
+    await expect(frame.locator("#hole-top-left")).toHaveAttribute(
+      "data-selected",
+      "true",
+    );
+    await page.screenshot({
+      path: `.generated/workspace-flat-${width}.png`,
+    });
+    await frame.locator("svg").press("Escape");
+  }
+});
+
 async function expectViewportLayout(page: Page) {
   await expect
     .poll(() =>
@@ -11,6 +75,9 @@ async function expectViewportLayout(page: Page) {
         const panels = [
           ".header-actions",
           ".canvas-toolbar",
+          ".canvas-footer",
+          ".canvas-status",
+          ".zoom-controls",
           ".drawing-workspace",
           ".assistant-panel",
           ".assistant-controls",

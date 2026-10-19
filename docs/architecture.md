@@ -39,6 +39,8 @@ Source tool parameter declarations are generated from the universal Zod input sc
 
 ## Generation and manual editing
 
+The drawing workspace arranges the toolbar, document heading, full-size canvas and footer on one surface. The preview iframe is a direct canvas child and fills its bounds; its transparent sandbox exposes the canvas dot grid. The footer owns selection hints, status and zoom controls. Contextual selection and hierarchy controls overlay the canvas, while the source editor occupies the same canvas bounds in Code mode. These display elements leave the canonical SVG and export presentation unchanged.
+
 1. App builds `DrawingContext` with the instruction, optional image, canonical SVG, selected IDs, notes and up to ten completed history messages. Interrupted, validating and review-pending replies are filtered out; history text is bounded to 8,000 characters. Saved single-ID question contexts are accepted by the optional `selectedId` field.
 2. App adds settings when calling `api.ts`, which posts `/api/draw`. Hono validates the request. `drawingMessages` constructs system, history, image and tool messages without using settings in their content; the official SDK receives credentials separately.
 3. `streamAI` sends `start`, `delta`, `tool_pending`, `result` or `error` SSE events. Bounded `tool_pending` metadata identifies a tool's position/name as its streamed name becomes available; arguments remain private to the tool workflow until terminal validation. Only a successful provider finish and schema validation produce `result`. `previewStream` decodes partial content for plain-text display.

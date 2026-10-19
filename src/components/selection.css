@@ -87,19 +87,24 @@
 .canvas-selection {
   position: absolute;
   z-index: 4;
-  bottom: 54px;
+  bottom: 12px;
   left: 12px;
   width: min(360px, calc(100% - 24px));
   max-height: 38%;
   overflow: auto;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 4px;
   background: #fffffff5;
-  box-shadow: 0 4px 16px #2436560d;
 }
 .canvas-selection .selection-panel {
   padding: 6px 8px;
   border: 0;
+}
+.canvas-selection .selection-card {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
 }
 .selection-kind {
   margin-left: 8px;

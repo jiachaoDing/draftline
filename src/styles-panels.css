@@ -757,10 +757,6 @@
     padding-left: 24px;
     padding-right: 24px;
   }
-  .drawing-paper {
-    height: 72%;
-    width: 78%;
-  }
 }
 @media (max-width: 1250px) {
   .studio {
@@ -788,10 +784,6 @@
     padding-left: 15px;
     padding-right: 15px;
   }
-  .canvas-hint {
-    bottom: 61px;
-    font-size: 8px;
-  }
   .canvas-tools {
     gap: 0;
   }
@@ -803,15 +795,6 @@
   }
   .header-actions {
     gap: 8px;
-  }
-  .canvas-document-heading {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 7px;
-  }
-  .drawing-paper {
-    padding: 21px 15px;
-    width: 85%;
   }
 }
 @media (max-width: 1050px) {
@@ -844,9 +827,6 @@
   }
   .project-name {
     font-size: 11px;
-  }
-  .canvas-hint {
-    bottom: 27px;
   }
 }
 @media (max-width: 700px) {
@@ -941,24 +921,16 @@
   .tool-separator {
     margin: 0 3px;
   }
-  .drawing-paper {
-    height: 65%;
-    width: 87%;
-    padding: 17px 13px;
-  }
   .canvas-document-heading {
-    flex-direction: row;
-    top: 19px;
-    left: 19px;
+    height: 26px;
+    padding: 0 12px;
   }
-  .canvas-hint {
-    bottom: 65px;
-    left: 20px;
-    font-size: 9px;
+  .canvas-footer {
+    padding: 6px 12px;
+    gap: 4px 8px;
   }
   .canvas-status {
     font-size: 8px;
-    padding: 0 12px;
   }
   .assistant-panel {
     flex: 1 1 55%;

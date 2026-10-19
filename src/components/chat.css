@@ -203,7 +203,6 @@
     max-height: calc(100% - 80px);
   }
   .canvas-selection {
-    bottom: 42px;
     max-height: 40%;
   }
 }
