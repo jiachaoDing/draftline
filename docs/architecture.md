@@ -31,6 +31,10 @@ At each explicit AI submission, App captures the selected language in the option
 
 Source tool parameter declarations are generated from the universal Zod input schemas using Zod's JSON Schema exporter. `read_source` treats omitted or null optional fields as offset 1, limit 80 and a whole-file read; offsets remain one-based and each read is limited to 200 lines. Argument failures identify invalid fields and bounds, provide a corrective read example and list accepted field names without reflecting unknown keys or argument values. Failed reads preserve the working source and return this feedback to the model for correction.
 
+## Production routing
+
+`wrangler.jsonc` publishes `server/worker.ts` as the Cloudflare API entry and uploads `dist/client` as Static Assets. `/api/*` invokes Hono first; frontend files are served directly by the asset service. `scripts/build-server.mjs` writes `_headers` from `PAGE_CSP`, preserving sandbox policy, privacy headers and immutable caching for fingerprinted assets. It also builds the embedded-assets Node/Worker module used by `npm start` and Sites packaging. The custom domain is `draftline.anxinsm.com`; projects and model settings remain in each browser's origin-scoped storage.
+
 ## Generation and manual editing
 
 1. App builds `DrawingContext` with the instruction, optional image, canonical SVG, selected IDs, notes and up to ten completed history messages. Interrupted, validating and review-pending replies are filtered out; history text is bounded to 8,000 characters. Saved single-ID question contexts are accepted by the optional `selectedId` field.

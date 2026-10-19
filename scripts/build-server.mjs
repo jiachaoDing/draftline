@@ -1,5 +1,11 @@
 import { build } from "esbuild";
-import { readFile, readdir, mkdir, copyFile } from "node:fs/promises";
+import {
+  readFile,
+  readdir,
+  mkdir,
+  copyFile,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import { PAGE_CSP } from "../server/security.ts";
 
@@ -20,10 +26,30 @@ async function collect(directory, prefix = "") {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const file = path.join(directory, entry.name);
     if (entry.isDirectory()) await collect(file, `${prefix}${entry.name}/`);
-    else assets[`/${prefix}${entry.name}`] = await readFile(file, "utf8");
+    else if (entry.name !== "_headers")
+      assets[`/${prefix}${entry.name}`] = await readFile(file, "utf8");
   }
 }
 await collect("dist/client");
+await writeFile(
+  "dist/client/_headers",
+  `/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Content-Security-Policy: ${PAGE_CSP}
+
+/
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+`,
+  "utf8",
+);
 await mkdir("dist/server", { recursive: true });
 await mkdir("dist/.openai", { recursive: true });
 await copyFile(".openai/hosting.json", "dist/.openai/hosting.json");

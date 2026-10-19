@@ -60,6 +60,19 @@ Playwright uses installed Microsoft Edge by default. Set `PLAYWRIGHT_CHANNEL=chr
 
 `npm start` serves the production build on loopback port 3000 (`PORT` overrides it). `dist/server/index.js` also exports a Cloudflare-compatible Worker `fetch` handler. The build embeds the small frontend assets into that module so Node and Worker deployments serve the same application. `.openai/hosting.json` identifies its private Sites deployment.
 
+## Cloudflare Workers deployment
+
+The production hostname is `https://draftline.anxinsm.com`. `wrangler.jsonc` deploys the Hono API from `server/worker.ts` and serves `dist/client` through Workers Static Assets. API paths run the Worker first. The build generates static security and cache headers from `server/security.ts`.
+
+```powershell
+npm ci
+npx wrangler login
+npm run verify:all
+npm run deploy
+```
+
+Wrangler provisions the custom hostname and its certificate in the Cloudflare account that manages `anxinsm.com`. For a Git-connected Workers build, set the build command to `npm run build` and the deploy command to `npx wrangler deploy`. Use Node.js 24.11+ in the build environment. Run `npm run build` followed by `npm run dev:worker` to inspect the production routing locally.
+
 ## Libraries and architecture
 
 | Responsibility                         | Reused implementation                                                                                                                                                                                |

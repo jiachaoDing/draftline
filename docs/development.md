@@ -31,6 +31,12 @@ CI installs Chromium with OS dependencies and sets the same environment variable
 
 Browser workflows run with two workers and a 60-second overall budget to allow cold Vite/browser startup. The persistent-profile restart case allows 120 seconds for two Edge startup/shutdown cycles and a large reference. Individual assertions retain their own timeouts; the drawing sandbox fails after six seconds. Drawing commit assertions wait for the validation lifecycle to end before inspecting the visible SVG.
 
+## Cloudflare deployment checks
+
+Run `npm run build`, `npx wrangler types --include-runtime false` and `npx wrangler deploy --dry-run` to validate the Cloudflare configuration and bundle. `npm run dev:worker` serves the production API and Static Assets locally. Check `/api/health`, `/`, a fingerprinted JS asset, CSP, cache headers and the drawing sandbox. `npm run deploy` builds and publishes the Worker and custom domain configured in `wrangler.jsonc`.
+
+Cloudflare authentication is stored by Wrangler outside the repository. Use `npx wrangler whoami` to check it and `npx wrangler login` to refresh it. The Git-connected Workers settings use `npm run build` and `npx wrangler deploy` as separate build/deploy commands. Build output, Wrangler state and local secrets are ignored by Git.
+
 ## Small-change workflow
 
 1. Read the relevant module and existing behavior tests; reproduce the issue or define the invariant to preserve.

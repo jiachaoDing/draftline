@@ -9,3 +9,6 @@ test-results/
 *.tar.gz
 *.log
 .openai/workflow-*
+.wrangler/
+.dev.vars*
+worker-configuration.d.ts

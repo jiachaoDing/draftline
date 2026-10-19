@@ -8,3 +8,5 @@ playwright-report/
 package-lock.json
 third_party/
 src/lib/codex-patch-wasm.ts
+.wrangler/
+worker-configuration.d.ts
