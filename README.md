@@ -83,6 +83,10 @@ Playwright uses installed Microsoft Edge by default. Set `PLAYWRIGHT_CHANNEL=chr
 
 There is no custom CAD kernel. Native SVG represents paths, circles, curves and holes. JavaScript may construct SVG elements; after execution, a sanitized SVG snapshot becomes the stable, editable drawing source.
 
+## License
+
+Draftline is licensed under the [MIT License](LICENSE). Third-party code retains its own licenses and notices; see [third_party/codex](third_party/codex/README.md).
+
 ## Drawing contract
 
 - Root: `<svg id="drawing" width="Wmm" height="Hmm" viewBox="x y W H">`. One coordinate unit equals one millimeter. Page size includes annotation margins.
