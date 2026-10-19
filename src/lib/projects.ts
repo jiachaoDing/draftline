@@ -4,11 +4,11 @@ import {
   drawingRequestSchema,
   notesSchema,
   pendingUserInputSchema,
+  attachmentsSchema,
   type Drawing,
   type ChatMessage,
 } from "./contracts";
 import { cleanDrawing, svgToHTML } from "./drawing";
-import { EXAMPLE } from "./example";
 import { drawingRevision } from "./ai-workflow";
 import { agentActivitySchema, settleActivities } from "./agent-activity";
 
@@ -48,6 +48,8 @@ const messageSchema = z
     received: z.number().optional(),
     activities: z.array(agentActivitySchema).max(256).default([]),
     reference: referenceSchema.optional(),
+    attachments: attachmentsSchema.optional(),
+    selectedIds: z.array(z.string().min(1).max(200)).max(500).optional(),
   })
   .transform((message) => ({
     ...message,
@@ -74,6 +76,7 @@ export const projectSchema = z
       .refine((h) => h.index < h.items.length),
     messages: z.array(messageSchema),
     sketch: referenceSchema.nullable(),
+    attachments: attachmentsSchema.default([]),
     chatInput: z.string(),
     clarification: drawingRequestSchema.omit({ config: true }).nullable(),
     userInput: pendingUserInputSchema.nullable().default(null),
@@ -86,6 +89,19 @@ export const projectSchema = z
   .transform((project) => ({
     ...project,
     createdAt: project.createdAt ?? project.updatedAt,
+    attachments:
+      project.attachments.length || !project.sketch
+        ? project.attachments
+        : [
+            {
+              id: `reference-${project.id}`,
+              name: project.sketch.name,
+              type: "image" as const,
+              size: Math.floor(project.sketch.data.length * 0.75),
+              image: project.sketch.data,
+            },
+          ],
+    sketch: null,
   }));
 export type Project = Omit<z.infer<typeof projectSchema>, "messages"> & {
   messages: ChatMessage[];
@@ -116,6 +132,7 @@ export function newProject(
     history: { items: [drawing], index: 0 },
     messages: [{ ...welcome }],
     sketch: null,
+    attachments: [],
     chatInput: "",
     clarification: null,
     userInput: null,
@@ -154,6 +171,7 @@ export async function saveProject(project: Project) {
     history: project.history,
     messages: project.messages,
     sketch: project.sketch,
+    attachments: project.attachments,
     chatInput: project.chatInput,
     clarification: project.clarification,
     userInput: project.userInput,
@@ -185,7 +203,7 @@ async function readProjects() {
     }
   }
   if (!records.length) {
-    let drawing = EXAMPLE;
+    let drawing: Drawing | null = null;
     try {
       const saved = JSON.parse(
         localStorage.getItem("draftline-drawing") || "null",
@@ -196,11 +214,18 @@ async function readProjects() {
           summary: "Restored from this browser.",
         });
     } catch {
-      /* Keep the starter drawing when old storage is invalid. */
+      /* Initialize samples when old storage is invalid. */
     }
-    const project = newProject(drawing);
-    await saveProject(project);
-    projects.push(project);
+    const starters = drawing
+      ? [newProject(drawing)]
+      : (await import("./starter-projects.json")).default.map((record) =>
+          projectSchema.parse(record),
+        );
+    const transaction = database.transaction("projects", "readwrite");
+    // A single transaction keeps a failed initialization from saving half a set.
+    for (const project of starters) transaction.store.add(project);
+    await transaction.done;
+    projects.push(...starters);
     try {
       localStorage.removeItem("draftline-drawing");
     } catch {

@@ -25,6 +25,22 @@ export function drawingMessages(
       type: "image_url",
       image_url: { url: input.image, detail: "high" },
     });
+  for (const attachment of input.attachments || []) {
+    content.push({
+      type: "text",
+      text: `Attached reference file: ${attachment.name} (${attachment.type})${attachment.text ? `\n${attachment.text}` : ""}`,
+    });
+    if (attachment.image)
+      content.push({
+        type: "image_url",
+        image_url: { url: attachment.image, detail: "high" },
+      });
+    if (attachment.file)
+      content.push({
+        type: "file",
+        file: { filename: attachment.name, file_data: attachment.file },
+      });
+  }
   const questions = input.toolTurns.map((turn) => [
     {
       role: "assistant" as const,

@@ -1,4 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "../helpers/workspace-test";
+import type { Page } from "@playwright/test";
 import { createServer, type Server } from "node:http";
 import { EXAMPLE_SVG } from "../../src/lib/example";
 import {

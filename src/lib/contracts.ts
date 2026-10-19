@@ -91,6 +91,48 @@ export const selectionSchema = z.object({
 export type SelectionState = z.infer<typeof selectionSchema>;
 export const EMPTY_SELECTION: SelectionState = { ids: [], rootId: null };
 export type Snapshot = { svg: string; elements: ElementInfo[] };
+export const attachmentSchema = z.object({
+  id: z.string().min(1).max(200),
+  name: z.string().min(1).max(500),
+  type: z.enum(["image", "svg", "pdf", "dxf", "text"]),
+  size: z
+    .number()
+    .int()
+    .min(0)
+    .max(8 * 1024 * 1024),
+  image: z
+    .string()
+    .max(11_000_000)
+    .regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/)
+    .optional(),
+  text: z.string().max(100_000).optional(),
+  file: z
+    .string()
+    .max(11_000_000)
+    .regex(/^data:application\/pdf;base64,[A-Za-z0-9+/=]+$/)
+    .optional(),
+});
+export type ChatAttachment = z.infer<typeof attachmentSchema>;
+export const attachmentsSchema = z
+  .array(attachmentSchema)
+  .max(10)
+  .refine(
+    (items) =>
+      items.reduce((sum, item) => sum + item.size, 0) <= 8 * 1024 * 1024,
+    "Attachments must total less than 8 MB.",
+  )
+  .refine(
+    (items) =>
+      items.reduce(
+        (sum, item) =>
+          sum +
+          (item.image?.length || 0) +
+          (item.text?.length || 0) +
+          (item.file?.length || 0),
+        0,
+      ) <= 11_000_000,
+    "Processed attachments are too large.",
+  );
 export type ChatMessage = {
   role: "user" | "assistant";
   text: string;
@@ -106,6 +148,8 @@ export type ChatMessage = {
   received?: number;
   activities?: AgentActivity[];
   reference?: { data: string; name: string };
+  attachments?: ChatAttachment[];
+  selectedIds?: string[];
 };
 
 export const drawingRequestSchema = z.object({
@@ -113,6 +157,7 @@ export const drawingRequestSchema = z.object({
   language: z.enum(["en", "zh-CN"]).optional(),
   mode: z.enum(["generate", "edit"]),
   instruction: z.string().min(1).max(8000),
+  attachments: attachmentsSchema.optional(),
   image: z
     .string()
     .max(11_000_000)

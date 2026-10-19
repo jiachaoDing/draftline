@@ -27,6 +27,40 @@ describe("local model settings", () => {
   });
 });
 describe("project restoration", () => {
+  it("restores message attachments independently of the empty composer and defaults older records", () => {
+    const project = newProject();
+    project.messages.push({
+      role: "user",
+      text: "Reference",
+      selectedIds: ["hole-top-left"],
+      attachments: [
+        {
+          id: "pdf",
+          type: "pdf",
+          name: "sheet.pdf",
+          size: 4,
+          file: "data:application/pdf;base64,JVBERg==",
+        },
+      ],
+    });
+    const restored = projectSchema.parse(project);
+    expect(restored.messages.at(-1)?.attachments).toEqual(
+      project.messages.at(-1)?.attachments,
+    );
+    expect(restored.attachments).toEqual([]);
+    expect(restored.messages.at(-1)?.selectedIds).toEqual(["hole-top-left"]);
+    expect(
+      projectSchema.parse({ ...project, attachments: undefined }).attachments,
+    ).toEqual([]);
+    const migrated = projectSchema.parse({
+      ...project,
+      sketch: { name: "sketch.png", data: "data:image/png;base64,AAAA" },
+    });
+    expect(migrated.attachments[0]).toMatchObject({
+      name: "sketch.png",
+      image: "data:image/png;base64,AAAA",
+    });
+  });
   it("keeps a fixed creation time when restoring and updating saved projects", () => {
     const project = newProject();
     expect(project.createdAt).toBe(project.updatedAt);

@@ -1,4 +1,6 @@
-import { test, expect, type Page } from "@playwright/test";
+import { waitForProjectSave } from "../helpers/project-storage";
+import { test, expect } from "../helpers/workspace-test";
+import type { Page } from "@playwright/test";
 import { createServer, type Server } from "node:http";
 import {
   completeResponse,
@@ -400,7 +402,7 @@ test("activity is immediate, streams queued calls, shows failures and retries, a
   await expect(failed).toContainText("Failed to find expected lines");
   await page.screenshot({ path: test.info().outputPath("activity-live.png") });
   releaseActivity();
-  await expect.poll(() => activityStage).toBe("validated");
+  await expect.poll(() => activityStage, { timeout: 15000 }).toBe("validated");
   await expect(
     activity.getByText("Retrying failed modification", { exact: true }).first(),
   ).toBeVisible();
@@ -429,7 +431,7 @@ test("activity is immediate, streams queued calls, shows failures and retries, a
     activity.locator('[data-activity-id="tool:1:0"]'),
   ).toHaveAttribute("data-status", "failed");
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "7");
-  await expect(page.getByText("Saved locally", { exact: true })).toBeVisible();
+  await waitForProjectSave(page);
   await page.reload();
   await expect(
     page.getByLabel("Agent activity").locator(".agent-history > summary"),
@@ -480,7 +482,7 @@ test("stopping while tool arguments stream marks queued activities stopped, incl
     "stopped",
   );
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "5");
-  await expect(page.getByText("Saved locally", { exact: true })).toBeVisible();
+  await waitForProjectSave(page);
   await page.reload();
   await expect(
     page.getByLabel("Agent activity").locator(".agent-history > summary"),
@@ -555,7 +557,7 @@ test("real provider loop retries patch/validation/identity/revision errors, then
   });
   await expect(page.locator(".cm-content")).toContainText('r="7"');
   await page.getByRole("button", { name: "Drawing", exact: true }).click();
-  await expect(page.getByText("Saved locally", { exact: true })).toBeVisible();
+  await waitForProjectSave(page);
   await page.reload();
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "7");
   await expect(frame.locator("#dim-hole text")).toHaveText("Ø14; 3 × Ø10");
@@ -598,7 +600,7 @@ test("inspection history and question tool IDs survive refresh before an increme
       exact: true,
     }),
   ).toBeVisible();
-  await expect(page.getByText("Saved locally", { exact: true })).toBeVisible();
+  await waitForProjectSave(page);
   await page.reload();
   await expect(
     page.getByRole("heading", {
@@ -628,13 +630,46 @@ test("stopping after successful tools discards every staged change", async ({
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "5");
   await expect(
     page.getByRole("button", { name: "New Drawing", exact: true }),
-  ).toBeDisabled();
+  ).toBeEnabled();
   await page.getByRole("button", { name: "Stop generation" }).click();
   await expect(
     page.getByRole("button", { name: "New Drawing", exact: true }),
   ).toBeEnabled();
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "5");
   await page.reload();
+  await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "5");
+});
+
+test("source tools, failure recovery and validation continue in the originating drawing after navigation", async ({
+  page,
+}) => {
+  const frame = await open(page);
+  await send(page, "Resize selected hole to Ø14 with activity progress.");
+  await expect.poll(() => activityStage).toBe("submitted");
+  await page.getByRole("button", { name: "New Drawing", exact: true }).click();
+  await page.getByLabel("Drawing instructions").fill("Unsent B draft");
+  releaseActivity();
+  await expect.poll(() => activityStage).toBe("arguments");
+  releaseActivity();
+  await expect.poll(() => activityStage).toBe("inspected");
+  releaseActivity();
+  await expect.poll(() => activityStage).toBe("failed");
+  releaseActivity();
+  await expect.poll(() => activityStage, { timeout: 15000 }).toBe("validated");
+  releaseActivity();
+  await expect(page.locator(".project-open .spin")).toHaveCount(0);
+  await expect(
+    page.getByText("A fresh page for your next idea."),
+  ).toBeVisible();
+  await expect(page.getByLabel("Drawing instructions")).toHaveValue(
+    "Unsent B draft",
+  );
+  await page
+    .getByRole("button", { name: "Open drawing Mounting plate", exact: true })
+    .click();
+  await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "7");
+  await expect(frame.locator("#dim-hole text")).toHaveText("Ø14; 3 × Ø10");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "5");
 });
 

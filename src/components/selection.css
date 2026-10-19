@@ -16,18 +16,42 @@
 .selection-breadcrumbs button:hover {
   color: var(--blue);
 }
-.object-tree summary {
-  cursor: pointer;
-  padding: 5px 0;
+.object-tree {
+  position: absolute;
+  z-index: 4;
+  top: 52px;
+  left: 12px;
+  width: 246px;
+  height: 230px;
+  min-width: 190px;
+  min-height: 110px;
+  max-width: calc(100% - 24px);
+  max-height: calc(100% - 116px);
+  resize: both;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #fffffff5;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  border-bottom-right-radius: 2px;
+  box-shadow: 0 8px 28px #24365614;
+  font-size: 11px;
 }
-.object-tree summary small {
-  float: right;
-  color: #87909f;
+.object-tree header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
 }
 .object-tree > ul {
-  max-height: 180px;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
-  margin: 7px 0;
+  overscroll-behavior: contain;
+  margin: 4px;
+  scrollbar-width: thin;
 }
 .object-tree ul {
   list-style: none;
@@ -57,8 +81,33 @@
   color: var(--blue);
 }
 .selection-panel .selection-card {
-  margin: 8px 0 0;
-  padding: 10px;
+  margin: 0;
+  padding: 7px 10px;
+}
+.canvas-selection {
+  position: absolute;
+  z-index: 4;
+  bottom: 54px;
+  left: 12px;
+  width: min(360px, calc(100% - 24px));
+  max-height: 38%;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffffff5;
+  box-shadow: 0 4px 16px #2436560d;
+}
+.canvas-selection .selection-panel {
+  padding: 6px 8px;
+  border: 0;
+}
+.selection-kind {
+  margin-left: 8px;
+  color: #87909f;
+}
+.canvas-selection .selection-instructions,
+.canvas-selection .selection-card p {
+  display: none;
 }
 .selection-actions {
   display: flex;

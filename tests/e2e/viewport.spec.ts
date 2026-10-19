@@ -1,4 +1,6 @@
-import { test, expect, type Page } from "@playwright/test";
+import { waitForProjectSave } from "../helpers/project-storage";
+import { test, expect } from "../helpers/workspace-test";
+import type { Page } from "@playwright/test";
 
 async function expectViewportLayout(page: Page) {
   await expect
@@ -120,7 +122,7 @@ test("long drawing lists and chat history scroll internally without moving the p
   page,
 }) => {
   await page.goto("/");
-  await expect(page.locator(".saved-indicator")).toHaveText("Saved locally");
+  await waitForProjectSave(page);
   await page.evaluate(async () => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open("draftline-projects", 1);

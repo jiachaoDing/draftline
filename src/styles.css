@@ -168,15 +168,6 @@ p {
     max-width: 90px;
   }
 }
-.saved-indicator {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: #8c94a1;
-  margin-right: 10px;
-}
-.saved-indicator > span,
 .status-dot {
   display: inline-block;
   width: 5px;
@@ -357,69 +348,6 @@ p {
   color: #9aa3b3;
   letter-spacing: 0.6px;
 }
-.upload-zone {
-  height: 186px;
-  position: relative;
-  border: 1px dashed #cbd3e0;
-  background: #fcfdff;
-  border-radius: 7px;
-  overflow: hidden;
-  transition:
-    background 0.15s,
-    border 0.15s;
-}
-.upload-zone.dragging {
-  background: #edf3ff;
-  border: 1px dashed var(--blue);
-}
-.upload-button {
-  width: 100%;
-  height: 158px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-}
-.upload-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  color: #6a85ba;
-  background: #edf2fb;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 2px 0 12px;
-}
-.upload-button strong {
-  font-weight: 550;
-  color: #4a5971;
-  margin-bottom: 5px;
-}
-.upload-button span {
-  font-size: 10px;
-  color: #9ba4b2;
-}
-.upload-button b {
-  color: var(--blue);
-  font-weight: 500;
-}
-.upload-button small {
-  font-size: 9px;
-  margin-top: 11px;
-  color: #a1a9b7;
-}
-.paste-hint {
-  height: 27px;
-  border-top: 1px solid #edf0f5;
-  color: #a0a9b7;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  font-size: 9px;
-}
 kbd {
   font: inherit;
   font-size: 8px;
@@ -427,49 +355,6 @@ kbd {
   padding: 1px 3px;
   border-radius: 3px;
   background: #fff;
-}
-.upload-zone.has-sketch {
-  border: 1px solid #dfe4ed;
-}
-.has-sketch > img {
-  width: 100%;
-  height: 157px;
-  object-fit: contain;
-  background: #fffef8;
-}
-.sketch-caption {
-  height: 27px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 0 7px;
-  border-top: 1px solid #e5e8ee;
-  background: white;
-}
-.sketch-caption > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  font-size: 9px;
-  color: #7c8698;
-}
-.sketch-caption .icon-button {
-  width: 22px;
-  height: 22px;
-}
-.replace-sketch {
-  position: absolute;
-  right: 7px;
-  top: 7px;
-  border: 1px solid #e1e5ed;
-  background: #ffffffeb;
-  border-radius: 4px;
-  padding: 4px 6px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 9px;
 }
 .instructions-label {
   margin-top: 23px;
@@ -754,15 +639,20 @@ kbd {
 }
 .canvas-loading {
   position: absolute;
-  inset: 0;
-  background: #f7f9fbbf;
-  backdrop-filter: blur(3px);
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  background: #fffffff5;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 8px 12px;
+  box-shadow: 0 4px 16px #2436560d;
   z-index: 5;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 13px;
+  gap: 8px;
   color: #56729f;
   font-size: 12px;
 }
@@ -770,7 +660,6 @@ kbd {
   font-size: 10px;
   color: #72839d;
   text-decoration: underline;
-  margin-top: 10px;
 }
 .code-panel {
   position: absolute;

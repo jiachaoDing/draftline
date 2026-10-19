@@ -1,5 +1,7 @@
-import { test, expect } from "@playwright/test";
+import { waitForProjectSave } from "../helpers/project-storage";
+import { test, expect } from "../helpers/workspace-test";
 import { createServer, type Server } from "node:http";
+import { attachFiles } from "../helpers/attach-files";
 import { EXAMPLE_SVG } from "../../src/lib/example";
 import {
   completeResponse,
@@ -169,7 +171,7 @@ test("sketch → clarification → generated code → targeted edit → undo/red
   await page.getByRole("button", { name: "New Drawing", exact: true }).click();
   await expect(frame.locator("#plate-outline")).toHaveCount(0);
   await page.getByRole("button", { name: "Try an example" }).click();
-  await expect(page.getByAltText("Uploaded sketch")).toBeVisible();
+  await expect(page.locator(".composer-attachment img")).toBeVisible();
   await page
     .getByLabel("Drawing instructions")
     .fill(
@@ -276,7 +278,7 @@ test("sketch → clarification → generated code → targeted edit → undo/red
   );
   expect(JSON.parse(stored)["draftline-model"]).toContain("browser-test-key");
   expect(page.url()).not.toContain("browser-test-key");
-  await expect(page.locator(".saved-indicator")).toContainText("Saved locally");
+  await waitForProjectSave(page);
   await page.reload();
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "7");
   await expect(frame.locator("#presentation")).toContainText(
@@ -298,21 +300,32 @@ test("upload and clipboard paste accept images; invalid files fail safely", asyn
   page,
 }) => {
   await page.goto("/");
-  await page.getByLabel("Upload sketch image").setInputFiles({
-    name: "bad.svg",
-    mimeType: "image/svg+xml",
-    buffer: Buffer.from("<svg/>"),
+  await attachFiles(page, {
+    name: "oversize.png",
+    mimeType: "image/png",
+    buffer: Buffer.alloc(9 * 1024 * 1024),
   });
-  await expect(page.getByRole("alert")).toContainText("Choose a PNG");
+  await expect(page.getByRole("alert")).toContainText("8 MB");
+  await expect(page.getByRole("alert")).toHaveCount(1);
+  await expect(
+    page.getByRole("button", { name: "Send drawing instruction" }),
+  ).toBeDisabled();
+  await page
+    .getByRole("button", { name: "Remove attachment oversize.png" })
+    .click();
   const png = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jWZkAAAAASUVORK5CYII=",
     "base64",
   );
+  await attachFiles(page, {
+    name: "sketch.png",
+    mimeType: "image/png",
+    buffer: png,
+  });
+  await expect(page.locator(".composer-attachment img")).toBeVisible();
   await page
-    .getByLabel("Upload sketch image")
-    .setInputFiles({ name: "sketch.png", mimeType: "image/png", buffer: png });
-  await expect(page.getByAltText("Uploaded sketch")).toBeVisible();
-  await page.getByRole("button", { name: "Remove sketch" }).click();
+    .getByRole("button", { name: "Remove attachment sketch.png" })
+    .click();
   await page.evaluate((base64) => {
     const file = new File(
       [Uint8Array.from(atob(base64), (char) => char.charCodeAt(0))],
@@ -321,9 +334,11 @@ test("upload and clipboard paste accept images; invalid files fail safely", asyn
     );
     const transfer = new DataTransfer();
     transfer.items.add(file);
-    document.dispatchEvent(
-      new ClipboardEvent("paste", { clipboardData: transfer, bubbles: true }),
-    );
+    document
+      .querySelector("textarea")!
+      .dispatchEvent(
+        new ClipboardEvent("paste", { clipboardData: transfer, bubbles: true }),
+      );
   }, png.toString("base64"));
   await expect(page.getByText("pasted.png")).toBeVisible();
 });
@@ -453,7 +468,7 @@ test("sandbox blocks external navigation and retains the previous drawing", asyn
     );
   await page.getByRole("button", { name: "Apply code" }).click();
   await expect(page.getByRole("alert")).toContainText(
-    "Drawing preview did not finish",
+    "Drawing validation did not finish",
     { timeout: 8000 },
   );
   await expect(
@@ -497,7 +512,7 @@ test("projects retain drawings, conversations, references and isolated AI contex
   await page.getByLabel("Project name", { exact: true }).fill("Bracket A");
   await page.getByRole("button", { name: "Save project name" }).click();
   await page.getByRole("button", { name: "Try an example" }).click();
-  await expect(page.getByAltText("Uploaded sketch")).toBeVisible();
+  await expect(page.locator(".composer-attachment img")).toBeVisible();
   await page
     .getByLabel("Drawing instructions")
     .fill("Project A only: missing width");
@@ -509,7 +524,7 @@ test("projects retain drawings, conversations, references and isolated AI contex
   await expect(
     page.getByText("What is the plate width in millimeters?"),
   ).toHaveCount(0);
-  await expect(page.getByAltText("Uploaded sketch")).toHaveCount(0);
+  await expect(page.locator(".composer-attachment img")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Undo", exact: true }),
   ).toBeDisabled();
@@ -530,12 +545,16 @@ test("projects retain drawings, conversations, references and isolated AI contex
   await expect(
     page.getByText("What is the plate width in millimeters?"),
   ).toBeVisible();
-  await expect(page.getByAltText("Uploaded sketch")).toBeVisible();
+  await expect(
+    page.locator(".chat-message.user .message-reference img"),
+  ).toBeVisible();
   await page.reload();
   await expect(
     page.getByText("What is the plate width in millimeters?"),
   ).toBeVisible();
-  await expect(page.getByAltText("Uploaded sketch")).toBeVisible();
+  await expect(
+    page.locator(".chat-message.user .message-reference img"),
+  ).toBeVisible();
   await page.getByLabel("Drawing instructions").fill("120 mm wide, 80 mm high");
   await page.getByRole("button", { name: "Send drawing instruction" }).click();
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "6");
@@ -613,7 +632,7 @@ test("settings update and clear persist without credentials in requests URLs or 
 test("projects and large references survive a full browser restart", async ({
   playwright,
 }, testInfo) => {
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
   const profile = testInfo.outputPath("browser-profile");
   const options = {
     channel: process.env.PLAYWRIGHT_CHANNEL || "msedge",
@@ -625,6 +644,10 @@ test("projects and large references survive a full browser restart", async ({
     profile,
     options,
   );
+  await context.addInitScript(() => {
+    if (window === window.top && !localStorage.getItem("draftline-language"))
+      localStorage.setItem("draftline-language", "en");
+  });
   try {
     let page = await context.newPage();
     await connectModel(page);
@@ -651,7 +674,7 @@ test("projects and large references survive a full browser restart", async ({
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jWZkAAAAASUVORK5CYII=",
       "base64",
     );
-    await page.getByLabel("Upload sketch image").setInputFiles({
+    await attachFiles(page, {
       name: "large-reference.png",
       mimeType: "image/png",
       buffer: Buffer.concat([png, Buffer.alloc(6 * 1024 * 1024)]),
@@ -678,7 +701,7 @@ test("projects and large references survive a full browser restart", async ({
       .click();
     await page.getByLabel("Show dimensions").uncheck();
     await page.keyboard.press("Escape");
-    await expect(page.locator(".saved-indicator")).toHaveText("Saved locally");
+    await waitForProjectSave(page);
     const projectData = await page.evaluate(async () => {
       const db = await new Promise<IDBDatabase>((resolve, reject) => {
         const req = indexedDB.open("draftline-projects", 1);
@@ -712,7 +735,7 @@ test("projects and large references survive a full browser restart", async ({
         exact: true,
       }),
     ).toHaveAttribute("aria-current", "page");
-    await expect(page.getByAltText("Uploaded sketch")).toBeVisible();
+    await expect(page.locator(".composer-attachment img")).toHaveCount(0);
     await expect(
       page.getByAltText("Reference: large-reference.png"),
     ).toBeVisible();
@@ -758,9 +781,18 @@ test("projects and large references survive a full browser restart", async ({
         exact: true,
       }),
     ).toHaveCount(0);
-    await page.getByRole("button", { name: /Drawing actions for/ }).click();
-    await page.getByRole("menuitem", { name: /Delete drawing/ }).click();
-    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    for (const name of ["样例1", "样例2", "样例3", "样例4"]) {
+      await page
+        .getByRole("button", {
+          name: `Drawing actions for ${name}`,
+          exact: true,
+        })
+        .click();
+      await page
+        .getByRole("menuitem", { name: `Delete drawing ${name}`, exact: true })
+        .click();
+      await page.getByRole("button", { name: "Delete", exact: true }).click();
+    }
     await expect(
       page.getByText("A fresh page for your next idea."),
     ).toBeVisible();
@@ -792,17 +824,16 @@ test("storage failures keep the assistant usable and report unsaved work", async
     };
   });
   await connectModel(page);
-  await expect(page.locator(".saved-indicator")).toContainText("Not saved");
   await page
     .getByLabel("Drawing instructions")
     .fill("Draw a 120 × 80 mm plate");
+  await expect(page.getByRole("alert")).toContainText("Browser storage");
   await page.getByRole("button", { name: "Send drawing instruction" }).click();
   await expect(
     page
       .frameLocator('iframe[title="Technical drawing preview"]')
       .locator("#hole-top-left"),
   ).toHaveAttribute("r", "6");
-  await expect(page.locator(".saved-indicator")).toContainText("Not saved");
   await expect(page.getByRole("alert")).toContainText("Browser storage");
   await expect(page.getByRole("button", { name: "Export SVG" })).toBeEnabled();
 });

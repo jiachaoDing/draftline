@@ -1,33 +1,163 @@
 import { t, useLocale } from "../lib/i18n";
-import { useEffect, useRef } from "react";
-import { ArrowLeft, Code2, Sparkles } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowLeft,
+  Code2,
+  Copy,
+  RotateCcw,
+  Sparkles,
+} from "lucide-react";
+import {
+  ActionBarPrimitive,
+  MessagePrimitive,
+  ThreadPrimitive,
+  useAuiState,
+} from "@assistant-ui/react";
+import { MarkdownTextPrimitive } from "@assistant-ui/react-markdown";
 import type { ChatMessage } from "../lib/contracts";
 import AgentActivities from "./AgentActivities";
 import { welcome } from "../lib/projects";
 
+const Markdown = () => <MarkdownTextPrimitive />;
+
+function Message() {
+  useLocale();
+  const metadata = useAuiState((state) => state.message.metadata.custom);
+  const message = metadata.draftline as ChatMessage | undefined;
+  const index = metadata.index as number;
+  const isLast = useAuiState((state) => state.message.isLast);
+  const role = useAuiState((state) => state.message.role);
+  if (!message)
+    return (
+      <MessagePrimitive.Root className={`chat-message ${role}`}>
+        <div className="message-content">
+          <MessagePrimitive.Parts components={{ Text: Markdown }} />
+        </div>
+      </MessagePrimitive.Root>
+    );
+  return (
+    <MessagePrimitive.Root className={`chat-message ${message.role}`}>
+      {message.role === "assistant" && (
+        <div className="chat-avatar">
+          <Sparkles size={12} />
+        </div>
+      )}
+      <div className="message-content">
+        {message.reference && (
+          <figure className="message-reference">
+            <img
+              src={message.reference.data}
+              alt={t("Reference: {{name}}", { name: message.reference.name })}
+            />
+            <figcaption>{message.reference.name}</figcaption>
+          </figure>
+        )}
+        {message.attachments?.map((file) => (
+          <figure className="message-reference" key={file.id}>
+            {file.image && (
+              <img
+                src={file.image}
+                alt={t("Reference: {{name}}", { name: file.name })}
+              />
+            )}
+            <figcaption>
+              {file.name} <small>{file.type.toUpperCase()}</small>
+            </figcaption>
+          </figure>
+        ))}
+        <div className="message-text">
+          {index === 0 && message.text === welcome.text ? (
+            t(welcome.text)
+          ) : (
+            <MessagePrimitive.Parts components={{ Text: Markdown }} />
+          )}
+          {!message.text &&
+            !message.activities?.length &&
+            message.status === "streaming" &&
+            t("Connecting to your model…")}
+        </div>
+        {message.activities && (
+          <AgentActivities
+            activities={message.activities}
+            active={
+              message.status === "streaming" || message.status === "validating"
+            }
+          />
+        )}
+        {message.status === "streaming" && message.text && (
+          <span className="stream-cursor" aria-hidden="true" />
+        )}
+        {message.code && (
+          <details
+            className="stream-code"
+            open={message.status === "streaming"}
+          >
+            <summary>
+              <Code2 size={12} />
+              {t("Receiving drawing code ·")}{" "}
+              {message.received?.toLocaleString()} {t("characters")}
+            </summary>
+            <pre>{message.code}</pre>
+          </details>
+        )}
+        {message.status && message.status !== "complete" && (
+          <small className={`reply-status ${message.status}`}>
+            {message.status === "streaming"
+              ? t(
+                  message.activities?.some(
+                    (step) =>
+                      step.status === "running" && step.kind !== "model",
+                  )
+                    ? "Working on your drawing"
+                    : "Waiting for model response",
+                )
+              : message.status === "validating"
+                ? t("Checking the completed drawing")
+                : message.status === "reviewing"
+                  ? t("Review proposed changes before applying")
+                  : message.status === "cancelled"
+                    ? t("Stopped")
+                    : t("Response incomplete — drawing unchanged")}
+          </small>
+        )}
+        {message.text &&
+          message.status !== "streaming" &&
+          message.status !== "validating" && (
+            <ActionBarPrimitive.Root className="message-actions">
+              <ActionBarPrimitive.Copy
+                aria-label={t("Copy message")}
+                title={t("Copy message")}
+              >
+                <Copy size={13} />
+              </ActionBarPrimitive.Copy>
+              {isLast &&
+                (message.status === "error" ||
+                  message.status === "cancelled") && (
+                  <ActionBarPrimitive.Reload aria-label={t("Retry response")}>
+                    <RotateCcw size={13} />
+                    {t("Retry")}
+                  </ActionBarPrimitive.Reload>
+                )}
+            </ActionBarPrimitive.Root>
+          )}
+      </div>
+    </MessagePrimitive.Root>
+  );
+}
+
 type Props = {
   messages: ChatMessage[];
   hasDrawing: boolean;
-  busy: boolean;
-  validating: boolean;
   onSuggest: (text: string) => void;
 };
-
 export default function ChatTranscript({
   messages,
   hasDrawing,
-  busy,
-  validating,
   onSuggest,
 }: Props) {
   useLocale();
-  const transcript = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const panel = transcript.current;
-    panel?.scrollTo({ top: panel.scrollHeight, behavior: "smooth" });
-  }, [messages, busy]);
   return (
-    <div className="assistant-content" ref={transcript}>
+    <ThreadPrimitive.Viewport className="assistant-content" autoScroll>
       {messages.length === 1 && (
         <div className="assistant-intro">
           <div className="intro-art">
@@ -44,85 +174,7 @@ export default function ChatTranscript({
           </p>
         </div>
       )}
-      {messages.map((message, index) => (
-        <div className={`chat-message ${message.role}`} key={index}>
-          {message.role === "assistant" && (
-            <div className="chat-avatar">
-              <Sparkles size={12} />
-            </div>
-          )}
-          <div className="message-content">
-            {message.reference && (
-              <figure className="message-reference">
-                <img
-                  src={message.reference.data}
-                  alt={t("Reference: {{name}}", {
-                    name: message.reference.name,
-                  })}
-                />
-                <figcaption>{message.reference.name}</figcaption>
-              </figure>
-            )}
-            <span className="message-text">
-              {(index === 0 &&
-              message.role === "assistant" &&
-              message.text === welcome.text
-                ? t(welcome.text)
-                : message.text) ||
-                (message.status === "streaming"
-                  ? message.activities?.length
-                    ? ""
-                    : t("Connecting to your model…")
-                  : message.status === "cancelled"
-                    ? t("Generation stopped.")
-                    : "")}
-            </span>
-            {message.activities && (
-              <AgentActivities
-                activities={message.activities}
-                active={
-                  message.status === "streaming" ||
-                  message.status === "validating"
-                }
-              />
-            )}
-            {message.status === "streaming" && message.text && (
-              <span className="stream-cursor" aria-hidden="true" />
-            )}
-            {message.code && (
-              <details
-                className="stream-code"
-                open={message.status === "streaming"}
-              >
-                <summary>
-                  <Code2 size={12} />
-                  {t("Receiving drawing code ·")}{" "}
-                  {message.received?.toLocaleString()} {t("characters")}
-                </summary>
-                <pre>{message.code}</pre>
-              </details>
-            )}
-            {message.status && message.status !== "complete" && (
-              <small className={`reply-status ${message.status}`}>
-                {message.status === "streaming"
-                  ? message.activities?.some(
-                      (step) =>
-                        step.status === "running" && step.kind !== "model",
-                    )
-                    ? t("Working on your drawing")
-                    : t("Waiting for model response")
-                  : message.status === "validating"
-                    ? t("Checking the completed drawing")
-                    : message.status === "reviewing"
-                      ? t("Review proposed changes before applying")
-                      : message.status === "cancelled"
-                        ? t("Stopped")
-                        : t("Response incomplete — drawing unchanged")}
-              </small>
-            )}
-          </div>
-        </div>
-      ))}
+      <ThreadPrimitive.Messages components={{ Message }} />
       {messages.length === 1 && (
         <div className="suggestions">
           <span>{t("TRY ASKING")}</span>
@@ -144,16 +196,12 @@ export default function ChatTranscript({
           ))}
         </div>
       )}
-      {busy && !messages.at(-1)?.activities?.length && (
-        <div className="thinking">
-          <span />
-          <span />
-          <span />{" "}
-          {validating
-            ? t("Validating geometry")
-            : t("Receiving your model’s response")}
-        </div>
-      )}
-    </div>
+      <ThreadPrimitive.ScrollToBottom
+        className="scroll-to-latest"
+        aria-label={t("Scroll to latest message")}
+      >
+        <ArrowDown size={16} />
+      </ThreadPrimitive.ScrollToBottom>
+    </ThreadPrimitive.Viewport>
   );
 }

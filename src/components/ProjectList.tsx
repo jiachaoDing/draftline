@@ -10,7 +10,14 @@ import {
   MenuItem,
   MenuItems,
 } from "@headlessui/react";
-import { Check, MoreHorizontal, Pencil, Trash2, X } from "lucide-react";
+import {
+  Check,
+  Loader2,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  X,
+} from "lucide-react";
 import type { Project } from "../lib/projects";
 
 type Props = {
@@ -101,6 +108,14 @@ export default function ProjectList({
                   onClick={() => onOpen(project.id)}
                 >
                   <span>{project.name}</span>
+                  {(project.messages.at(-1)?.status === "streaming" ||
+                    project.messages.at(-1)?.status === "validating") && (
+                    <Loader2
+                      className="spin"
+                      size={12}
+                      aria-label={t("AI is working")}
+                    />
+                  )}
                 </button>
                 <Menu>
                   <MenuButton

@@ -203,16 +203,20 @@
 }
 .validation-preview {
   position: fixed;
-  left: -10000px;
+  left: 0;
   top: 0;
   width: 800px;
   height: 600px;
   pointer-events: none;
-  visibility: hidden;
+  max-width: 100vw;
+  max-height: 100vh;
+  overflow: hidden;
+  opacity: 0;
+  z-index: -1;
 }
 .validation-preview iframe {
-  width: 100%;
-  height: 100%;
+  width: 800px;
+  height: 600px;
   border: 0;
 }
 .suggestions {
@@ -793,9 +797,6 @@
   .canvas-toolbar {
     padding: 0 12px;
   }
-  .saved-indicator {
-    display: none;
-  }
   .header-actions {
     gap: 8px;
   }
@@ -890,17 +891,6 @@
     grid-column: 1;
     grid-row: 1;
     margin-bottom: 0;
-  }
-  .upload-zone {
-    grid-column: 1;
-    grid-row: 2/4;
-    height: 175px;
-  }
-  .upload-button {
-    height: 147px;
-  }
-  .has-sketch > img {
-    height: 145px;
   }
   .instructions-label {
     grid-column: 2;

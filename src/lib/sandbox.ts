@@ -7,7 +7,11 @@ import { ensureObjectIds } from "./drawing";
 
 const scriptText = (value: string) =>
   value.replace(/<\/script/gi, "<\\/script");
-export function buildSandbox(html: string, channel: string) {
+export function buildSandbox(
+  html: string,
+  channel: string,
+  interactive = true,
+) {
   const parsed = new DOMParser().parseFromString(html, "text/html");
   const scripts = [...parsed.querySelectorAll("script")]
     .filter((script) => !script.src)
@@ -76,6 +80,7 @@ export function buildSandbox(html: string, channel: string) {
       (${ensureObjectIds.toString()})(svg);
       svg.dataset.physicalWidth = svg.getAttribute('width'); svg.dataset.physicalHeight = svg.getAttribute('height'); svg.dataset.physicalViewbox = svg.getAttribute('viewBox');
       rawSnapshot();
+      if (!${interactive}) return;
       svg.style.width = '100%'; svg.style.height = '100%';
       const initialize = () => {
       const size = svg.getBoundingClientRect();
@@ -88,5 +93,5 @@ export function buildSandbox(html: string, channel: string) {
       requestAnimationFrame(initialize);
     });
   })();`;
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'none'; font-src 'none'; media-src 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}body{display:flex;align-items:center;justify-content:center}svg{overflow:visible}body{user-select:none;touch-action:none}.svg-marquee{background:#2462f322;border:1px solid #2462f3}.svg-selection-overlay{position:fixed;inset:0;pointer-events:none;z-index:2}.svg-object-outline{position:fixed;border:1.5px solid #2462f3;box-sizing:border-box}.svg-object-outline.changed{border:2px dashed #c77a12}.svg-object-outline.editing{border:1px dashed #8a94a3}#geometry :is(path,circle,rect,ellipse,line,polygon,polyline,text,use){pointer-events:all;cursor:pointer}#dimensions>g{cursor:pointer;pointer-events:all}body[data-mode=pan] svg,body[data-mode=pan] svg *{cursor:grab!important}</style><script nonce="${nonce}">${scriptText(panZoomSource)}</script><script nonce="${nonce}">${scriptText(selectionSource)}</script><script nonce="${nonce}">${scriptText(bridge)}</script></head><body>${markup}${scripts.map((script) => `<script nonce="${nonce}">${scriptText(script)}</script>`).join("")}</body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'none'; font-src 'none'; media-src 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}body{display:flex;align-items:center;justify-content:center}svg{overflow:visible}body{user-select:none;touch-action:none}.svg-marquee{background:#2462f322;border:1px solid #2462f3}.svg-selection-overlay{position:fixed;inset:0;pointer-events:none;z-index:2}.svg-object-outline{position:fixed;border:1.5px solid #2462f3;box-sizing:border-box}.svg-object-outline.changed{border:2px dashed #c77a12}.svg-object-outline.editing{border:1px dashed #8a94a3}#geometry :is(path,circle,rect,ellipse,line,polygon,polyline,text,use){pointer-events:all;cursor:pointer}#dimensions>g{cursor:pointer;pointer-events:all}body[data-mode=pan] svg,body[data-mode=pan] svg *{cursor:grab!important}</style>${interactive ? `<script nonce="${nonce}">${scriptText(panZoomSource)}</script><script nonce="${nonce}">${scriptText(selectionSource)}</script>` : ""}<script nonce="${nonce}">${scriptText(bridge)}</script></head><body>${markup}${scripts.map((script) => `<script nonce="${nonce}">${scriptText(script)}</script>`).join("")}</body></html>`;
 }

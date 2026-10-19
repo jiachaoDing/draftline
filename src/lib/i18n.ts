@@ -7,16 +7,9 @@ import { selectionZhCN } from "./locales/selection-zh-CN";
 export type Locale = "en" | "zh-CN";
 export const LANGUAGE_STORAGE_KEY = "draftline-language";
 
-export function resolveLocale(
-  saved: string | null,
-  languages: readonly string[],
-): Locale {
+export function resolveLocale(saved: string | null): Locale {
   if (saved === "en" || saved === "zh-CN") return saved;
-  for (const language of languages) {
-    if (/^zh(?:-|$)/i.test(language)) return "zh-CN";
-    if (/^en(?:-|$)/i.test(language)) return "en";
-  }
-  return "en";
+  return "zh-CN";
 }
 
 function initialLocale(): Locale {
@@ -26,10 +19,7 @@ function initialLocale(): Locale {
   } catch {
     /* Language selection also works without browser storage. */
   }
-  return resolveLocale(
-    saved,
-    typeof navigator === "undefined" ? [] : navigator.languages,
-  );
+  return resolveLocale(saved);
 }
 
 void i18n.use(initReactI18next).init({

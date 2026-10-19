@@ -13,12 +13,11 @@ afterEach(() => {
 });
 
 describe("workspace languages", () => {
-  it("uses a saved supported language before browser preferences and falls back to English", () => {
-    expect(resolveLocale("en", ["zh-CN"])).toBe("en");
-    expect(resolveLocale("zh-CN", ["en-US"])).toBe("zh-CN");
-    expect(resolveLocale(null, ["fr-FR", "zh-TW", "en"])).toBe("zh-CN");
-    expect(resolveLocale("invalid", ["en-GB", "zh-CN"])).toBe("en");
-    expect(resolveLocale(null, ["de"])).toBe("en");
+  it("defaults to Simplified Chinese and preserves an explicit saved language", () => {
+    expect(resolveLocale("en")).toBe("en");
+    expect(resolveLocale("zh-CN")).toBe("zh-CN");
+    expect(resolveLocale(null)).toBe("zh-CN");
+    expect(resolveLocale("invalid")).toBe("zh-CN");
   });
 
   it("switches document language, stores preference and interpolates whole messages", () => {

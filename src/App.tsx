@@ -1,4 +1,6 @@
 import { currentLocale, t, useLocale } from "./lib/i18n";
+import { useProjectField } from "./hooks/useProjectField";
+import { useProjectSession } from "./hooks/useProjectSession";
 import {
   lazy,
   Suspense,
@@ -27,28 +29,32 @@ import {
   PanelLeftOpen,
   Plus,
   Redo2,
-  Send,
   Settings2,
   ShieldCheck,
   Sparkles,
-  Square,
   Undo2,
   X,
 } from "lucide-react";
 import ModelSettings from "./components/ModelSettings";
 import LanguageSelect from "./components/LanguageSelect";
 import SelectionPanel from "./components/SelectionPanel";
+import ObjectTree from "./components/ObjectTree";
 import ReviewChanges from "./components/ReviewChanges";
 import {
   groupObjects,
   ungroupObjects,
   normalizeSelection,
 } from "./lib/svg-selection";
-import { drawingChanges, type DrawingChanges } from "./lib/drawing-changes";
+import { drawingChanges } from "./lib/drawing-changes";
 import { EMPTY_SELECTION, type SelectionState } from "./lib/contracts";
 import DrawingSidebar from "./components/DrawingSidebar";
 import DrawingLayers from "./components/DrawingLayers";
 import ChatTranscript from "./components/ChatTranscript";
+import AssistantChat, {
+  type AssistantChatHandle,
+} from "./components/AssistantChat";
+import ChatComposer from "./components/ChatComposer";
+import type { ChatAttachment } from "./lib/contracts";
 import RequestUserInput from "./components/RequestUserInput";
 import type { UserInputResponse } from "./lib/user-input";
 import {
@@ -57,15 +63,16 @@ import {
   questionText,
   answerQuestions,
 } from "./lib/user-input-flow";
-import SketchUpload, { type Sketch } from "./components/SketchUpload";
 import { Preview, type PreviewHandle } from "./components/Preview";
 import {
   downloadFile,
   exportSVG,
   presentationSVG,
   svgToHTML,
+  listElements,
+  sanitizeSVG,
 } from "./lib/drawing";
-import { pushHistory, type History } from "./lib/history";
+import { pushHistory } from "./lib/history";
 import { requestDrawing } from "./lib/api";
 import { runDrawingAgent } from "./lib/drawing-agent";
 import { validateDrawingSource } from "./lib/validate-source";
@@ -93,13 +100,7 @@ import {
   type Project,
 } from "./lib/projects";
 import { readConfig, defaultConfig } from "./lib/model-settings";
-import type {
-  ChatMessage,
-  Drawing,
-  ElementInfo,
-  Snapshot,
-  PendingUserInput,
-} from "./lib/contracts";
+import type { ChatMessage, Drawing, ElementInfo } from "./lib/contracts";
 
 const CodeEditor = lazy(() => import("./components/CodeEditor"));
 
@@ -109,7 +110,6 @@ export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeId, setActiveId] = useState("");
   const [loaded, setLoaded] = useState(false);
-  const [saveStatus, setSaveStatus] = useState("Opening workspace…");
   const [projectBusy, setProjectBusy] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(
     () => !window.matchMedia("(max-width: 700px)").matches,
@@ -120,39 +120,84 @@ export default function App() {
   const activeProject = projects.find((project) => project.id === activeId);
   const activeIdRef = useRef(activeId);
   const [settings, setSettings] = useState(false);
-  const [history, setHistory] = useState<History<Drawing | null>>(() => ({
-    items: [null],
-    index: 0,
-  }));
+  const updateProject = useCallback(
+    (id: string, update: (p: Project) => Project) => {
+      const next = projectsRef.current.map((p) => {
+        if (p.id !== id) return p;
+        const changed = update(p);
+        const current = changed.history.items[changed.history.index];
+        return {
+          ...changed,
+          name: changed.renamed ? changed.name : current?.title || changed.name,
+          updatedAt: Date.now(),
+        };
+      });
+      projectsRef.current = next;
+      setProjects(next);
+    },
+    [],
+  );
+  const [history, setHistory] = useProjectField(
+    activeProject,
+    "history",
+    {
+      items: [null],
+      index: 0,
+    },
+    updateProject,
+  );
   const drawing = history.items[history.index];
-  const [pending, setPending] = useState<Omit<Drawing, "svg"> | null>(null);
-  const pendingRef = useRef(pending);
-  const [sketch, setSketch] = useState<Sketch | null>(null);
+  const {
+    busy,
+    setBusy,
+    pending,
+    setPending,
+    review,
+    setReview,
+    abort,
+    reply: activeReply,
+    retry: retryContext,
+    editContext,
+    sessions,
+  } = useProjectSession(activeId);
   const [elements, setElements] = useState<ElementInfo[]>([]);
   const [selection, setSelection] = useState<SelectionState>(EMPTY_SELECTION);
   const selectedId = selection.ids[0] || null;
   const selected = elements.find((el) => el.id === selectedId);
-  const [review, setReview] = useState<{
-    drawing: Drawing;
-    changes: DrawingChanges;
-  } | null>(null);
-  const editContext = useRef<{ drawing: Drawing | null; ids: string[] } | null>(
-    null,
+  const [layers, setLayers] = useProjectField(
+    activeProject,
+    "layers",
+    {
+      geometry: true,
+      dimensions: true,
+      presentation: true,
+    },
+    updateProject,
   );
-  const [layers, setLayers] = useState({
-    geometry: true,
-    dimensions: true,
-    presentation: true,
-  });
   const previewHTML = useMemo(() => {
     const shown = review?.drawing || drawing;
     return shown ? svgToHTML(presentationSVG(shown.svg, shown)) : "";
   }, [drawing, review]);
   const [mode, setMode] = useState<"select" | "pan">("select");
   const [zoom, setZoom] = useState(100);
-  const [messages, setMessages] = useState<ChatMessage[]>([welcome]);
-  const [chatInput, setChatInput] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [messages, setMessages] = useProjectField(
+    activeProject,
+    "messages",
+    [welcome],
+    updateProject,
+  );
+  const [chatInput, setChatInput] = useProjectField(
+    activeProject,
+    "chatInput",
+    "",
+    updateProject,
+  );
+  const [attachments, setAttachments] = useProjectField(
+    activeProject,
+    "attachments",
+    [],
+    updateProject,
+  );
   const runningActivity = [...(messages.at(-1)?.activities || [])]
     .reverse()
     .find((activity) => activity.status === "running");
@@ -160,16 +205,24 @@ export default function App() {
     text: string;
     error?: boolean;
   } | null>(null);
-  const [clarification, setClarification] = useState<DrawingContext | null>(
+  const [clarification, setClarification] = useProjectField(
+    activeProject,
+    "clarification",
     null,
+    updateProject,
   );
-  const [userInput, setUserInput] = useState<PendingUserInput | null>(null);
+  const [userInput, setUserInput] = useProjectField(
+    activeProject,
+    "userInput",
+    null,
+    updateProject,
+  );
   const [exportOpen, setExportOpen] = useState(false);
   const [tab, setTab] = useState<"drawing" | "code">("drawing");
+  const [objectsOpen, setObjectsOpen] = useState(false);
   const [help, setHelp] = useState(false);
   const preview = useRef<PreviewHandle>(null);
-  const abort = useRef<AbortController | null>(null);
-  const activeReply = useRef<string | null>(null);
+  const composer = useRef<AssistantChatHandle>(null);
   const exporting = useRef<HTMLDivElement>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
@@ -190,13 +243,6 @@ export default function App() {
   const openProject = useCallback((project: Project) => {
     activeIdRef.current = project.id;
     setActiveId(project.id);
-    setHistory(project.history);
-    setMessages(project.messages);
-    setSketch(project.sketch);
-    setChatInput(project.chatInput);
-    setClarification(project.clarification);
-    setUserInput(project.userInput);
-    setLayers(project.layers);
     setSelection(EMPTY_SELECTION);
     setElements([]);
     setMode("select");
@@ -205,19 +251,11 @@ export default function App() {
     setExportOpen(false);
     setNotice(null);
   }, []);
-  const saveSequence = useRef(0);
-  const streamSaveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
-    undefined,
-  );
   const persist = useCallback(
     async (project: Project) => {
-      const sequence = ++saveSequence.current;
-      setSaveStatus("Saving locally…");
       try {
         await saveProject(project);
-        if (sequence === saveSequence.current) setSaveStatus("Saved locally");
       } catch {
-        if (sequence === saveSequence.current) setSaveStatus("Not saved");
         tell(
           "Browser storage is unavailable or full. Export your drawing to keep it, then free storage and reload.",
           true,
@@ -260,83 +298,50 @@ export default function App() {
       mounted = false;
     };
   }, [openProject, tell]);
+  const savedProjects = useRef(new Map<string, Project>());
+  const saveTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   useEffect(() => {
     if (!loaded) return;
-    const current = projectsRef.current.find((p) => p.id === activeId);
-    if (!current) return;
-    const project: Project = {
-      ...current,
-      history,
-      messages,
-      sketch,
-      chatInput,
-      clarification: clarification
-        ? { ...clarification, toolTurns: clarification.toolTurns || [] }
-        : null,
-      userInput,
-      layers,
-      name: current.renamed ? current.name : drawing?.title || current.name,
-      updatedAt: Date.now(),
-    };
-    const next = projectsRef.current.map((p) =>
-      p.id === activeId ? project : p,
-    );
-    projectsRef.current = next;
-    setProjects(next);
-    if (
-      messages.at(-1)?.status === "streaming" &&
-      current.messages.at(-1)?.id === messages.at(-1)?.id
-    ) {
-      // Batch streamed deltas so large reference images are not cloned every frame.
-      if (streamSaveTimer.current === undefined) {
-        streamSaveTimer.current = setTimeout(() => {
-          streamSaveTimer.current = undefined;
-          const latest = projectsRef.current.find((p) => p.id === activeId);
-          if (latest) void persist(latest);
-        }, 400);
+    for (const project of projects) {
+      if (savedProjects.current.get(project.id) === project) continue;
+      savedProjects.current.set(project.id, project);
+      const timers = saveTimers.current;
+      const save = () => {
+        timers.delete(project.id);
+        const latest = projectsRef.current.find((p) => p.id === project.id);
+        if (latest) void persist(latest);
+      };
+      if (project.messages.at(-1)?.status === "streaming") {
+        if (!timers.has(project.id))
+          timers.set(project.id, setTimeout(save, 400));
+      } else {
+        clearTimeout(timers.get(project.id));
+        save();
       }
-    } else {
-      clearTimeout(streamSaveTimer.current);
-      streamSaveTimer.current = undefined;
-      void persist(project);
     }
-  }, [
-    loaded,
-    activeId,
-    history,
-    messages,
-    sketch,
-    chatInput,
-    clarification,
-    userInput,
-    layers,
-    drawing,
-    persist,
-  ]);
-
+  }, [loaded, projects, persist]);
   useEffect(() => {
-    if (!loaded) return;
     const flush = () => {
-      clearTimeout(streamSaveTimer.current);
-      streamSaveTimer.current = undefined;
-      const project = projectsRef.current.find(
-        (p) => p.id === activeIdRef.current,
-      );
-      if (project) void persist(project);
+      for (const timer of saveTimers.current.values()) clearTimeout(timer);
+      saveTimers.current.clear();
+      for (const project of projectsRef.current) void persist(project);
     };
     const hide = () => {
       if (document.visibilityState === "hidden") flush();
     };
-    window.addEventListener("pagehide", flush);
+    const unload = () => {
+      for (const session of sessions.values()) session.abort.current?.abort();
+      flush();
+    };
+    window.addEventListener("pagehide", unload);
     document.addEventListener("visibilitychange", hide);
     return () => {
-      window.removeEventListener("pagehide", flush);
+      window.removeEventListener("pagehide", unload);
       document.removeEventListener("visibilitychange", hide);
     };
-  }, [loaded, persist]);
-
+  }, [persist, sessions]);
   async function changeProject(id?: string) {
-    if (busy || review || projectBusy || !loaded || id === activeId) return;
+    if (projectBusy || !loaded || id === activeId) return;
     setProjectBusy(true);
     const current = projectsRef.current.find((p) => p.id === activeId);
     if (current) await persist(current);
@@ -357,16 +362,30 @@ export default function App() {
       try {
         await selectProject(project.id);
       } catch {
-        setSaveStatus("Not saved");
+        tell(
+          "Browser storage is unavailable. Export drawings to keep your work.",
+          true,
+        );
       }
     }
     setProjectBusy(false);
   }
   async function removeProject(id: string) {
-    if (busy || review || projectBusy) return false;
+    if (projectBusy) return false;
+    if (sessions.get(id)?.busy || sessions.get(id)?.review) {
+      tell(
+        "Stop this drawing's task or resolve its proposal before deleting it.",
+        true,
+      );
+      return false;
+    }
     setProjectBusy(true);
     try {
       await deleteProject(id);
+      clearTimeout(saveTimers.current.get(id));
+      saveTimers.current.delete(id);
+      savedProjects.current.delete(id);
+      sessions.delete(id);
       const remaining = projectsRef.current.filter((p) => p.id !== id);
       if (!remaining.length)
         remaining.push(newProject(null, [], t("Untitled drawing")));
@@ -399,18 +418,29 @@ export default function App() {
     void persist(next.find((p) => p.id === id)!);
   }
 
-  const commit = useCallback((next: Drawing) => {
-    setHistory((h) =>
-      pushHistory(h, { ...next, revision: crypto.randomUUID() }),
-    );
-    setSelection(EMPTY_SELECTION);
-    setElements([]);
-    setClarification(null);
-    setTab("drawing");
-    setUserInput(null);
-    setReview(null);
-    editContext.current = null;
-  }, []);
+  const commit = useCallback(
+    (next: Drawing) => {
+      setHistory((h) =>
+        pushHistory(h, { ...next, revision: crypto.randomUUID() }),
+      );
+      if (activeIdRef.current === activeProject?.id) {
+        setSelection(EMPTY_SELECTION);
+        setElements(listElements(sanitizeSVG(next.svg)));
+      }
+      setClarification(null);
+      setUserInput(null);
+      setReview(null);
+      editContext.current = null;
+    },
+    [
+      setHistory,
+      setClarification,
+      setUserInput,
+      setReview,
+      editContext,
+      activeProject?.id,
+    ],
+  );
   const offerDrawing = useCallback(
     (next: Drawing) => {
       const context = editContext.current;
@@ -438,14 +468,14 @@ export default function App() {
           });
         if (changes.outsideIds.length || changes.metadata.length) {
           setReview({ drawing: next, changes });
-          setTab("drawing");
+          if (activeIdRef.current === activeProject?.id) setTab("drawing");
           return false;
         }
       }
       commit(next);
       return true;
     },
-    [commit],
+    [commit, editContext, setReview, activeProject?.id],
   );
   function changeGrouping(action: "group" | "ungroup") {
     if (!drawing || busy || review || userInput || projectBusy) return;
@@ -499,26 +529,18 @@ export default function App() {
       if (status !== "validating" && status !== "reviewing")
         activeReply.current = null;
     },
-    [],
+    [activeReply, setMessages],
   );
   const cancelGeneration = () => {
-    if (abort.current) abort.current.abort();
-    else if (pendingRef.current) {
-      pendingRef.current = null;
-      setPending(null);
-      setBusy(false);
-      editContext.current = null;
-      finishReply("cancelled", undefined, true);
-      tell("Generation stopped.");
-    }
+    abort.current?.abort();
   };
   useEffect(
     () => () => {
-      abort.current?.abort();
-      clearTimeout(streamSaveTimer.current);
+      for (const session of sessions.values()) session.abort.current?.abort();
+      for (const timer of saveTimers.current.values()) clearTimeout(timer);
       clearTimeout(noticeTimer.current);
     },
-    [],
+    [sessions],
   );
   useEffect(() => {
     const close = (event: MouseEvent) => {
@@ -529,45 +551,6 @@ export default function App() {
     return () => document.removeEventListener("click", close);
   }, []);
 
-  const loadFile = useCallback(
-    (file: File) => {
-      if (!["image/png", "image/jpeg", "image/webp"].includes(file.type))
-        return tell("Choose a PNG, JPEG, or WebP image.", true);
-      if (file.size > 8 * 1024 * 1024)
-        return tell("Your sketch must be smaller than 8 MB.", true);
-      const reader = new FileReader();
-      const projectId = activeIdRef.current;
-      reader.onload = () => {
-        if (activeIdRef.current !== projectId) return;
-        setSketch({
-          data: String(reader.result),
-          name: file.name || t("Pasted sketch"),
-        });
-        setClarification(null);
-        tell(
-          "Sketch added. Include any important dimensions before generating.",
-        );
-      };
-      reader.onerror = () =>
-        tell("This image could not be read. Please try another file.", true);
-      reader.readAsDataURL(file);
-    },
-    [tell],
-  );
-  useEffect(() => {
-    const paste = (event: ClipboardEvent) => {
-      if (busy || review || settings || userInput) return;
-      const image = [...(event.clipboardData?.items || [])]
-        .find((item) => item.type.startsWith("image/"))
-        ?.getAsFile();
-      if (image) {
-        event.preventDefault();
-        loadFile(image);
-      }
-    };
-    document.addEventListener("paste", paste);
-    return () => document.removeEventListener("paste", paste);
-  }, [loadFile, busy, review, settings, userInput]);
   useEffect(() => {
     const keyboard = (event: KeyboardEvent) => {
       if (
@@ -608,73 +591,12 @@ export default function App() {
     };
     document.addEventListener("keydown", keyboard);
     return () => document.removeEventListener("keydown", keyboard);
-  }, [busy, pending, userInput, review]);
-
-  const onSnapshot = useCallback(
-    (snapshot: Snapshot) => {
-      setElements(snapshot.elements);
-      if (pendingRef.current) {
-        const candidate = pendingRef.current;
-        pendingRef.current = null;
-        setPending(null);
-        const committed = offerDrawing({
-          ...candidate,
-          svg: snapshot.svg,
-          html: svgToHTML(snapshot.svg),
-        });
-        setBusy(false);
-        const id = activeReply.current;
-        setMessages((messages) =>
-          messages.map((message) =>
-            message.id === id
-              ? {
-                  ...message,
-                  activities: updateActivity(message.activities, {
-                    id: "final-validation",
-                    kind: "validation",
-                    status: "completed",
-                    detail: "Validated drawing committed to revision history.",
-                  }),
-                }
-              : message,
-          ),
-        );
-        finishReply(committed ? "complete" : "reviewing");
-        if (committed) tell("Drawing is ready. Click an element to refine it.");
-      }
-    },
-    [offerDrawing, finishReply, tell],
-  );
-  const onPreviewError = useCallback(
-    (text: string) => {
-      if (pendingRef.current) {
-        pendingRef.current = null;
-        editContext.current = null;
-        setPending(null);
-        setBusy(false);
-        const id = activeReply.current;
-        setMessages((messages) =>
-          messages.map((message) =>
-            message.id === id
-              ? {
-                  ...message,
-                  status: "error",
-                  activities: settleActivities(message.activities, "failed"),
-                  text: `${message.text}\n\n${t("The drawing could not be applied. {{error}}", { error: t(text) })}`,
-                }
-              : message,
-          ),
-        );
-        activeReply.current = null;
-      }
-      tell(text, true);
-    },
-    [tell],
-  );
+  }, [busy, pending, userInput, review, setHistory]);
 
   async function runAI(input: DrawingContext) {
-    if (abort.current || pendingRef.current || review) return;
+    if (abort.current || review) return;
     input = { ...input, language: currentLocale() };
+    retryContext.current = input;
     editContext.current = {
       drawing,
       ids: input.selectedIds || (input.selectedId ? [input.selectedId] : []),
@@ -758,7 +680,7 @@ export default function App() {
           const project = projectsRef.current.find((p) => p.id === projectId);
           const current = project?.history.items[project.history.index];
           return (
-            activeIdRef.current === projectId &&
+            !!project &&
             (current ? drawingRevision(current) : undefined) === baseRevision
           );
         },
@@ -813,10 +735,24 @@ export default function App() {
           if (committed) tell("Selected element updated.");
         } else {
           finishReply("validating", result.summary);
-          pendingRef.current = change.candidate;
           setPending(change.candidate);
-          setTab("drawing");
-          setSelection(EMPTY_SELECTION);
+          const svg = await validateDrawingSource(
+            change.candidate.html,
+            controller.signal,
+          );
+          controller.signal.throwIfAborted();
+          onActivity({
+            id: "final-validation",
+            kind: "validation",
+            status: "completed",
+            detail: "Drawing passed sandbox validation.",
+          });
+          const committed = offerDrawing({
+            ...change.candidate,
+            svg,
+            html: svgToHTML(svg),
+          });
+          finishReply(committed ? "complete" : "reviewing", result.summary);
         }
       }
     } catch (error) {
@@ -847,7 +783,8 @@ export default function App() {
     } finally {
       if (updateFrame !== undefined) cancelAnimationFrame(updateFrame);
       if (abort.current === controller) {
-        if (!pendingRef.current) setBusy(false);
+        setBusy(false);
+        setPending(null);
         abort.current = null;
       }
     }
@@ -886,64 +823,106 @@ export default function App() {
     ]);
   };
 
-  const sendChat = () => {
+  const sendChat = async (inputText: string, files: ChatAttachment[]) => {
     const text =
-      chatInput.trim() ||
-      (sketch
+      inputText.trim() ||
+      (files.length
         ? t(
             "Use this reference sketch to create or refine the drawing. Read its dimensions and ask for anything essential that is unclear.",
           )
         : "");
-    if (!text || busy || review || projectBusy || !loaded || userInput) return;
+    if (
+      !text ||
+      busy ||
+      abort.current ||
+      review ||
+      projectBusy ||
+      !loaded ||
+      userInput
+    )
+      return;
     if (!config.apiKey || !config.model) {
       setSettings(true);
-      return;
+      throw new Error(t("Connect an AI model to start drawing."));
     }
-    setChatInput("");
-    const previousReference = [...messages]
-      .reverse()
-      .find((m) => m.reference)?.reference;
-    const reference =
-      sketch &&
-      (sketch.data !== previousReference?.data ||
-        sketch.name !== previousReference?.name)
-        ? sketch
-        : undefined;
-    setMessages((m) => [...m, { role: "user", text, reference }]);
-    void runAI(
-      drawingContext(
+    setMessages((m) => [
+      ...m,
+      {
+        id: crypto.randomUUID(),
+        role: "user",
+        text,
+        attachments: files,
+        selectedIds: selection.ids,
+      },
+    ]);
+    await runAI({
+      ...drawingContext(
         text,
         messages,
         drawing,
-        sketch?.data,
+        undefined,
         selectedId || undefined,
         clarification,
         selection.ids,
       ),
-    );
+      attachments: clarification?.attachments || files,
+    });
+  };
+  const retryResponse = async (id: string) => {
+    if (busy || review) return;
+    const index = messages.findIndex((message) => message.id === id);
+    const preceding =
+      index >= 0
+        ? messages.slice(0, index + (messages[index].role === "user" ? 1 : 0))
+        : messages;
+    const user = [...preceding]
+      .reverse()
+      .find((message) => message.role === "user");
+    if (!user) return;
+    if (retryContext.current || clarification) {
+      await runAI(retryContext.current || clarification!);
+      return;
+    }
+    await runAI({
+      ...drawingContext(
+        user.text,
+        preceding.slice(0, preceding.indexOf(user)),
+        drawing,
+        user.reference?.data,
+        user.selectedIds?.[0],
+        undefined,
+        user.selectedIds,
+      ),
+      attachments: user.attachments,
+    });
   };
   const useExample = async () => {
     const projectId = activeIdRef.current;
-    const draft = chatInput;
+    const target = composer.current;
+    if (!target) return;
+    const revision = target.getDraftRevision();
     try {
       const image = new Image();
       image.src = "/example-sketch.svg";
       await image.decode();
-      if (activeIdRef.current !== projectId) return;
+      if (activeIdRef.current !== projectId || composer.current !== target)
+        return;
       const canvas = document.createElement("canvas");
       canvas.width = image.width;
       canvas.height = image.height;
       canvas.getContext("2d")!.drawImage(image, 0, 0);
-      setSketch({
+      target.addAttachment({
+        id: crypto.randomUUID(),
+        type: "image",
+        size: 0,
         name: "mounting-plate-sketch.png",
-        data: canvas.toDataURL("image/png"),
+        image: canvas.toDataURL("image/png"),
       });
-      setChatInput((current) =>
-        current === draft
-          ? t(
-              "120 × 80 mm plate, R8 corners. Four Ø10 holes; centers 20 mm from each edge.",
-            )
-          : current,
+      target.setDraft(
+        t(
+          "120 × 80 mm plate, R8 corners. Four Ø10 holes; centers 20 mm from each edge.",
+        ),
+        revision,
       );
       tell(
         "Example sketch loaded. Connect your model and generate your own drawing.",
@@ -1021,9 +1000,6 @@ export default function App() {
         </div>
         <div className="header-actions">
           <LanguageSelect />
-          <span className="saved-indicator">
-            <span /> {t(saveStatus)}
-          </span>
           <button
             className="button settings-button"
             aria-label={t("Model settings")}
@@ -1077,7 +1053,7 @@ export default function App() {
           onToggle={setSidebarOpen}
           projects={projects}
           activeId={activeId}
-          disabled={busy || !!review || projectBusy}
+          disabled={projectBusy}
           projectBusy={projectBusy}
           onOpen={(id) => void changeProject(id)}
           onRename={renameProject}
@@ -1107,6 +1083,17 @@ export default function App() {
               </button>
             </div>
             <div className="canvas-tools">
+              <button
+                className={`icon-button ${objectsOpen ? "active" : ""}`}
+                aria-label={t("Objects and groups")}
+                title={t("Objects and groups")}
+                aria-expanded={objectsOpen}
+                aria-controls="canvas-objects"
+                disabled={!drawing || tab !== "drawing"}
+                onClick={() => setObjectsOpen(!objectsOpen)}
+              >
+                <Layers2 size={17} />
+              </button>
               <DrawingLayers
                 layers={layers}
                 onChange={setLayers}
@@ -1185,7 +1172,7 @@ export default function App() {
                   html={previewHTML}
                   onSnapshot={(snapshot) => setElements(snapshot.elements)}
                   onSelection={(next) => {
-                    if (busy || review) return;
+                    if (review) return;
                     setSelection({
                       ids: normalizeSelection(next.ids, elements),
                       rootId: elements.some(
@@ -1214,7 +1201,7 @@ export default function App() {
                   onError={(text) => tell(text, true)}
                   onZoom={setZoom}
                   selection={selection}
-                  locked={busy || !!review || !!userInput || projectBusy}
+                  locked={!!review || !!userInput || projectBusy}
                   changedIds={review?.changes.ids}
                   layers={layers}
                   mode={mode}
@@ -1252,7 +1239,7 @@ export default function App() {
                     <button
                       className="button small primary"
                       disabled={busy || formattingCode || !!userInput}
-                      onClick={() => {
+                      onClick={async () => {
                         editContext.current = null;
                         const candidate = {
                           title:
@@ -1263,10 +1250,27 @@ export default function App() {
                           summary: t("Source code updated."),
                           notes: drawing?.notes,
                         };
-                        pendingRef.current = candidate;
                         setPending(candidate);
                         setBusy(true);
                         setTab("drawing");
+                        const controller = new AbortController();
+                        abort.current = controller;
+                        try {
+                          const svg = await validateDrawingSource(
+                            candidate.html,
+                            controller.signal,
+                          );
+                          controller.signal.throwIfAborted();
+                          commit({ ...candidate, svg, html: svgToHTML(svg) });
+                        } catch (error) {
+                          if ((error as Error).name !== "AbortError")
+                            tell((error as Error).message, true);
+                        } finally {
+                          if (abort.current === controller)
+                            abort.current = null;
+                          setPending(null);
+                          setBusy(false);
+                        }
                       }}
                     >
                       {t("Apply code")}
@@ -1295,6 +1299,28 @@ export default function App() {
                 </div>
               </div>
             )}
+            {tab === "drawing" && drawing && objectsOpen && (
+              <ObjectTree
+                elements={elements}
+                selection={selection}
+                onChange={setSelection}
+                onClose={() => setObjectsOpen(false)}
+              />
+            )}
+            {tab === "drawing" &&
+              drawing &&
+              (selection.ids.length > 0 || selection.rootId) && (
+                <div className="canvas-selection">
+                  <SelectionPanel
+                    elements={elements}
+                    selection={selection}
+                    disabled={busy || !!review || !!userInput || projectBusy}
+                    onChange={setSelection}
+                    onGroup={() => changeGrouping("group")}
+                    onUngroup={() => changeGrouping("ungroup")}
+                  />
+                </div>
+              )}
             {busy && (
               <div className="canvas-loading">
                 <Loader2 className="spin" size={20} />
@@ -1363,203 +1389,131 @@ export default function App() {
             </span>
           </div>
         </section>
-        <aside className="assistant-panel">
-          <div className="assistant-heading">
-            <div className="assistant-mark">
-              <Sparkles size={19} />
+        <AssistantChat
+          key={activeId}
+          ref={composer}
+          messages={messages}
+          busy={busy}
+          disabled={projectBusy || !!review || (!!userInput && !busy)}
+          initialDraft={chatInput}
+          initialAttachments={attachments}
+          onDraft={setChatInput}
+          onAttachments={setAttachments}
+          onSend={sendChat}
+          onCancel={cancelGeneration}
+          onRetry={retryResponse}
+          onAttachmentError={(message) => tell(message, true)}
+        >
+          <aside className="assistant-panel">
+            <div className="assistant-heading">
+              <div className="assistant-mark">
+                <Sparkles size={19} />
+              </div>
+              <div>
+                <h2>{t("Drawing assistant")}</h2>
+                <p>
+                  <span />{" "}
+                  {busy
+                    ? t("Working on your drawing")
+                    : t("A little help, a lot of precision")}
+                </p>
+              </div>
             </div>
-            <div>
-              <h2>{t("Drawing assistant")}</h2>
-              <p>
-                <span />{" "}
-                {busy
-                  ? t("Working on your drawing")
-                  : t("A little help, a lot of precision")}
-              </p>
-            </div>
-          </div>
-          <ChatTranscript
-            messages={messages}
-            hasDrawing={!!drawing}
-            busy={busy}
-            validating={!!pending}
-            onSuggest={setChatInput}
-          />
-          <div className="assistant-controls">
-            {review ? (
-              <ReviewChanges
-                changes={review.changes}
-                summary={review.drawing.summary}
-                onApply={() => {
-                  commit(review.drawing);
-                  finishReply("complete");
-                  tell("Drawing updated.");
-                }}
-                onDiscard={() => {
-                  setReview(null);
-                  editContext.current = null;
-                  finishReply("cancelled");
-                  tell("Proposal discarded. Your drawing is unchanged.");
-                }}
-              />
-            ) : (
-              <>
-                {drawing && !userInput && (
-                  <SelectionPanel
-                    elements={elements}
-                    selection={selection}
-                    disabled={busy || projectBusy}
-                    onChange={setSelection}
-                    onGroup={() => changeGrouping("group")}
-                    onUngroup={() => changeGrouping("ungroup")}
-                  />
-                )}
-                {userInput && !busy ? (
-                  <RequestUserInput
-                    key={`${activeId}:${userInput.request.calls[userInput.callIndex].id}`}
-                    args={questionArgs(userInput.request, userInput.callIndex)}
-                    state={userInput.state}
-                    disabled={busy || projectBusy}
-                    onChange={(state) => setUserInput({ ...userInput, state })}
-                    onSubmit={submitUserInput}
-                    onCancel={cancelUserInput}
-                  />
-                ) : (
-                  <>
-                    {clarification && (
-                      <div className="clarification-banner">
-                        <CircleHelp size={15} />
-                        {t("A measurement is needed. Reply below to continue.")}
-                      </div>
-                    )}
-                    <div className="chat-composer">
-                      <SketchUpload
-                        sketch={sketch}
-                        onFile={loadFile}
-                        onClear={() => {
-                          setSketch(null);
-                          setClarification(null);
-                        }}
-                        disabled={busy || projectBusy}
-                      />
-                      {messages.length === 1 && (
-                        <button
-                          className="example-button"
-                          onClick={useExample}
-                          disabled={busy || projectBusy}
-                        >
-                          {t("Try an example")}
-                          <ArrowRight size={12} />
-                        </button>
+            <ChatTranscript
+              messages={messages}
+              hasDrawing={!!drawing}
+              onSuggest={(text) => composer.current?.setDraft(text)}
+            />
+            <div className="assistant-controls">
+              {review ? (
+                <ReviewChanges
+                  changes={review.changes}
+                  summary={review.drawing.summary}
+                  onApply={() => {
+                    commit(review.drawing);
+                    finishReply("complete");
+                    tell("Drawing updated.");
+                  }}
+                  onDiscard={() => {
+                    setReview(null);
+                    editContext.current = null;
+                    finishReply("cancelled");
+                    tell("Proposal discarded. Your drawing is unchanged.");
+                  }}
+                />
+              ) : (
+                <>
+                  {userInput && !busy ? (
+                    <RequestUserInput
+                      key={`${activeId}:${userInput.request.calls[userInput.callIndex].id}`}
+                      args={questionArgs(
+                        userInput.request,
+                        userInput.callIndex,
                       )}
-                      <div className="composer-input">
-                        <textarea
-                          aria-label={t("Drawing instructions")}
-                          rows={3}
-                          value={chatInput}
-                          disabled={busy || projectBusy}
-                          onChange={(e) => setChatInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (
-                              e.key === "Enter" &&
-                              !e.shiftKey &&
-                              !e.nativeEvent.isComposing
-                            ) {
-                              e.preventDefault();
-                              sendChat();
-                            }
-                          }}
-                          placeholder={
-                            clarification
-                              ? t("Add the missing dimensions…")
-                              : selection.ids.length > 1
-                                ? t("Describe changes to the selected objects…")
-                                : selected
-                                  ? t("How should I change {{name}}?", {
-                                      name: selected.label.toLowerCase(),
-                                    })
-                                  : drawing
-                                    ? t("Describe a change to your drawing…")
-                                    : t(
-                                        "Describe your part and dimensions in mm…",
-                                      )
-                          }
-                        />
-                        <div className="composer-bottom">
-                          <span>
-                            {selected ? (
-                              <>
-                                <MousePointer2 size={11} />
-                                {selection.ids.length > 1
-                                  ? t("{{count}} selected", {
-                                      count: selection.ids.length,
-                                    })
-                                  : t("Selected element")}
-                              </>
-                            ) : (
-                              <>
-                                <Layers2 size={11} />{" "}
-                                {drawing
-                                  ? t("Whole drawing")
-                                  : t("New drawing")}
-                              </>
-                            )}
-                          </span>
-                          <button
-                            aria-label={
-                              busy
-                                ? t("Stop generation")
-                                : t("Send drawing instruction")
-                            }
-                            disabled={
-                              projectBusy ||
-                              (!busy && !chatInput.trim() && !sketch)
-                            }
-                            onClick={busy ? cancelGeneration : sendChat}
-                          >
-                            {busy ? (
-                              <Square size={13} fill="currentColor" />
-                            ) : (
-                              <Send size={15} />
-                            )}
-                          </button>
+                      state={userInput.state}
+                      disabled={busy || projectBusy}
+                      onChange={(state) =>
+                        setUserInput({ ...userInput, state })
+                      }
+                      onSubmit={submitUserInput}
+                      onCancel={cancelUserInput}
+                    />
+                  ) : (
+                    <>
+                      {clarification && (
+                        <div className="clarification-banner">
+                          <CircleHelp size={15} />
+                          {t(
+                            "A measurement is needed. Reply below to continue.",
+                          )}
                         </div>
-                      </div>
-                      <div className="assistant-model">
-                        <span
-                          className={`connection-dot ${config.apiKey && config.model ? "connected" : ""}`}
-                        />
-                        <button onClick={() => setSettings(true)}>
-                          {config.apiKey && config.model
-                            ? config.model
-                            : t("Connect your AI model")}
-                          <ChevronDown size={11} />
-                        </button>
-                        <span>{t("↵ to send")}</span>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-        </aside>
+                      )}
+                      <ChatComposer
+                        busy={busy}
+                        selectionCount={selection.ids.length}
+                        onClearSelection={() => setSelection(EMPTY_SELECTION)}
+                        placeholder={
+                          clarification
+                            ? t("Add the missing dimensions…")
+                            : selection.ids.length
+                              ? t("Describe changes to the selected objects…")
+                              : drawing
+                                ? t("Describe a change to your drawing…")
+                                : t("Describe your part and dimensions in mm…")
+                        }
+                      >
+                        {messages.length === 1 && (
+                          <button
+                            type="button"
+                            className="example-button"
+                            onClick={useExample}
+                            disabled={busy || projectBusy}
+                          >
+                            {t("Try an example")}
+                            <ArrowRight size={12} />
+                          </button>
+                        )}{" "}
+                        <div className="assistant-model">
+                          <span
+                            className={`connection-dot ${config.apiKey && config.model ? "connected" : ""}`}
+                          />
+                          <button onClick={() => setSettings(true)}>
+                            {config.apiKey && config.model
+                              ? config.model
+                              : t("Connect your AI model")}
+                            <ChevronDown size={11} />
+                          </button>
+                          <span>{t("↵ to send")}</span>
+                        </div>
+                      </ChatComposer>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          </aside>
+        </AssistantChat>
       </main>
-      {pending && (
-        <div className="validation-preview" aria-hidden="true">
-          <Preview
-            title={t("Drawing validation sandbox")}
-            html={pending.html}
-            onSnapshot={onSnapshot}
-            onSelection={() => {}}
-            onError={onPreviewError}
-            onZoom={() => {}}
-            locked
-            layers={{ geometry: true, dimensions: true, presentation: true }}
-            mode="select"
-          />
-        </div>
-      )}
       {notice && (
         <div
           className={`toast ${notice.error ? "error" : ""}`}

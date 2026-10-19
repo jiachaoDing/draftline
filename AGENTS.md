@@ -24,7 +24,7 @@ Draftline turns sketches and measured instructions into editable millimeter SVG 
 - Each frame uses `sandbox="allow-scripts"`, an opaque origin, CSP, and source/channel-checked messages. Keep credentials out of frame messages, prompts, projects, URLs, exports and logs.
 - One SVG unit equals one millimeter. Keep stable object/group IDs and `geometry`/`dimensions` groups. Selection supplies intent context; AI chooses a coherent edit scope. Changes beyond selected objects and associated dimensions require review before commit. Presentation, viewport transforms and selection overlays are derived from the canonical SVG.
 - Keep pending question context and tool IDs through retries, refreshes and project switches. Highlighted options require explicit submission. Preserve schema defaults for saved records.
-- Project navigation remains blocked during active generation/validation. Every drawing commit goes through bounded revision history; new edits drop the redo branch.
+- Project navigation stays available during generation/validation. Tasks, streaming, cancellation, validation and review belong to their originating project; only that drawing's mutations are locked. Every drawing commit goes through bounded revision history; new edits drop the redo branch.
 
 ## Implementation and completion
 

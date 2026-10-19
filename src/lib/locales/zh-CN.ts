@@ -1,10 +1,28 @@
 export const zhCN: Record<string, string> = {
+  "Choose an image, SVG, PDF, DXF, or text file.":
+    "请选择图片、SVG、PDF、DXF 或文本文件。",
+  "Text attachments must contain at most 100,000 characters.":
+    "文本附件不能超过 100,000 个字符。",
+  "Stop this drawing's task or resolve its proposal before deleting it.":
+    "请先停止此图纸的任务或处理变更提案，再删除图纸。",
+  "Close objects panel": "收起对象面板",
+  "SVG hierarchy": "SVG 层级",
+  Groups: "编组",
+  Objects: "对象",
+  "Clear AI selection context": "清除 AI 选择上下文",
+  "Images, SVG, PDF, DXF, text": "图片、SVG、PDF、DXF、文本",
+  "Copy message": "复制消息",
+  "Retry response": "重试回复",
+  "Scroll to latest message": "滚动到最新消息",
+  "Attach files": "添加附件",
+  "Reading attachment…": "正在读取附件…",
+  "Remove attachment {{name}}": "移除附件 {{name}}",
+  "This file could not be read.": "无法读取此文件。",
+  "Remove failed attachments before sending.": "请先移除读取失败的附件再发送。",
+  "Attachments must total less than 8 MB.": "附件总大小不能超过 8 MB。",
+  "Processed attachments are too large.": "附件内容过大。",
   Language: "语言",
-  "Opening workspace…": "正在打开工作区…",
   "Opening your workspace…": "正在打开你的工作区…",
-  "Saving locally…": "正在保存到本地…",
-  "Saved locally": "已保存到本地",
-  "Not saved": "未保存",
   "Browser storage is unavailable or full. Export your drawing to keep it, then free storage and reload.":
     "浏览器存储不可用或已满。请先导出图纸，再清理存储空间并刷新。",
   "Browser storage is unavailable. Export drawings to keep your work.":

@@ -1,4 +1,5 @@
-import { test, expect } from "@playwright/test";
+import { waitForProjectSave } from "../helpers/project-storage";
+import { test, expect } from "../helpers/workspace-test";
 import { createServer, type Server } from "node:http";
 import { completeResponse, toolResponse } from "../helpers/provider-stream";
 import { EXAMPLE_SVG } from "../../src/lib/example";
@@ -60,7 +61,7 @@ test("language switching preserves drafts, drawing content, editor state and sav
   page,
 }) => {
   await page.goto("/");
-  await expect(page.locator(".saved-indicator")).toHaveText("Saved locally");
+  await waitForProjectSave(page);
   await page
     .getByLabel("Drawing instructions")
     .fill("保留这个草稿 Keep this draft");
@@ -133,7 +134,7 @@ test("Chinese questions survive refresh and resume through the provider with mat
   await page
     .getByLabel("自定义回答", { exact: true })
     .fill("120 mm，保持其他尺寸");
-  await expect(page.locator(".saved-indicator")).toHaveText("已保存到本地");
+  await waitForProjectSave(page);
   await page.reload();
   await expect(page.getByLabel("自定义回答", { exact: true })).toHaveValue(
     "120 mm，保持其他尺寸",
@@ -156,9 +157,12 @@ test("Chinese questions survive refresh and resume through the provider with mat
   expect((await download).suggestedFilename()).toBe("中文测试图纸.svg");
 });
 
-test.describe("Chinese browser preference", () => {
-  test.use({ locale: "zh-CN", viewport: { width: 390, height: 844 } });
-  test("selects Chinese automatically and keeps the mobile language control in view", async ({
+test.describe("saved Chinese preference", () => {
+  test.use({
+    workspaceLanguage: "zh-CN",
+    viewport: { width: 390, height: 844 },
+  });
+  test("restores Chinese and keeps the mobile language control in view", async ({
     page,
   }) => {
     await page.goto("/");

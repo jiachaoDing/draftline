@@ -15,6 +15,8 @@ export function validateDrawingSource(
     const frame = document.createElement("iframe");
     frame.title = "Agent drawing validation sandbox";
     frame.setAttribute("sandbox", "allow-scripts");
+    frame.loading = "eager";
+    frame.tabIndex = -1;
     frame.referrerPolicy = "no-referrer";
     let settled = false;
     const finish = (error?: Error, svg?: string) => {
@@ -61,8 +63,9 @@ export function validateDrawingSource(
     );
     signal.addEventListener("abort", cancel, { once: true });
     window.addEventListener("message", receive);
-    frame.srcdoc = buildSandbox(html, channel);
+    const source = buildSandbox(html, channel, false);
     container.append(frame);
     document.body.append(container);
+    frame.srcdoc = source;
   });
 }

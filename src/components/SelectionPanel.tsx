@@ -1,7 +1,5 @@
 import { useLocale } from "../lib/i18n";
 import type { ElementInfo, SelectionState } from "../lib/contracts";
-import { normalizeSelection } from "../lib/svg-selection";
-import type { ReactNode } from "react";
 import "./selection.css";
 
 type Props = {
@@ -32,44 +30,6 @@ export default function SelectionPanel({
     ancestors.unshift(current);
     current = current.parentId ? byId.get(current.parentId) : undefined;
   }
-  const choose = (element: ElementInfo, shift: boolean) =>
-    onChange({
-      rootId: null,
-      ids: normalizeSelection(
-        shift
-          ? selection.ids.includes(element.id)
-            ? selection.ids.filter((id) => id !== element.id)
-            : [...selection.ids, element.id]
-          : [element.id],
-        elements,
-      ),
-    });
-  const rows = (parentId?: string, depth = 0): ReactNode =>
-    elements
-      .filter((element) => element.parentId === parentId)
-      .map((element) => (
-        <li key={element.id}>
-          <button
-            type="button"
-            className="object-tree-row"
-            style={{ paddingLeft: `${8 + depth * 12}px` }}
-            disabled={disabled}
-            aria-pressed={selection.ids.includes(element.id)}
-            onClick={(event) => choose(element, event.shiftKey)}
-            onDoubleClick={() => {
-              if (element.tag === "g" && element.layer === "geometry")
-                onChange({ ids: [], rootId: element.id });
-            }}
-          >
-            <span>{element.tag === "g" ? "▱" : "·"}</span>
-            <span>{element.label}</span>
-            <small>{element.tag}</small>
-          </button>
-          {element.childIds?.length ? (
-            <ul>{rows(element.id, depth + 1)}</ul>
-          ) : null}
-        </li>
-      ));
   return (
     <div className="selection-panel">
       <nav
@@ -95,20 +55,6 @@ export default function SelectionPanel({
           </span>
         ))}
       </nav>
-      <details className="object-tree">
-        <summary>
-          {t("Objects and groups")}{" "}
-          <small>
-            {selection.ids.length
-              ? t("{{count}} selected", { count: selection.ids.length })
-              : t("Browse objects")}
-          </small>
-        </summary>
-        <ul aria-label={t("Drawing objects")}>
-          {rows("geometry")}
-          {rows("dimensions")}
-        </ul>
-      </details>
       {selected.length > 0 && (
         <div className="selection-card">
           <div className="selection-heading">
@@ -130,6 +76,11 @@ export default function SelectionPanel({
               ? selected[0].label
               : t("{{count}} objects selected", { count: selected.length })}
           </strong>
+          <small className="selection-kind">
+            {selected.every((element) => element.tag === "g")
+              ? t("Groups")
+              : t("Objects")}
+          </small>
           <div className="selection-actions">
             {selected.length === 1 &&
               selected[0].parentId &&

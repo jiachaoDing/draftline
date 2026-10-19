@@ -1,6 +1,7 @@
 {
   "files": {
     "includes": [
+      "!!**/.openai/**",
       "src/**/*.ts",
       "src/**/*.tsx",
       "server/**/*.ts",

@@ -1,4 +1,5 @@
-import { test, expect } from "@playwright/test";
+import { waitForProjectSave } from "../helpers/project-storage";
+import { test, expect } from "../helpers/workspace-test";
 
 test("drawing order follows creation time through opening, editing, renaming and reload", async ({
   page,
@@ -46,7 +47,7 @@ test("drawing order follows creation time through opening, editing, renaming and
     "Untitled drawing",
     "Oldest drawing",
   ]);
-  await expect(page.locator(".saved-indicator")).toHaveText("Saved locally");
+  await waitForProjectSave(page);
   await page.reload();
   await expect(drawings).toHaveText([
     "Untitled drawing 2",
@@ -70,7 +71,7 @@ test("drawing navigation supports search, long lists, collapse and keyboard acti
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
-  await expect(page.locator(".saved-indicator")).toHaveText("Saved locally");
+  await waitForProjectSave(page);
   await page.evaluate(async () => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open("draftline-projects", 1);

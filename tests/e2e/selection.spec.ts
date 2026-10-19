@@ -1,4 +1,6 @@
-import { test, expect, type Page } from "@playwright/test";
+import { waitForProjectSave } from "../helpers/project-storage";
+import { test, expect } from "../helpers/workspace-test";
+import type { Page } from "@playwright/test";
 import { createServer, type Server } from "node:http";
 import { completeResponse, toolResponse } from "../helpers/provider-stream";
 import { OBJECT_SVG } from "../helpers/object-drawing";
@@ -240,6 +242,22 @@ test("AI can move a whole logo from a selected path; broader changes require rev
       .join("");
   });
   expect(saved).not.toContain("translate(30 20)");
+  const original = await page
+    .locator('.project-open[aria-current="page"]')
+    .getAttribute("aria-label");
+  await page.getByRole("button", { name: "New Drawing", exact: true }).click();
+  await expect(
+    page.getByRole("region", { name: "Review AI changes" }),
+  ).toHaveCount(0);
+  await page.getByLabel("Drawing instructions").fill("Other drawing draft");
+  await page.getByRole("button", { name: original!, exact: true }).click();
+  await expect(
+    page.getByRole("region", { name: "Review AI changes" }),
+  ).toBeVisible();
+  await expect(frame.locator("#logo")).toHaveAttribute(
+    "transform",
+    "translate(30 20)",
+  );
   await page
     .getByRole("button", { name: "Discard proposal", exact: true })
     .click();
@@ -266,7 +284,7 @@ test("AI can move a whole logo from a selected path; broader changes require rev
     "transform",
     "translate(30 20)",
   );
-  await expect(page.locator(".saved-indicator")).toHaveText("Saved locally");
+  await waitForProjectSave(page);
   await page.reload();
   await expect(frame.locator("#logo")).toHaveAttribute(
     "transform",

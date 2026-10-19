@@ -21,6 +21,59 @@ const config = {
 };
 
 describe("provider message construction", () => {
+  it("forwards native PDF files, images and textual SVG/DXF references only on their explicit request", () => {
+    const input = drawingRequestSchema.parse({
+      config,
+      mode: "generate",
+      instruction: "Inspect these references",
+      attachments: [
+        {
+          id: "pdf",
+          type: "pdf",
+          name: "sheet.pdf",
+          size: 8,
+          file: "data:application/pdf;base64,JVBERg==",
+        },
+        {
+          id: "svg",
+          type: "svg",
+          name: "drawing.svg",
+          size: 6,
+          text: "<svg/>",
+        },
+        { id: "dxf", type: "dxf", name: "part.dxf", size: 5, text: "ENTITIES" },
+        {
+          id: "png",
+          type: "image",
+          name: "sketch.png",
+          size: 4,
+          image: "data:image/png;base64,AAAA",
+        },
+      ],
+    });
+    const content = drawingMessages(input).at(-1)!.content;
+    expect(content).toEqual(
+      expect.arrayContaining([
+        {
+          type: "file",
+          file: {
+            filename: "sheet.pdf",
+            file_data: "data:application/pdf;base64,JVBERg==",
+          },
+        },
+        {
+          type: "image_url",
+          image_url: { url: "data:image/png;base64,AAAA", detail: "high" },
+        },
+      ]),
+    );
+    expect(JSON.stringify(content)).toContain("ENTITIES");
+    expect(JSON.stringify(content)).toContain("<svg/>");
+    expect(JSON.stringify(content)).not.toContain(config.apiKey);
+    const next = drawingMessages({ ...input, attachments: [] });
+    expect(JSON.stringify(next)).not.toContain("file_data");
+    expect(JSON.stringify(next)).not.toContain("image_url");
+  });
   it("requests localized replies and questions without changing source context or tool contracts", () => {
     for (const language of ["en", "zh-CN"] as const) {
       const input = drawingRequestSchema.parse({
