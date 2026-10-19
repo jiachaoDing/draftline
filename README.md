@@ -69,6 +69,10 @@ npm run dev
 
 开发环境支持本机 HTTP 模型接口；生产环境使用公开 HTTPS 接口。
 
+**推理强度**可在模型设置中选择并保存。自动模式下，GPT-5、GPT-6（包括 `gpt-6.1-sol`）及 o 系列推理模型使用 `high`；其他模型使用服务商默认值。也可手动选择档位，或选择“服务商默认”以省略推理参数。旧设置会自动采用此规则。较高强度可能增加耗时与 Token 用量，具体档位取决于模型和服务商。
+
+绘图接口使用流式 Chat Completions 工具调用，兼容网关需要支持 `reasoning_effort` 参数及相应工具调用。[OpenAI 官方 GPT-6 工具调用使用 Responses API](https://developers.openai.com/api/docs/models/gpt-6.1-sol)，接入时需核对网关的兼容能力。
+
 ## 部署到 Cloudflare Workers
 
 前端通过 **Workers Static Assets** 提供，Hono API 运行在同一个 Worker 下。

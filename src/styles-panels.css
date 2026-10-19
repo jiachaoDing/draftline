@@ -450,6 +450,8 @@
   margin-left: 8px;
 }
 .settings-dialog {
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
   border: 1px solid #e5e9f0;
   padding: 30px;
   width: min(460px, calc(100vw - 32px));
@@ -501,7 +503,8 @@
   font-weight: 400;
   font-size: 10px;
 }
-.settings-dialog input {
+.settings-dialog input,
+.settings-dialog select {
   width: 100%;
   height: 39px;
   border: 1px solid #dfe5ef;
@@ -511,7 +514,8 @@
   color: #526b94;
   font-size: 12px;
 }
-.settings-dialog input:focus {
+.settings-dialog input:focus,
+.settings-dialog select:focus {
   outline: 2px solid #eef3ff;
   border-color: #88a9fa;
 }

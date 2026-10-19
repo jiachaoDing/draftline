@@ -6,6 +6,7 @@ import { drawingMessages } from "./messages";
 import { providerErrorMessage, streamAI } from "./stream";
 import { requestUserInputTool } from "./user-input";
 import { drawingTools } from "./drawing-tools";
+import { resolveReasoningEffort } from "../src/lib/model-reasoning";
 
 export function createApp(allowLocal = false) {
   const app = new Hono();
@@ -42,6 +43,7 @@ export function createApp(allowLocal = false) {
       client,
       {
         model: config.model,
+        reasoning_effort: resolveReasoningEffort(config),
         messages: [{ role: "user", content: "Reply with OK." }],
       },
       () => ({ ok: true, model: config.model }),
@@ -59,6 +61,7 @@ export function createApp(allowLocal = false) {
       client,
       {
         model: input.config.model,
+        reasoning_effort: resolveReasoningEffort(input.config),
         tools: [
           requestUserInputTool,
           ...(input.mode === "edit" && input.source ? drawingTools : []),

@@ -19,7 +19,11 @@ let responseContent =
 const app = createApp(true);
 let releaseDelayed: () => void;
 let cancelled: Promise<void>;
-let upstreamRequests: Array<{ stream?: boolean }> = [];
+let upstreamRequests: Array<{
+  stream?: boolean;
+  reasoning_effort?: string;
+  model?: string;
+}> = [];
 beforeEach(() => {
   responseContent =
     '{"kind":"clarification","question":"What is the plate width in mm?"}';
@@ -101,6 +105,48 @@ const config = () => ({
 });
 
 describe("OpenAI-compatible server integration", () => {
+  it.each([
+    { model: "gpt-6.1-sol", effort: undefined, expected: "high" },
+    { model: "gpt-6.1-sol", effort: "low", expected: "low" },
+    { model: "gpt-6.1-sol", effort: "provider", expected: undefined },
+    { model: "vision-test", effort: "auto", expected: undefined },
+  ])(
+    "forwards reasoning settings to test and drawing requests: $model / $effort",
+    async ({ model, effort, expected }) => {
+      const settings = { ...config(), model, reasoningEffort: effort };
+      for (const path of ["/api/test", "/api/draw"]) {
+        const response = await call(
+          path,
+          path === "/api/test"
+            ? settings
+            : {
+                config: settings,
+                mode: "generate",
+                instruction: "Draw a plate",
+                history: [],
+              },
+        );
+        expect(response.status).toBe(200);
+        await readAIStream(response);
+      }
+      expect(upstreamRequests).toHaveLength(2);
+      for (const request of upstreamRequests) {
+        expect(request.model).toBe(model);
+        expect(request.reasoning_effort).toBe(expected);
+        if (expected === undefined)
+          expect(request).not.toHaveProperty("reasoning_effort");
+      }
+    },
+  );
+
+  it("rejects unsupported reasoning settings before requesting the provider", async () => {
+    expect(
+      (await call("/api/test", { ...config(), reasoningEffort: "unsupported" }))
+        .status,
+    ).toBe(400);
+    expect(upstreamRequests).toHaveLength(0);
+  });
+
   it("discovers models through the official SDK", async () => {
     const response = await call("/api/models", config());
     expect(response.status).toBe(200);

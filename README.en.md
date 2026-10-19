@@ -69,6 +69,10 @@ Open <http://127.0.0.1:3000> and configure your endpoint in Model settings. Vite
 
 Local development accepts localhost HTTP providers. Production uses public HTTPS endpoints.
 
+Choose and save **Reasoning effort** in Model settings. Automatic uses `high` for GPT-5, GPT-6 (including `gpt-6.1-sol`) and o-series reasoning models, and the provider default for other model IDs. You can select a level explicitly or choose **Provider default** to omit the parameter. Existing saved settings adopt the automatic rule. Higher effort may increase latency and token usage; supported levels depend on the model and provider.
+
+The drawing workflow uses streamed Chat Completions tool calling. Compatible gateways must support `reasoning_effort` and the corresponding tool calls. [Official OpenAI GPT-6 tool calling uses Responses](https://developers.openai.com/api/docs/models/gpt-6.1-sol), so check your gateway's compatibility when connecting these models.
+
 ## Deploy to Cloudflare Workers
 
 **Workers Static Assets** serves the frontend; the same Worker runs the Hono API.

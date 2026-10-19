@@ -29,6 +29,12 @@ The workspace fills the browser viewport. Drawing navigation, chat history, assi
 
 Keyboard shortcuts: `V` select, `H` pan, `Ctrl/Cmd Z` undo, `Ctrl/Cmd Shift Z` redo, `Ctrl/Cmd A` select all at the current group level, `Ctrl/Cmd G` group, `Ctrl/Cmd Shift G` ungroup, `Escape` exit a group or clear selection, `Enter` enter the selected group on the canvas / send from the composer, `Shift Enter` newline. In the **Code** tab, CodeMirror 6 provides HTML/SVG and embedded JavaScript/CSS highlighting, line numbers, automatic word wrapping, indentation, search and editor undo/redo. Prettier automatically formats each committed drawing's source with two-space indentation and line breaks. Use **Format** to tidy a draft and **Apply code** to validate it in the drawing sandbox and update the preview. Formatting errors retain the draft; invalid drawings retain the current preview. Editor shortcuts apply to the source while the editor has focus.
 
+## Reasoning effort
+
+Model settings includes a saved reasoning-effort selector. Automatic sends `high` for GPT-5/GPT-6 and o1/o3/o4 model IDs, including namespace-prefixed IDs such as `provider/gpt-6.1-sol`. Other IDs use the provider default. Choose a specific level to override the automatic value, or choose Provider default to omit the parameter for any model. Existing saved settings adopt Automatic while retaining the provider URL, key and model.
+
+Connection tests, drawing requests, tool rounds and clarification continuations use the selected setting. Higher effort can increase latency and token usage. Supported levels depend on the model and gateway; GPT-6.1 Sol supports low, medium, high, xhigh and max. The application forwards `reasoning_effort` through Chat Completions. Its gateway must support the selected model's streamed tool calls; official OpenAI GPT-6 tool calling uses the [Responses API](https://developers.openai.com/api/docs/models/gpt-6.1-sol).
+
 ## Streaming AI interaction
 
 Ordinary conversation, missing-dimension clarification, drawing generation, selected-element edits, and model connection tests all use one end-to-end streaming transport. The official SDK requests Chat Completions with `stream: true`; Hono forwards each content delta immediately as SSE. Provider URL and model selection work with OpenAI-compatible and NewAPI endpoints. See [official OpenAI streaming documentation](https://developers.openai.com/api/docs/guides/streaming-responses).

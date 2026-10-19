@@ -1,4 +1,17 @@
 export const zhCN: Record<string, string> = {
+  "Reasoning effort": "推理强度",
+  Automatic: "自动",
+  "Provider default": "服务商默认",
+  "Automatic ({{effort}})": "自动（{{effort}}）",
+  "None (none)": "不推理（none）",
+  "Minimal (minimal)": "极低（minimal）",
+  "Low (low)": "低（low）",
+  "Medium (medium)": "中（medium）",
+  "High (high)": "高（high）",
+  "Extra high (xhigh)": "很高（xhigh）",
+  "Maximum (max)": "最高（max）",
+  "Automatic uses high for GPT-5/GPT-6 and o-series reasoning models. Supported levels depend on your provider; higher effort can take longer and use more tokens.":
+    "自动模式下，GPT-5/GPT-6 和 o 系列推理模型使用 high。可用档位取决于服务商；较高强度可能增加耗时和 Token 用量。",
   "Choose an image, SVG, PDF, DXF, or text file.":
     "请选择图片、SVG、PDF、DXF 或文本文件。",
   "Text attachments must contain at most 100,000 characters.":

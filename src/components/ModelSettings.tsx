@@ -20,8 +20,25 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
-import type { ModelConfig } from "../lib/contracts";
+import {
+  reasoningEffortSchema,
+  type ModelConfig,
+  type ReasoningEffort,
+} from "../lib/contracts";
+import { resolveReasoningEffort } from "../lib/model-reasoning";
 import { discoverModels, testConnection } from "../lib/api";
+
+const reasoningLabels: Record<ReasoningEffort, string> = {
+  auto: "Automatic",
+  provider: "Provider default",
+  none: "None (none)",
+  minimal: "Minimal (minimal)",
+  low: "Low (low)",
+  medium: "Medium (medium)",
+  high: "High (high)",
+  xhigh: "Extra high (xhigh)",
+  max: "Maximum (max)",
+};
 
 type Props = {
   config: ModelConfig;
@@ -55,10 +72,13 @@ export default function ModelSettings({
     dialog.current?.showModal();
     return () => abort.current?.abort();
   }, []);
-  const field = (name: keyof ModelConfig, value: string) => {
+  function field<Key extends keyof ModelConfig>(
+    name: Key,
+    value: ModelConfig[Key],
+  ) {
     setDraft({ ...draft, [name]: value });
     setStatus(null);
-  };
+  }
   const connect = async (action: "discover" | "test") => {
     setBusy(action);
     setStatus(null);
@@ -298,6 +318,43 @@ export default function ModelSettings({
         </Portal.Group>
         <p className="field-hint" id="model-hint">
           {t("Use a model with image input to interpret hand-drawn sketches.")}
+        </p>
+        <label className="field-label" htmlFor="reasoning-effort">
+          {t("Reasoning effort")}
+        </label>
+        <select
+          id="reasoning-effort"
+          value={draft.reasoningEffort ?? "auto"}
+          disabled={!!busy}
+          aria-describedby="reasoning-hint"
+          onChange={(event) =>
+            field(
+              "reasoningEffort",
+              reasoningEffortSchema.parse(event.target.value),
+            )
+          }
+        >
+          <option value="auto">
+            {t("Automatic ({{effort}})", {
+              effort: t(
+                reasoningLabels[
+                  resolveReasoningEffort({ model: draft.model }) ?? "provider"
+                ],
+              ),
+            })}
+          </option>
+          {reasoningEffortSchema.options
+            .filter((effort) => effort !== "auto")
+            .map((effort) => (
+              <option key={effort} value={effort}>
+                {t(reasoningLabels[effort])}
+              </option>
+            ))}
+        </select>
+        <p className="field-hint" id="reasoning-hint">
+          {t(
+            "Automatic uses high for GPT-5/GPT-6 and o-series reasoning models. Supported levels depend on your provider; higher effort can take longer and use more tokens.",
+          )}
         </p>
         {status && (
           <div

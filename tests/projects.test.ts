@@ -10,6 +10,7 @@ describe("local model settings", () => {
       baseURL: "https://provider.example/v1",
       apiKey: "secret-key",
       model: "vision",
+      reasoningEffort: "high",
     };
     localStorage.setItem("draftline-model", JSON.stringify(config));
     expect(readConfig()).toEqual(config);

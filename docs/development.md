@@ -29,7 +29,7 @@ npm run verify:all
 
 CI installs Chromium with OS dependencies and sets the same environment variable. The checked-in workflow runs on pushes and pull requests. Tests use deterministic local HTTP providers through the actual OpenAI SDK and Hono server, with test-only credentials. No live API credentials are needed.
 
-Browser workflows run with two workers and a 60-second overall budget to allow cold Vite/browser startup. The persistent-profile restart case allows 120 seconds for two Edge startup/shutdown cycles and a large reference. Individual assertions retain their own timeouts; the drawing sandbox fails after six seconds. Drawing commit assertions wait for the validation lifecycle to end before inspecting the visible SVG.
+Playwright waits for the proxied `/api/health` endpoint so both Vite and the API are ready before browser workflows begin. Browser workflows run with two workers and a 60-second overall budget to allow cold Vite/browser startup. The persistent-profile restart case allows 120 seconds for two Edge startup/shutdown cycles and a large reference. Individual assertions retain their own timeouts; the drawing sandbox fails after six seconds. Drawing commit assertions wait for the validation lifecycle to end before inspecting the visible SVG.
 
 ## Cloudflare deployment checks
 
@@ -60,6 +60,8 @@ Get-Content -LiteralPath src/lib/drawing.ts -Encoding UTF8
 ```
 
 ## Test map and debugging
+
+- Reasoning settings: `model-reasoning.test.ts` checks automatic defaults, explicit overrides, unknown model IDs and old/invalid saved settings. `provider.test.ts` checks the actual SDK payload for test and drawing routes, parameter omission and rejected enum values. `e2e/model-reasoning.spec.ts` exercises the real browser/server/provider boundary, legacy defaults, persisted choices, model ID preservation and mobile saving.
 
 - Drawing/presentation/export changes: `drawing.test.ts`, `ai-workflow.test.ts`, `history.test.ts`, plus the drawing/code/export/undo cases in `e2e/studio.spec.ts`. `preview.test.ts` delivers a frame snapshot before passive effects to verify early bridge registration and source/channel rejection.
 - Object selection and AI scope: `svg-selection.test.ts` checks nested text/groups, stable IDs, group/ungroup appearance and dimension references, normalized selections, hierarchy context and actual change detection independent of source formatting. `e2e/selection.spec.ts` exercises group and leaf picking, Shift-click, nested entry, marquee after zoom, grouping undo/redo, overlay-free exports, and a real streamed source-tool edit of an entire logo from a selected path, with discard/apply, storage and history checks. Review proposals must never enter committed revisions before Apply.

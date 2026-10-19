@@ -13,10 +13,24 @@ import {
   userInputArgsSchema,
 } from "./user-input";
 
+export const reasoningEffortSchema = z.enum([
+  "auto",
+  "provider",
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+]);
+export type ReasoningEffort = z.infer<typeof reasoningEffortSchema>;
+
 export const configSchema = z.object({
   baseURL: z.string().min(1).max(2048),
   apiKey: z.string().min(1, "Enter an API key.").max(4096),
   model: z.string().max(200).default(""),
+  reasoningEffort: reasoningEffortSchema.optional(),
 });
 export type ModelConfig = z.infer<typeof configSchema>;
 export const notesSchema = z
