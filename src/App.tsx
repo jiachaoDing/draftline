@@ -45,11 +45,12 @@ import {
   ungroupObjects,
   normalizeSelection,
 } from "./lib/svg-selection";
-import { drawingChanges } from "./lib/drawing-changes";
+import { reviewDrawing } from "./lib/drawing-review";
 import { EMPTY_SELECTION, type SelectionState } from "./lib/contracts";
 import DrawingSidebar from "./components/DrawingSidebar";
 import DrawingLayers from "./components/DrawingLayers";
 import ChatTranscript from "./components/ChatTranscript";
+import ConversationHistory from "./components/ConversationHistory";
 import AssistantChat, {
   type AssistantChatHandle,
 } from "./components/AssistantChat";
@@ -73,6 +74,12 @@ import {
   sanitizeSVG,
 } from "./lib/drawing";
 import { pushHistory } from "./lib/history";
+import {
+  recordConversation,
+  conversationPath,
+  restoreConversation,
+  sameCanvas,
+} from "./lib/conversation";
 import { requestDrawing } from "./lib/api";
 import {
   runDrawingAgent,
@@ -129,7 +136,18 @@ export default function App() {
     (id: string, update: (p: Project) => Project) => {
       const next = projectsRef.current.map((p) => {
         if (p.id !== id) return p;
-        const changed = update(p);
+        let changed = update(p);
+        if (changed.messages !== p.messages) {
+          const conversation = recordConversation(
+            changed.messages,
+            changed.conversation,
+          );
+          changed = {
+            ...changed,
+            conversation,
+            messages: conversationPath(conversation),
+          };
+        }
         const current = changed.history.items[changed.history.index];
         return {
           ...changed,
@@ -161,8 +179,6 @@ export default function App() {
     setReview,
     abort,
     reply: activeReply,
-    retry: retryContext,
-    recovery: recoveryPoint,
     editContext,
     sessions,
   } = useProjectSession(activeId);
@@ -426,9 +442,22 @@ export default function App() {
 
   const commit = useCallback(
     (next: Drawing) => {
-      setHistory((h) =>
-        pushHistory(h, { ...next, revision: crypto.randomUUID() }),
-      );
+      next = { ...next, revision: crypto.randomUUID() };
+      setHistory((h) => pushHistory(h, next));
+      if (activeReply.current)
+        setMessages((messages) =>
+          messages.map((message) =>
+            message.id === activeReply.current
+              ? {
+                  ...message,
+                  canvas: next,
+                  recovery: undefined,
+                  userInput: null,
+                  clarification: null,
+                }
+              : message,
+          ),
+        );
       if (activeIdRef.current === activeProject?.id) {
         setSelection(EMPTY_SELECTION);
         setElements(listElements(sanitizeSVG(next.svg)));
@@ -445,35 +474,24 @@ export default function App() {
       setReview,
       editContext,
       activeProject?.id,
+      activeReply,
+      setMessages,
     ],
   );
   const offerDrawing = useCallback(
     (next: Drawing) => {
       const context = editContext.current;
       if (context?.drawing && context.ids.length) {
-        const changes = drawingChanges(
-          context.drawing.svg,
-          next.svg,
-          context.ids,
-        );
-        changes.metadata = [];
-        if (context.drawing.title !== next.title)
-          changes.metadata.push({
-            label: "Drawing title",
-            before: context.drawing.title,
-            after: next.title,
-          });
-        if (
-          JSON.stringify(context.drawing.notes || []) !==
-          JSON.stringify(next.notes || [])
-        )
-          changes.metadata.push({
-            label: "Technical notes",
-            before: (context.drawing.notes || []).join("; "),
-            after: (next.notes || []).join("; "),
-          });
+        const changes = reviewDrawing(context.drawing, next, context.ids);
         if (changes.outsideIds.length || changes.metadata.length) {
           setReview({ drawing: next, changes });
+          setMessages((messages) =>
+            messages.map((message) =>
+              message.id === activeReply.current
+                ? { ...message, proposal: next }
+                : message,
+            ),
+          );
           if (activeIdRef.current === activeProject?.id) setTab("drawing");
           return false;
         }
@@ -481,7 +499,14 @@ export default function App() {
       commit(next);
       return true;
     },
-    [commit, editContext, setReview, activeProject?.id],
+    [
+      commit,
+      editContext,
+      setReview,
+      activeProject?.id,
+      setMessages,
+      activeReply,
+    ],
   );
   function changeGrouping(action: "group" | "ungroup") {
     if (!drawing || busy || review || userInput || projectBusy) return;
@@ -519,8 +544,22 @@ export default function App() {
               ? {
                   ...message,
                   status,
+                  resumable:
+                    status === "complete" ||
+                    (status === "cancelled" && !keepCode)
+                      ? false
+                      : message.resumable,
                   text: text ?? message.text,
                   code: keepCode ? message.code : undefined,
+                  recovery:
+                    status === "complete" ||
+                    (status === "cancelled" && !keepCode)
+                      ? undefined
+                      : message.recovery,
+                  proposal:
+                    status === "complete" || status === "cancelled"
+                      ? undefined
+                      : message.proposal,
                   activities:
                     status === "error" || status === "cancelled"
                       ? settleActivities(
@@ -538,8 +577,28 @@ export default function App() {
     [activeReply, setMessages],
   );
   const cancelGeneration = () => {
-    abort.current?.abort();
+    abort.current?.abort(
+      new DOMException("Generation stopped by user.", "AbortError"),
+    );
   };
+  useEffect(() => {
+    const message = activeProject?.messages.at(-1);
+    if (
+      busy ||
+      review ||
+      message?.status !== "reviewing" ||
+      !message.proposal ||
+      !message.canvas
+    )
+      return;
+    activeReply.current = message.id || null;
+    const ids = message.request?.selectedIds || [];
+    editContext.current = { drawing: message.canvas, ids };
+    setReview({
+      drawing: message.proposal,
+      changes: reviewDrawing(message.canvas, message.proposal, ids),
+    });
+  }, [activeProject, busy, review, activeReply, editContext, setReview]);
   useEffect(
     () => () => {
       for (const session of sessions.values()) session.abort.current?.abort();
@@ -602,12 +661,13 @@ export default function App() {
   async function runAI(
     input: DrawingContext,
     recovery?: DrawingAgentCheckpoint,
+    baseDrawing: Drawing | null = drawing,
+    retryId?: string,
   ) {
     if (abort.current || review) return;
     input = { ...input, language: currentLocale() };
-    if (!recovery) retryContext.current = input;
     editContext.current = {
-      drawing,
+      drawing: baseDrawing,
       ids: input.selectedIds || (input.selectedId ? [input.selectedId] : []),
     };
     if (!config.apiKey || !config.model) {
@@ -616,22 +676,29 @@ export default function App() {
       return;
     }
     setBusy(true);
-    recoveryPoint.current = null;
     setNotice(null);
     setClarification(null);
     const controller = new AbortController();
     abort.current = controller;
-    const replyId = crypto.randomUUID();
+    const replyId = retryId || crypto.randomUUID();
     activeReply.current = replyId;
     setMessages((messages) => [
-      ...messages.map((message) => ({ ...message, resumable: false })),
+      ...messages.filter((message) => message.id !== replyId),
       {
         id: replyId,
         role: "assistant",
         text: "",
         status: "streaming",
+        canvas: baseDrawing,
+        request: input,
+        recovery,
+        userInput,
+        clarification: null,
         activities: recovery
-          ? []
+          ? settleActivities(
+              messages.find((message) => message.id === replyId)?.activities,
+              "cancelled",
+            ).slice(-200)
           : [
               {
                 id: "model:0",
@@ -649,7 +716,9 @@ export default function App() {
           message.id === replyId
             ? {
                 ...message,
-                activities: updateActivity(message.activities, activity),
+                activities: updateActivity(message.activities, activity).slice(
+                  -256,
+                ),
               }
             : message,
         ),
@@ -680,16 +749,21 @@ export default function App() {
     };
     try {
       const projectId = activeIdRef.current;
-      const baseRevision = drawing ? drawingRevision(drawing) : undefined;
+      const owner = projectsRef.current.find(
+        (project) => project.id === projectId,
+      );
+      const baseRevision = baseDrawing
+        ? drawingRevision(baseDrawing)
+        : undefined;
       const outcome = await runDrawingAgent({
         projectId,
         recovery: recovery ? { ...recovery, context: input } : undefined,
         context: input,
-        resources: activeProject
-          ? projectResources(activeProject, input.attachments)
+        resources: owner
+          ? projectResources({ ...owner, attachments: [] }, input.attachments)
           : input.attachments,
         config,
-        drawing,
+        drawing: baseDrawing,
         signal: controller.signal,
         request: requestDrawing,
         validate: validateDrawingSource,
@@ -705,6 +779,20 @@ export default function App() {
           source = "";
         },
         onActivity,
+        onCheckpoint: async (checkpoint) => {
+          controller.signal.throwIfAborted();
+          setMessages((messages) =>
+            messages.map((message) =>
+              message.id === replyId
+                ? { ...message, recovery: checkpoint, resumable: true }
+                : message,
+            ),
+          );
+          const project = projectsRef.current.find(
+            (project) => project.id === projectId,
+          );
+          if (project) await persist(project);
+        },
         onDelta: (text) => {
           source += text;
           if (updateFrame === undefined)
@@ -723,14 +811,42 @@ export default function App() {
         );
         if (committed) tell("Drawing updated.");
       } else if (result.kind === "request_user_input") {
-        setUserInput(pendingQuestions(outcome.context, result));
+        const pending = {
+          ...pendingQuestions(outcome.context, result),
+          messageId: replyId,
+        };
+        setUserInput(pending);
+        setMessages((messages) =>
+          messages.map((message) =>
+            message.id === replyId
+              ? { ...message, userInput: pending, recovery: undefined }
+              : message,
+          ),
+        );
         finishReply("complete", questionText(result));
       } else if (result.kind === "message") {
         setUserInput(null);
+        setMessages((messages) =>
+          messages.map((message) =>
+            message.id === replyId ? { ...message, userInput: null } : message,
+          ),
+        );
         finishReply("complete", result.message);
       } else if (result.kind === "clarification") {
         setUserInput(null);
         setClarification(input);
+        setMessages((messages) =>
+          messages.map((message) =>
+            message.id === replyId
+              ? {
+                  ...message,
+                  clarification: input,
+                  userInput: null,
+                  recovery: undefined,
+                }
+              : message,
+          ),
+        );
         finishReply("complete", result.question);
       } else if (result.kind !== "tool_calls") {
         onActivity({
@@ -739,7 +855,7 @@ export default function App() {
           status: "running",
           detail: "Checking the completed drawing before committing it.",
         });
-        const change = drawingChange(result, input, drawing);
+        const change = drawingChange(result, input, baseDrawing);
         if (change.kind === "commit") {
           onActivity({
             id: "final-validation",
@@ -779,16 +895,22 @@ export default function App() {
       if (clarification) setClarification(input);
       if (userInput) setUserInput(userInput);
       if ((error as Error).name === "AbortError") {
-        recoveryPoint.current = null;
+        if (controller.signal.reason?.message === "Generation stopped by user.")
+          setMessages((messages) =>
+            messages.map((message) =>
+              message.id === replyId
+                ? { ...message, recovery: undefined, resumable: false }
+                : message,
+            ),
+          );
         finishReply("cancelled", undefined, true);
         tell("Generation stopped. Your drawing is unchanged.");
       } else {
         const resumable =
           error instanceof DrawingAgentRecoveryError &&
           !controller.signal.aborted;
-        if (resumable)
-          recoveryPoint.current = { replyId, checkpoint: error.checkpoint };
-        tell((error as Error).message, true);
+        if (activeIdRef.current !== activeProject?.id)
+          tell((error as Error).message, true);
         setMessages((messages) =>
           messages.map((message) =>
             message.id === replyId
@@ -797,7 +919,8 @@ export default function App() {
                   status: "error",
                   resumable,
                   activities: settleActivities(message.activities, "failed"),
-                  text: `${message.text}\n\n${t((error as Error).message)}`,
+                  error: (error as Error).message,
+                  recovery: resumable ? error.checkpoint : message.recovery,
                 }
               : message,
           ),
@@ -814,7 +937,18 @@ export default function App() {
     }
   }
 
-  const submitUserInput = (response: UserInputResponse) => {
+  const updateUserInput = (pending: Project["userInput"]) => {
+    setUserInput(pending);
+    if (pending?.messageId)
+      setMessages((messages) =>
+        messages.map((message) =>
+          message.id === pending.messageId
+            ? { ...message, userInput: pending }
+            : message,
+        ),
+      );
+  };
+  const submitUserInput = async (response: UserInputResponse) => {
     if (!userInput || busy || projectBusy) return;
     if (!config.apiKey || !config.model) {
       setSettings(true);
@@ -823,28 +957,71 @@ export default function App() {
     try {
       const answer = answerQuestions(userInput, response);
       if (answer.kind === "next") {
-        setUserInput(answer.pending);
+        updateUserInput(answer.pending);
         return;
       }
-      setMessages((messages) => [
-        ...messages.filter((message) => message.id !== answer.message.id),
-        answer.message,
-      ]);
-      void runAI(answer.context);
+      const project = projectsRef.current.find(
+        (project) => project.id === activeId,
+      );
+      const questionId =
+        userInput.messageId ||
+        [...messages]
+          .reverse()
+          .find(
+            (message) =>
+              message.role === "assistant" &&
+              message.text === questionText(userInput.request),
+          )?.id;
+      if (!project || !questionId) return;
+      const previous = project.conversation.nodes.find(
+        (node) =>
+          node.parentId === questionId &&
+          node.message.role === "user" &&
+          node.message.text === answer.message.text,
+      );
+      const failed =
+        previous &&
+        [...project.conversation.nodes]
+          .reverse()
+          .find(
+            (node) =>
+              node.parentId === previous.message.id &&
+              (node.message.status === "error" ||
+                node.message.status === "cancelled"),
+          );
+      if (failed) {
+        await retryResponse(failed.message.id);
+        return;
+      }
+      const restored = restoreConversation(project, questionId);
+      const base = restored.history.items[restored.history.index];
+      updateProject(project.id, () => ({
+        ...restored,
+        messages: [
+          ...restored.messages,
+          {
+            ...answer.message,
+            id: crypto.randomUUID(),
+            canvas: base,
+            userInput,
+            clarification: null,
+          },
+        ],
+      }));
+      await runAI(answer.context, undefined, base);
     } catch (error) {
       tell((error as Error).message, true);
     }
   };
   const cancelUserInput = () => {
     setUserInput(null);
-    setMessages((messages) => [
-      ...messages,
-      {
-        role: "assistant",
-        text: t("Questions cancelled."),
-        status: "cancelled",
-      },
-    ]);
+    setMessages((messages) =>
+      messages.map((message, index) =>
+        index === messages.length - 1
+          ? { ...message, userInput: null }
+          : message,
+      ),
+    );
   };
 
   const sendChat = async (inputText: string, files: ChatAttachment[]) => {
@@ -877,6 +1054,9 @@ export default function App() {
         text,
         attachments: files,
         selectedIds: selection.ids,
+        canvas: drawing,
+        userInput: null,
+        clarification: null,
       },
     ]);
     await runAI({
@@ -893,50 +1073,126 @@ export default function App() {
     });
   };
   const retryResponse = async (id: string) => {
-    if (busy || review) return;
-    // assistant-ui reload supplies the parent user ID; direct callers may supply
-    // the failed assistant ID. Both must resolve to this checkpoint's request.
-    const recoveryIndex = messages.findIndex(
-      (message) => message.id === recoveryPoint.current?.replyId,
+    if (busy || review || abort.current) return;
+    if (!config.apiKey || !config.model) {
+      setSettings(true);
+      return;
+    }
+    const project = projectsRef.current.find(
+      (project) => project.id === activeId,
     );
-    const recoveryUser = messages
-      .slice(0, recoveryIndex)
-      .reverse()
-      .find((message) => message.role === "user");
+    if (!project) return;
+    const node = project.conversation.nodes.find(
+      (node) => node.message.id === id,
+    );
+    const userId = node?.message.role === "user" ? id : node?.parentId;
+    if (!userId) return;
+    const reply =
+      node?.message.role === "assistant"
+        ? node.message
+        : [...project.conversation.nodes]
+            .reverse()
+            .find((node) => node.parentId === userId)?.message;
+    const restored = restoreConversation(project, userId);
+    const user = restored.messages.at(-1)!;
+    const base = restored.history.items[restored.history.index];
+    const retry = reply?.status === "error" || reply?.status === "cancelled";
     if (
-      recoveryPoint.current &&
-      messages[recoveryIndex]?.resumable &&
-      (recoveryPoint.current.replyId === id || recoveryUser?.id === id)
+      retry &&
+      !sameCanvas(base, project.history.items[project.history.index])
     ) {
-      const checkpoint = recoveryPoint.current.checkpoint;
-      await runAI(checkpoint.context, checkpoint);
+      const error =
+        "Revision conflict: the committed drawing changed. Start a new request.";
+      setMessages((messages) =>
+        messages.map((message) =>
+          message.id === reply?.id
+            ? { ...message, error, status: "error" }
+            : message,
+        ),
+      );
       return;
     }
-    const index = messages.findIndex((message) => message.id === id);
-    const preceding =
-      index >= 0
-        ? messages.slice(0, index + (messages[index].role === "user" ? 1 : 0))
-        : messages;
-    const user = [...preceding]
-      .reverse()
-      .find((message) => message.role === "user");
-    if (!user) return;
-    if (retryContext.current || clarification) {
-      await runAI(retryContext.current || clarification!);
-      return;
+    const checkpoint =
+      retry && reply.recovery
+        ? { ...reply.recovery, attempt: reply.recovery.attempt + 1 }
+        : undefined;
+    const context = checkpoint?.context ||
+      reply?.request || {
+        ...drawingContext(
+          user.text,
+          restored.messages.slice(0, -1),
+          base,
+          user.reference?.data,
+          user.selectedIds?.[0],
+          undefined,
+          user.selectedIds,
+        ),
+        attachments: user.attachments,
+      };
+    updateProject(project.id, () => restored);
+    setSelection(EMPTY_SELECTION);
+    await runAI(context, checkpoint, base, retry ? reply.id : undefined);
+  };
+  const switchConversation = (id: string) => {
+    if (busy || review || projectBusy || abort.current) return;
+    updateProject(activeId, (project) => restoreConversation(project, id));
+    setSelection(EMPTY_SELECTION);
+    editContext.current = null;
+  };
+  const editMessage = async (
+    id: string,
+    text: string,
+    files: ChatAttachment[],
+  ) => {
+    if (busy || review || abort.current || !text.trim()) return;
+    if (!config.apiKey || !config.model) {
+      setSettings(true);
+      throw new Error(t("Connect an AI model to start drawing."));
     }
-    await runAI({
-      ...drawingContext(
-        user.text,
-        preceding.slice(0, preceding.indexOf(user)),
-        drawing,
-        user.reference?.data,
-        user.selectedIds?.[0],
-        undefined,
-        user.selectedIds,
-      ),
-      attachments: user.attachments,
-    });
+    const project = projectsRef.current.find(
+      (project) => project.id === activeId,
+    );
+    const node = project?.conversation.nodes.find(
+      (node) => node.message.id === id,
+    );
+    if (!project || !node?.parentId || node.message.role !== "user") return;
+    let restored = restoreConversation(project, node.parentId);
+    const base =
+      node.message.canvas === undefined
+        ? restored.history.items[restored.history.index]
+        : node.message.canvas;
+    if (!sameCanvas(base, restored.history.items[restored.history.index]))
+      restored = { ...restored, history: pushHistory(restored.history, base) };
+    const edited: ChatMessage = {
+      ...node.message,
+      id: crypto.randomUUID(),
+      text: text.trim(),
+      attachments: files,
+      canvas: base,
+      userInput: null,
+      clarification: null,
+    };
+    updateProject(project.id, () => ({
+      ...restored,
+      messages: [...restored.messages, edited],
+    }));
+    setSelection(EMPTY_SELECTION);
+    await runAI(
+      {
+        ...drawingContext(
+          edited.text,
+          restored.messages,
+          base,
+          edited.reference?.data,
+          edited.selectedIds?.[0],
+          undefined,
+          edited.selectedIds,
+        ),
+        attachments: files,
+      },
+      undefined,
+      base,
+    );
   };
   const useExample = async () => {
     const projectId = activeIdRef.current;
@@ -1436,6 +1692,7 @@ export default function App() {
           key={activeId}
           ref={composer}
           messages={messages}
+          conversation={activeProject!.conversation}
           busy={busy}
           disabled={projectBusy || !!review || (!!userInput && !busy)}
           initialDraft={chatInput}
@@ -1445,6 +1702,8 @@ export default function App() {
           onSend={sendChat}
           onCancel={cancelGeneration}
           onRetry={retryResponse}
+          onEdit={editMessage}
+          onBranch={switchConversation}
           onAttachmentError={(message) => tell(message, true)}
         >
           <aside className="assistant-panel">
@@ -1462,10 +1721,16 @@ export default function App() {
                 </p>
               </div>
             </div>
+            <ConversationHistory
+              conversation={activeProject!.conversation}
+              disabled={busy || !!review || projectBusy}
+              onRestore={switchConversation}
+            />
             <ChatTranscript
               messages={messages}
               hasDrawing={!!drawing}
               onSuggest={(text) => composer.current?.setDraft(text)}
+              onRestore={switchConversation}
             />
             <div className="assistant-controls">
               {review ? (
@@ -1496,7 +1761,7 @@ export default function App() {
                       state={userInput.state}
                       disabled={busy || projectBusy}
                       onChange={(state) =>
-                        setUserInput({ ...userInput, state })
+                        updateUserInput({ ...userInput, state })
                       }
                       onSubmit={submitUserInput}
                       onCancel={cancelUserInput}

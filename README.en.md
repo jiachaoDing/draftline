@@ -91,6 +91,7 @@ Preview production routing with `npm run build` followed by `npm run dev:worker`
 - **Projects stay in browser storage.** IndexedDB holds drawings, conversations and attachments, scoped to the current origin and browser profile. Export important drawings for safekeeping.
 - **You manage model credentials.** Settings use browser local storage; requests pass through the application server to your selected provider. Credentials are kept separate from drawing prompts, project records and exports.
 - **Validation precedes commits.** Generated code runs in an isolated iframe and passes sanitization and SVG checks before entering drawing history. Cancellation, failures and incomplete responses preserve the committed drawing.
+- **Conversation branches restore their canvases.** Edit a user message, regenerate a reply, switch versions or continue from any message. Conversation history restores saved branches and their descendants. Execution checkpoints, staged tools and review proposals survive refresh; retries update the original failed reply.
 - **Review generated measurements.** The application checks structure and scale conventions; users must verify geometric relationships and suitability for their intended use.
 
 ## Stack and documentation
@@ -100,7 +101,7 @@ Preview production routing with `npm run build` followed by `npm run dev:worker`
 | UI and conversation        | React, TypeScript, Vite, assistant-ui                         |
 | Drawing and source editing | SVG, CodeMirror 6, Prettier, DOMPurify, svg-pan-zoom          |
 | Incremental edits          | OpenAI Codex Rust apply-patch engine compiled to browser WASM |
-| API and streaming          | Hono, OpenAI JavaScript SDK, SSE, Zod                         |
+| API and streaming          | Hono, Vercel AI SDK, OpenAI-compatible provider, SSE, Zod     |
 | Storage and deployment     | IndexedDB / idb, Cloudflare Workers / Static Assets           |
 | Verification               | Vitest, Playwright, Biome                                     |
 

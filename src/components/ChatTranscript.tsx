@@ -1,4 +1,5 @@
 import { t, useLocale } from "../lib/i18n";
+import { createContext, useContext } from "react";
 import {
   ArrowDown,
   ArrowLeft,
@@ -6,12 +7,18 @@ import {
   Copy,
   RotateCcw,
   Sparkles,
+  Pencil,
+  History,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import {
   ActionBarPrimitive,
   MessagePrimitive,
   ThreadPrimitive,
   useAuiState,
+  ComposerPrimitive,
+  BranchPickerPrimitive,
 } from "@assistant-ui/react";
 import { MarkdownTextPrimitive } from "@assistant-ui/react-markdown";
 import type { ChatMessage } from "../lib/contracts";
@@ -19,14 +26,31 @@ import AgentActivities from "./AgentActivities";
 import { welcome } from "../lib/projects";
 
 const Markdown = () => <MarkdownTextPrimitive />;
+const RestoreContext = createContext<(id: string) => void>(() => {});
+
+function EditMessage() {
+  return (
+    <ComposerPrimitive.Root className="message-edit">
+      <ComposerPrimitive.Input aria-label={t("Edit message")} />
+      <div className="message-actions">
+        <ComposerPrimitive.Cancel>{t("Cancel")}</ComposerPrimitive.Cancel>
+        <ComposerPrimitive.Send>
+          {t("Save and regenerate")}
+        </ComposerPrimitive.Send>
+      </div>
+    </ComposerPrimitive.Root>
+  );
+}
 
 function Message() {
   useLocale();
   const metadata = useAuiState((state) => state.message.metadata.custom);
   const message = metadata.draftline as ChatMessage | undefined;
+  const staged = !!message?.recovery?.session?.changed;
   const index = metadata.index as number;
-  const isLast = useAuiState((state) => state.message.isLast);
   const role = useAuiState((state) => state.message.role);
+  const running = useAuiState((state) => state.thread.isRunning);
+  const restore = useContext(RestoreContext);
   if (!message)
     return (
       <MessagePrimitive.Root className={`chat-message ${role}`}>
@@ -117,14 +141,21 @@ function Message() {
                   ? t("Review proposed changes before applying")
                   : message.status === "cancelled"
                     ? t("Stopped")
-                    : message.resumable
+                    : message.recovery?.session?.changed
                       ? t(
                           "Completion failed — changes staged, not applied; continue from the failed step",
                         )
                       : t("Response incomplete — drawing unchanged")}
           </small>
         )}
-        {message.text &&
+        {message.error && (
+          <div className="message-error" role="alert">
+            {t(message.error)}
+          </div>
+        )}
+        {(message.text ||
+          message.status === "error" ||
+          message.status === "cancelled") &&
           message.status !== "streaming" &&
           message.status !== "validating" && (
             <ActionBarPrimitive.Root className="message-actions">
@@ -134,22 +165,64 @@ function Message() {
               >
                 <Copy size={13} />
               </ActionBarPrimitive.Copy>
-              {isLast &&
-                (message.status === "error" ||
-                  message.status === "cancelled") && (
-                  <ActionBarPrimitive.Reload
-                    aria-label={t(
-                      message.resumable
-                        ? "Continue from failed step"
+              {message.role === "user" && (
+                <ActionBarPrimitive.Edit
+                  disabled={running}
+                  aria-label={t("Edit message")}
+                >
+                  <Pencil size={13} />
+                </ActionBarPrimitive.Edit>
+              )}
+              {message.id && (
+                <button
+                  disabled={running}
+                  aria-label={t("Continue from here")}
+                  title={t("Continue from here")}
+                  onClick={() => restore(message.id!)}
+                >
+                  <History size={13} />
+                </button>
+              )}
+              {message.role === "assistant" && index > 0 && (
+                <ActionBarPrimitive.Reload
+                  disabled={running}
+                  aria-label={t(
+                    staged
+                      ? "Continue from failed step"
+                      : message.status === "complete"
+                        ? "Regenerate response"
                         : "Retry response",
-                    )}
-                  >
-                    <RotateCcw size={13} />
-                    {t(
-                      message.resumable ? "Continue from failed step" : "Retry",
-                    )}
-                  </ActionBarPrimitive.Reload>
-                )}
+                  )}
+                >
+                  <RotateCcw size={13} />
+                  {t(
+                    staged
+                      ? "Continue from failed step"
+                      : message.status === "complete"
+                        ? "Regenerate"
+                        : "Retry",
+                  )}
+                </ActionBarPrimitive.Reload>
+              )}
+              <BranchPickerPrimitive.Root
+                className="branch-picker"
+                hideWhenSingleBranch
+              >
+                <BranchPickerPrimitive.Previous
+                  disabled={running}
+                  aria-label={t("Previous version")}
+                >
+                  <ChevronLeft size={13} />
+                </BranchPickerPrimitive.Previous>
+                <BranchPickerPrimitive.Number /> /{" "}
+                <BranchPickerPrimitive.Count />
+                <BranchPickerPrimitive.Next
+                  disabled={running}
+                  aria-label={t("Next version")}
+                >
+                  <ChevronRight size={13} />
+                </BranchPickerPrimitive.Next>
+              </BranchPickerPrimitive.Root>
             </ActionBarPrimitive.Root>
           )}
       </div>
@@ -161,59 +234,65 @@ type Props = {
   messages: ChatMessage[];
   hasDrawing: boolean;
   onSuggest: (text: string) => void;
+  onRestore: (id: string) => void;
 };
 export default function ChatTranscript({
   messages,
   hasDrawing,
   onSuggest,
+  onRestore,
 }: Props) {
   useLocale();
   return (
-    <ThreadPrimitive.Viewport className="assistant-content" autoScroll>
-      {messages.length === 1 && (
-        <div className="assistant-intro">
-          <div className="intro-art">
-            <span />
-            <span />
-            <span />
-            <Sparkles size={18} />
+    <RestoreContext.Provider value={onRestore}>
+      <ThreadPrimitive.Viewport className="assistant-content" autoScroll>
+        {messages.length === 1 && (
+          <div className="assistant-intro">
+            <div className="intro-art">
+              <span />
+              <span />
+              <span />
+              <Sparkles size={18} />
+            </div>
+            <h3>{t("Your idea, engineered.")}</h3>
+            <p>
+              {t("Describe a part or a change in plain language.")}
+              <br />
+              {t("I’ll take care of the geometry.")}
+            </p>
           </div>
-          <h3>{t("Your idea, engineered.")}</h3>
-          <p>
-            {t("Describe a part or a change in plain language.")}
-            <br />
-            {t("I’ll take care of the geometry.")}
-          </p>
-        </div>
-      )}
-      <ThreadPrimitive.Messages components={{ Message }} />
-      {messages.length === 1 && (
-        <div className="suggestions">
-          <span>{t("TRY ASKING")}</span>
-          {(hasDrawing
-            ? [
-                "Make the plate 140 mm wide",
-                "Change all holes to Ø12 mm",
-                "Round the corners to R12",
-              ]
-            : [
-                "Draw a 100 × 60 mm plate with R5 corners",
-                "Create a Ø50 mm disk with a Ø10 center hole",
-              ]
-          ).map((text) => (
-            <button key={text} onClick={() => onSuggest(t(text))}>
-              {t(text)}
-              <ArrowLeft size={12} />
-            </button>
-          ))}
-        </div>
-      )}
-      <ThreadPrimitive.ScrollToBottom
-        className="scroll-to-latest"
-        aria-label={t("Scroll to latest message")}
-      >
-        <ArrowDown size={16} />
-      </ThreadPrimitive.ScrollToBottom>
-    </ThreadPrimitive.Viewport>
+        )}
+        <ThreadPrimitive.Messages
+          components={{ Message, EditComposer: EditMessage }}
+        />
+        {messages.length === 1 && (
+          <div className="suggestions">
+            <span>{t("TRY ASKING")}</span>
+            {(hasDrawing
+              ? [
+                  "Make the plate 140 mm wide",
+                  "Change all holes to Ø12 mm",
+                  "Round the corners to R12",
+                ]
+              : [
+                  "Draw a 100 × 60 mm plate with R5 corners",
+                  "Create a Ø50 mm disk with a Ø10 center hole",
+                ]
+            ).map((text) => (
+              <button key={text} onClick={() => onSuggest(t(text))}>
+                {t(text)}
+                <ArrowLeft size={12} />
+              </button>
+            ))}
+          </div>
+        )}
+        <ThreadPrimitive.ScrollToBottom
+          className="scroll-to-latest"
+          aria-label={t("Scroll to latest message")}
+        >
+          <ArrowDown size={16} />
+        </ThreadPrimitive.ScrollToBottom>
+      </ThreadPrimitive.Viewport>
+    </RestoreContext.Provider>
   );
 }

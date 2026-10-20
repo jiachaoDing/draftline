@@ -47,6 +47,9 @@
                     "group": [
                       "openai",
                       "openai/**",
+                      "ai",
+                      "ai/**",
+                      "@ai-sdk/**",
                       "hono",
                       "hono/**",
                       "@hono/**",

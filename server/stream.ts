@@ -1,6 +1,9 @@
 import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import OpenAI from "openai";
+import { APICallError } from "ai";
+import { modelStream } from "./model-stream";
+import { toolStreamPolicy } from "./tool-stream-policy";
 import { userInputResultSchema } from "../src/lib/contracts";
 import { agentCallsResultSchema } from "../src/lib/agent-contracts";
 import { toolPendingSchema } from "../src/lib/agent-activity";
@@ -9,7 +12,7 @@ import { ModelFailure } from "../src/lib/model-failure";
 export class AIStreamError extends ModelFailure {}
 export function providerErrorMessage(error: Error, streaming = false) {
   if (error instanceof ModelFailure) return error.message;
-  if (error instanceof OpenAI.APIError) {
+  if (error instanceof OpenAI.APIError || APICallError.isInstance(error)) {
     const messages: Record<number, string> = {
       400: "The provider rejected the request. Check model compatibility and image support.",
       401: "The API key was rejected. Check your credentials.",
@@ -18,7 +21,10 @@ export function providerErrorMessage(error: Error, streaming = false) {
       429: "Provider rate limit or quota reached. Please try again later.",
     };
     return (
-      messages[error.status || 0] ||
+      messages[
+        (error instanceof OpenAI.APIError ? error.status : error.statusCode) ||
+          0
+      ] ||
       (streaming
         ? "The AI provider interrupted its stream. Please try again."
         : "The AI provider is unavailable. Check your connection and try again.")
@@ -72,40 +78,50 @@ export function streamAI<T>(
       heartbeat = setInterval(() => {
         if (!output.aborted) void output.write(": keep-alive\n\n");
       }, 15_000);
-      const upstream = await client.chat.completions.create(
-        { ...params, stream: true },
-        { signal: controller.signal },
-      );
+      const upstream = modelStream(client, params, controller.signal);
       let content = "";
       let finishReason: string | null = null;
       const calls = new Map<
         number,
         { id: string; name: string; arguments: string }
       >();
-      const announced = new Set<number>();
+      const pendingIds = new Map<string, number>();
+      const checkToolPolicy = toolStreamPolicy(
+        allowUserInput,
+        allowAgentTools ? 200_000 : 32000,
+      );
       for await (const chunk of upstream) {
         if (controller.signal.aborted || output.aborted) break;
         armWatchdog();
-        const choice = chunk.choices?.find((choice) => choice.index === 0);
-        if (choice?.delta?.refusal)
-          throw new AIStreamError(
-            "The model declined this request. Adjust your instructions.",
-          );
-        const text = choice?.delta?.content;
-        for (const delta of choice?.delta?.tool_calls || []) {
-          if (!allowUserInput || delta.index < 0 || delta.index > 3)
+        if (chunk.type === "raw") checkToolPolicy(chunk.rawValue);
+        if (chunk.type === "error") throw chunk.error;
+        const text = chunk.type === "text-delta" ? chunk.text : undefined;
+        if (chunk.type === "tool-input-start") {
+          const index = pendingIds.size;
+          if (!allowUserInput || index > 3)
             throw new AIStreamError(
               "The model returned an unsupported tool call.",
             );
-          const call = calls.get(delta.index) || {
-            id: "",
-            name: "",
-            arguments: "",
+          pendingIds.set(chunk.id, index);
+          const pending = toolPendingSchema.safeParse({
+            index,
+            name: chunk.toolName,
+          });
+          if (pending.success)
+            await output.writeSSE({
+              event: "tool_pending",
+              data: JSON.stringify(pending.data),
+            });
+        }
+        if (chunk.type === "tool-call") {
+          const call = {
+            id: chunk.toolCallId,
+            name: chunk.toolName,
+            arguments:
+              chunk.invalid && typeof chunk.input === "string"
+                ? chunk.input
+                : JSON.stringify(chunk.input),
           };
-          if (delta.id) call.id += delta.id;
-          if (delta.function?.name) call.name += delta.function.name;
-          if (delta.function?.arguments)
-            call.arguments += delta.function.arguments;
           if (
             call.arguments.length > (allowAgentTools ? 200_000 : 32000) ||
             call.id.length > 200 ||
@@ -114,18 +130,7 @@ export function streamAI<T>(
             throw new AIStreamError(
               "The model returned an oversized tool call.",
             );
-          calls.set(delta.index, call);
-          const pending = toolPendingSchema.safeParse({
-            index: delta.index,
-            name: call.name,
-          });
-          if (pending.success && !announced.has(delta.index)) {
-            announced.add(delta.index);
-            await output.writeSSE({
-              event: "tool_pending",
-              data: JSON.stringify(pending.data),
-            });
-          }
+          calls.set(pendingIds.get(call.id) ?? calls.size, call);
         }
         if (text) {
           content += text;
@@ -138,9 +143,8 @@ export function streamAI<T>(
             data: JSON.stringify({ text }),
           });
         }
-        if (choice?.finish_reason) {
-          finishReason = choice.finish_reason;
-          break;
+        if (chunk.type === "finish") {
+          finishReason = chunk.finishReason.replaceAll("-", "_");
         }
       }
       if (timedOut)
@@ -262,6 +266,12 @@ export function streamAI<T>(
         });
     } catch (error) {
       if (!output.aborted && !c.req.raw.signal.aborted) {
+        const status =
+          error instanceof OpenAI.APIError
+            ? error.status
+            : APICallError.isInstance(error)
+              ? error.statusCode
+              : undefined;
         const message = timedOut
           ? "The model stopped sending data. Please try again."
           : providerErrorMessage(error as Error, true);
@@ -273,9 +283,7 @@ export function streamAI<T>(
               ? error.info
               : timedOut ||
                   (!(error instanceof ModelFailure) &&
-                    (!(error instanceof OpenAI.APIError) ||
-                      !error.status ||
-                      error.status >= 500))
+                    (!status || status >= 500))
                 ? { code: "connection", retryable: true }
                 : {}),
           }),

@@ -25,6 +25,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@ai-sdk/openai-compatible": "^3.0.73",
     "@assistant-ui/react": "^0.15.29",
     "@assistant-ui/react-markdown": "^0.14.23",
     "@codemirror/commands": "6.11.1",
@@ -35,6 +36,7 @@
     "@headlessui/react": "^2.2.10",
     "@hono/node-server": "2.1.4",
     "@viselect/vanilla": "^3.10.1",
+    "ai": "^7.0.145",
     "codemirror": "6.0.2",
     "css-tree": "^3.2.1",
     "dompurify": "3.4.17",

@@ -26,6 +26,7 @@ it("keeps newer composer text when an older project draft renders during autosav
           null,
           createElement(AssistantChat, {
             messages: [],
+            conversation: { headId: null, nodes: [] },
             busy: false,
             disabled: false,
             ref: handle,
@@ -36,6 +37,8 @@ it("keeps newer composer text when an older project draft renders during autosav
             onSend: async () => {},
             onCancel: () => {},
             onRetry: async () => {},
+            onEdit: async () => {},
+            onBranch: () => {},
             onAttachmentError: () => {},
             children: createElement(Composer),
           }),

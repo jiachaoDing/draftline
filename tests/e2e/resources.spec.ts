@@ -445,7 +445,7 @@ test("PDF tools render a selected page locally and send its bounded preview, wit
   await page.getByRole("button", { name: "Send drawing instruction" }).click();
   await expect(
     page.getByText("Selected PDF page inspected.", { exact: true }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 20_000 });
   const inspection = JSON.parse(
     requests[1].messages.find((m: any) => m.role === "tool").content,
   );

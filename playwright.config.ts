@@ -7,6 +7,11 @@ export default defineConfig({
   timeout: 60_000,
   workers: Number(process.env.PLAYWRIGHT_WORKERS || 2),
   retries: 0,
+  // Persistent-profile restarts own a browser process and an independent runner.
+  projects: [
+    { name: "browser-restart", testMatch: "**/browser-restart.spec.ts" },
+    { name: "workspace", testIgnore: "**/browser-restart.spec.ts" },
+  ],
   use: {
     ...devices["Desktop Chrome"],
     channel: process.env.PLAYWRIGHT_CHANNEL || "msedge",

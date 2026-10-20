@@ -134,6 +134,7 @@ export const Preview = forwardRef<PreviewHandle, Props>(
     useEffect(() => send("mode", props.mode), [props.mode, send]);
     return (
       <iframe
+        key={channel}
         ref={frame}
         title={props.title || t("Technical drawing preview")}
         sandbox="allow-scripts"

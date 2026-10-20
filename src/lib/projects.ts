@@ -11,6 +11,12 @@ import {
 import { cleanDrawing, svgToHTML } from "./drawing";
 import { drawingRevision } from "./ai-workflow";
 import { agentActivitySchema, settleActivities } from "./agent-activity";
+import { sourceSchema } from "./agent-contracts";
+import {
+  conversationPath,
+  migrateConversation,
+  recordConversation,
+} from "./conversation";
 
 const referenceSchema = z.object({
   name: z.string().max(500),
@@ -33,7 +39,7 @@ const messageSchema = z
   .object({
     role: z.enum(["user", "assistant"]),
     text: z.string(),
-    id: z.string().optional(),
+    id: z.string().default(() => crypto.randomUUID()),
     status: z
       .enum([
         "streaming",
@@ -50,15 +56,43 @@ const messageSchema = z
     reference: referenceSchema.optional(),
     attachments: attachmentsSchema.optional(),
     selectedIds: z.array(z.string().min(1).max(200)).max(500).optional(),
+    error: z.string().max(3000).optional(),
+    canvas: drawingSchema.nullable().optional(),
+    proposal: drawingSchema.optional(),
+    request: drawingRequestSchema.omit({ config: true }).optional(),
+    userInput: pendingUserInputSchema.nullable().optional(),
+    clarification: drawingRequestSchema
+      .omit({ config: true })
+      .nullable()
+      .optional(),
+    recovery: z
+      .object({
+        projectId: z.string(),
+        baseRevision: z.string().optional(),
+        context: drawingRequestSchema.omit({ config: true }),
+        resources: z.array(attachmentsSchema.element).max(100),
+        session: z
+          .object({
+            source: sourceSchema,
+            drawing: drawingSchema,
+            changed: z.boolean(),
+            patchFailed: z.boolean(),
+            inspectedRevision: z.string().optional(),
+          })
+          .optional(),
+        round: z.number().int().min(0).max(16),
+        attempt: z.number().int().min(0).max(1000),
+      })
+      .optional(),
   })
   .transform((message) => ({
     ...message,
-    resumable: false,
+    resumable: message.status !== "complete" && !!message.recovery,
     activities: settleActivities(message.activities, "cancelled"),
     status:
       message.status === "streaming" ||
       message.status === "validating" ||
-      message.status === "reviewing"
+      (message.status === "reviewing" && !message.proposal)
         ? ("cancelled" as const)
         : message.status,
   }));
@@ -76,6 +110,29 @@ export const projectSchema = z
       })
       .refine((h) => h.index < h.items.length),
     messages: z.array(messageSchema),
+    conversation: z
+      .object({
+        headId: z.string().nullable(),
+        nodes: z.array(
+          z.object({
+            parentId: z.string().nullable(),
+            message: messageSchema,
+          }),
+        ),
+      })
+      .refine((conversation) => {
+        const seen = new Set<string>();
+        for (const node of conversation.nodes) {
+          if (
+            seen.has(node.message.id) ||
+            (node.parentId !== null && !seen.has(node.parentId))
+          )
+            return false;
+          seen.add(node.message.id);
+        }
+        return conversation.headId === null || seen.has(conversation.headId);
+      }, "Invalid conversation branches.")
+      .optional(),
     sketch: referenceSchema.nullable(),
     attachments: attachmentsSchema.default([]),
     chatInput: z.string(),
@@ -87,23 +144,37 @@ export const projectSchema = z
       presentation: z.boolean(),
     }),
   })
-  .transform((project) => ({
-    ...project,
-    createdAt: project.createdAt ?? project.updatedAt,
-    attachments:
-      project.attachments.length || !project.sketch
-        ? project.attachments
-        : [
-            {
-              id: `reference-${project.id}`,
-              name: project.sketch.name,
-              type: "image" as const,
-              size: Math.floor(project.sketch.data.length * 0.75),
-              image: project.sketch.data,
-            },
-          ],
-    sketch: null,
-  }));
+  .transform((project) => {
+    const conversation = project.conversation
+      ? recordConversation(project.messages, project.conversation)
+      : migrateConversation(
+          project.messages,
+          project.history.items,
+          project.history.index,
+        );
+    return {
+      ...project,
+      conversation,
+      messages: conversationPath(conversation).map((message) => ({
+        ...message,
+        activities: message.activities || [],
+      })),
+      createdAt: project.createdAt ?? project.updatedAt,
+      attachments:
+        project.attachments.length || !project.sketch
+          ? project.attachments
+          : [
+              {
+                id: `reference-${project.id}`,
+                name: project.sketch.name,
+                type: "image" as const,
+                size: Math.floor(project.sketch.data.length * 0.75),
+                image: project.sketch.data,
+              },
+            ],
+      sketch: null,
+    };
+  });
 export type Project = Omit<z.infer<typeof projectSchema>, "messages"> & {
   messages: ChatMessage[];
 };
@@ -124,6 +195,7 @@ export function newProject(
   while (names.has(name.toLocaleLowerCase()))
     name = `${untitledName} ${suffix++}`;
   const createdAt = Date.now();
+  const conversation = migrateConversation([welcome], [drawing], 0);
   return {
     id: crypto.randomUUID(),
     name: drawing?.title || name,
@@ -131,7 +203,8 @@ export function newProject(
     createdAt,
     updatedAt: createdAt,
     history: { items: [drawing], index: 0 },
-    messages: [{ ...welcome }],
+    messages: conversationPath(conversation),
+    conversation,
     sketch: null,
     attachments: [],
     chatInput: "",
@@ -171,6 +244,7 @@ export async function saveProject(project: Project) {
     updatedAt: project.updatedAt,
     history: project.history,
     messages: project.messages,
+    conversation: project.conversation,
     sketch: project.sketch,
     attachments: project.attachments,
     chatInput: project.chatInput,

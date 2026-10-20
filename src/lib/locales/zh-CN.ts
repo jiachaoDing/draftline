@@ -1,4 +1,14 @@
 export const zhCN: Record<string, string> = {
+  "Edit message": "编辑消息",
+  "Save and regenerate": "保存并重新生成",
+  "Continue from here": "从此处继续",
+  "Regenerate response": "重新生成回复",
+  Regenerate: "重新生成",
+  "Previous version": "上一个版本",
+  "Next version": "下一个版本",
+  "Conversation history": "对话历史",
+  "Saved branches": "已保存的分支",
+  "Branch {{number}}": "分支 {{number}}",
   "Completing staged changes": "正在完成暂存修改",
   "Steps succeeded — changes staged, not yet applied":
     "步骤执行成功，修改已暂存，尚未应用",

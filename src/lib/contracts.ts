@@ -170,6 +170,13 @@ export type ChatMessage = {
   reference?: { data: string; name: string };
   attachments?: ChatAttachment[];
   selectedIds?: string[];
+  error?: string;
+  canvas?: Drawing | null;
+  proposal?: Drawing;
+  request?: Omit<DrawingRequest, "config">;
+  recovery?: import("./drawing-agent").DrawingAgentCheckpoint;
+  userInput?: PendingUserInput | null;
+  clarification?: Omit<DrawingRequest, "config"> | null;
 };
 
 export const drawingRequestSchema = z.object({
@@ -205,6 +212,7 @@ export const drawingRequestSchema = z.object({
 export type DrawingRequest = z.infer<typeof drawingRequestSchema>;
 export const pendingUserInputSchema = z
   .object({
+    messageId: z.string().optional(),
     context: drawingRequestSchema.omit({ config: true }),
     request: userInputResultSchema,
     callIndex: z.number().int().min(0),

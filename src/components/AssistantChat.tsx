@@ -16,6 +16,7 @@ import {
   type AttachmentAdapter,
   MessageNotSentError,
   type ComposerRuntime,
+  type ThreadMessage,
 } from "@assistant-ui/react";
 import {
   attachmentsSchema,
@@ -23,11 +24,8 @@ import {
   type ChatMessage,
 } from "../lib/contracts";
 import { ATTACHMENT_ACCEPT, parseAttachment } from "../lib/attachments";
-import {
-  runtimeAttachment,
-  runtimeMessage,
-  savedAttachment,
-} from "../lib/chat-runtime";
+import { runtimeAttachment, savedAttachment } from "../lib/chat-runtime";
+import { runtimeRepository, type Conversation } from "../lib/conversation";
 
 export type AssistantChatHandle = {
   getDraftRevision: () => number;
@@ -49,6 +47,7 @@ export function useComposerText() {
 
 type Props = {
   messages: ChatMessage[];
+  conversation: Conversation;
   busy: boolean;
   disabled: boolean;
   initialDraft: string;
@@ -58,6 +57,12 @@ type Props = {
   onSend: (text: string, attachments: ChatAttachment[]) => Promise<void>;
   onCancel: () => void;
   onRetry: (id: string) => Promise<void>;
+  onEdit: (
+    id: string,
+    text: string,
+    attachments: ChatAttachment[],
+  ) => Promise<void>;
+  onBranch: (id: string) => void;
   onAttachmentError: (message: string) => void;
   children: ReactNode;
 };
@@ -134,9 +139,16 @@ export default forwardRef<AssistantChatHandle, Props>(
       }),
       [],
     );
-    const runtime = useExternalStoreRuntime({
-      messages: props.messages,
-      convertMessage: runtimeMessage,
+    const repository = useMemo(
+      () => runtimeRepository(props.conversation),
+      [props.conversation],
+    );
+    const runtime = useExternalStoreRuntime<ThreadMessage>({
+      messageRepository: repository,
+      setMessages: () => {},
+      unstable_onBranchChange: ({ headId }) => {
+        if (headId) callbacks.current.onBranch(headId);
+      },
       isRunning: props.busy,
       isDisabled: props.disabled,
       onNew: async (message) => {
@@ -158,8 +170,23 @@ export default forwardRef<AssistantChatHandle, Props>(
         }
       },
       onCancel: async () => callbacks.current.onCancel(),
-      onReload: async (id) => {
-        if (id) await callbacks.current.onRetry(id);
+      onEdit: async (message) => {
+        const text = message.content
+          .filter((part) => part.type === "text")
+          .map((part) => part.text)
+          .join("\n");
+        const items = (message.attachments || [])
+          .map(savedAttachment)
+          .filter((item) => item !== undefined);
+        try {
+          await callbacks.current.onEdit(message.sourceId!, text, items);
+        } catch (error) {
+          throw new MessageNotSentError((error as Error).message);
+        }
+      },
+      onReload: async (id, config) => {
+        const targetId = config.sourceId || id;
+        if (targetId) await callbacks.current.onRetry(targetId);
       },
       adapters: { attachments: adapter },
     });

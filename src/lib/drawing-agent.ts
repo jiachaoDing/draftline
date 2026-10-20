@@ -49,6 +49,7 @@ type AgentOptions = {
   onRound: () => void;
   onActivity?: ActivityHandler;
   resources?: ChatAttachment[];
+  onCheckpoint?: (checkpoint: DrawingAgentCheckpoint) => Promise<void>;
 };
 export type DrawingAgentCheckpoint = {
   projectId: string;
@@ -160,6 +161,16 @@ export async function runDrawingAgent(options: AgentOptions): Promise<{
   let round = recovery?.round || 0;
   let attempt = recovery?.attempt || 0;
   let failures = 0;
+  const checkpoint = () =>
+    options.onCheckpoint?.({
+      projectId,
+      baseRevision,
+      context,
+      resources: permittedResources,
+      session: session?.snapshot(),
+      round,
+      attempt,
+    });
   while (true) {
     signal.throwIfAborted();
     if (!options.isCurrent())
@@ -173,6 +184,7 @@ export async function runDrawingAgent(options: AgentOptions): Promise<{
         svg: session.drawing.svg,
         source: session.source,
       };
+    await checkpoint();
     options.onRound();
     const modelId = `model:${round}${attempt ? `:attempt:${attempt}` : ""}`;
     const toolId = (index: number) =>
@@ -469,5 +481,6 @@ export async function runDrawingAgent(options: AgentOptions): Promise<{
       );
     round++;
     attempt = 0;
+    await checkpoint();
   }
 }

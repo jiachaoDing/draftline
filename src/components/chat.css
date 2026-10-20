@@ -65,6 +65,68 @@
   margin-top: 7px;
   color: #8b97aa;
   font-size: 10px;
+  flex-wrap: wrap;
+}
+.branch-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.message-edit {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.message-edit textarea {
+  width: 100%;
+  min-height: 80px;
+  resize: vertical;
+  font: inherit;
+  color: inherit;
+}
+.message-error {
+  color: #a13f32;
+  font-size: 11px;
+  margin-top: 7px;
+  overflow-wrap: anywhere;
+}
+.conversation-history {
+  position: relative;
+  margin: 0 18px;
+  font-size: 11px;
+  color: #67788f;
+}
+.conversation-history summary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  padding: 7px 0;
+}
+.conversation-history nav {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 240px;
+  overflow: auto;
+  z-index: 20;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px #24365620;
+}
+.conversation-history nav button {
+  width: 100%;
+  padding: 10px;
+  text-align: left;
+  display: grid;
+  gap: 4px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--line);
+}
+.conversation-history nav button[aria-current="true"] {
+  background: #edf2ff;
 }
 .message-actions button {
   display: flex;
