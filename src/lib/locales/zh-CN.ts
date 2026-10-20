@@ -1,4 +1,16 @@
 export const zhCN: Record<string, string> = {
+  "Completing staged changes": "正在完成暂存修改",
+  "Steps succeeded — changes staged, not yet applied":
+    "步骤执行成功，修改已暂存，尚未应用",
+  "Completion failed — changes staged, not applied; continue from the failed step":
+    "收尾失败，进度已保留，图纸尚未应用；可从失败步骤继续",
+  "Continue from failed step": "从失败步骤继续",
+  "Retrying model response from failed step": "正在从失败步骤重试模型回复",
+  "The model returned invalid JSON.": "模型返回的 JSON 无效。",
+  "The model returned an incomplete drawing response.":
+    "模型返回的绘图响应不完整。",
+  "The model returned an invalid drawing completion.":
+    "模型返回的绘图完成信号无效。",
   "Reasoning effort": "推理强度",
   Automatic: "自动",
   "Provider default": "服务商默认",
@@ -14,8 +26,16 @@ export const zhCN: Record<string, string> = {
     "自动模式下，GPT-5/GPT-6 和 o 系列推理模型使用 high。可用档位取决于服务商；较高强度可能增加耗时和 Token 用量。",
   "Choose an image, SVG, PDF, DXF, or text file.":
     "请选择图片、SVG、PDF、DXF 或文本文件。",
-  "Text attachments must contain at most 100,000 characters.":
-    "文本附件不能超过 100,000 个字符。",
+  "Listing project resources": "正在列出项目资源",
+  "Inspecting project resource": "正在查看项目资源",
+  "Reading resource segment": "正在分段读取资源",
+  "Placing SVG resource": "正在放置 SVG 资源",
+  "Transforming drawing object": "正在变换图纸对象",
+  "Project resource access completed.": "项目资源访问完成。",
+  "Choose an ASCII DXF file for text inspection and geometry previews.":
+    "请选择文本（ASCII）格式的 DXF 文件，以便读取内容和预览几何图形。",
+  "Accessing permitted resources in the originating project.":
+    "正在访问所属项目中有权限使用的资源。",
   "Stop this drawing's task or resolve its proposal before deleting it.":
     "请先停止此图纸的任务或处理变更提案，再删除图纸。",
   "Close objects panel": "收起对象面板",

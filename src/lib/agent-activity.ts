@@ -2,10 +2,16 @@ import { z } from "zod";
 
 export const activityKindSchema = z.enum([
   "model",
+  "finish_drawing",
   "prepare",
   "read_source",
   "search_source",
   "apply_patch",
+  "list_resources",
+  "inspect_resource",
+  "read_resource",
+  "place_svg",
+  "transform_object",
   "validation",
   "request_user_input",
   "tool",
@@ -13,9 +19,15 @@ export const activityKindSchema = z.enum([
 export const toolPendingSchema = z.object({
   index: z.number().int().min(0).max(3),
   name: z.enum([
+    "finish_drawing",
     "read_source",
     "search_source",
     "apply_patch",
+    "list_resources",
+    "inspect_resource",
+    "read_resource",
+    "place_svg",
+    "transform_object",
     "request_user_input",
   ]),
 });
@@ -59,8 +71,16 @@ export function settleActivities(
 
 export function activityLabel(activity: AgentActivity) {
   const labels: Record<AgentActivity["kind"], string> = {
-    model: "Waiting for model response",
+    model: activity.retry
+      ? "Retrying model response from failed step"
+      : "Waiting for model response",
+    finish_drawing: "Completing staged changes",
     prepare: "Preparing drawing source",
+    list_resources: "Listing project resources",
+    inspect_resource: "Inspecting project resource",
+    read_resource: "Reading resource segment",
+    place_svg: "Placing SVG resource",
+    transform_object: "Transforming drawing object",
     read_source: activity.selected
       ? "Inspecting selected element"
       : "Reading drawing source",

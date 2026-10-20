@@ -66,6 +66,7 @@ export function validateDrawingSource(
     const source = buildSandbox(html, channel, false);
     container.append(frame);
     document.body.append(container);
+    frame.getBoundingClientRect();
     frame.srcdoc = source;
   });
 }

@@ -5,16 +5,19 @@ import { createProvider, parseAIResult } from "./provider";
 import { drawingMessages } from "./messages";
 import { providerErrorMessage, streamAI } from "./stream";
 import { requestUserInputTool } from "./user-input";
-import { drawingTools } from "./drawing-tools";
+import { drawingTools, resourceTools } from "./drawing-tools";
 import { resolveReasoningEffort } from "../src/lib/model-reasoning";
 
-export function createApp(allowLocal = false) {
+export function createApp(
+  allowLocal = false,
+  localOrigin = "http://127.0.0.1:3000",
+) {
   const app = new Hono();
   app.use("/api/*", async (c, next) => {
     c.header("Cache-Control", "no-store");
     c.header("X-Content-Type-Options", "nosniff");
     const origin = c.req.header("origin");
-    const localPreview = allowLocal && origin === "http://127.0.0.1:3000";
+    const localPreview = allowLocal && origin === localOrigin;
     if (origin && origin !== new URL(c.req.url).origin && !localPreview)
       return c.json({ error: "Cross-origin requests are not allowed." }, 403);
     await next();
@@ -64,6 +67,7 @@ export function createApp(allowLocal = false) {
         reasoning_effort: resolveReasoningEffort(input.config),
         tools: [
           requestUserInputTool,
+          ...resourceTools,
           ...(input.mode === "edit" && input.source ? drawingTools : []),
         ],
         parallel_tool_calls: false,
@@ -71,7 +75,7 @@ export function createApp(allowLocal = false) {
       },
       parseAIResult,
       true,
-      input.mode === "edit" && !!input.source,
+      true,
     );
   });
   app.onError((error, c) => {

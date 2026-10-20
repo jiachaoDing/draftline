@@ -56,12 +56,24 @@ export async function parseAttachment(file: File): Promise<ChatAttachment> {
   const complete = await files.send(pending);
   const image = complete.content.find((part) => part.type === "image");
   const content = complete.content.find((part) => part.type === "text");
-  if (content?.type === "text" && content.text.length > 100_000)
+  const extension = file.name.split(".").at(-1)?.toLowerCase();
+  const rawText =
+    content?.type === "text"
+      ? content.text.slice(
+          content.text.indexOf(">\n") + 2,
+          -"\n</attachment>".length,
+        )
+      : undefined;
+  if (extension === "dxf" && rawText?.startsWith("AutoCAD Binary DXF"))
     throw new Error(
-      "Text attachments must contain at most 100,000 characters.",
+      "Choose an ASCII DXF file for text inspection and geometry previews.",
+    );
+  const textLimit = extension === "svg" ? 4 : extension === "dxf" ? 8 : 2;
+  if (content?.type === "text" && file.size > textLimit * 1024 * 1024)
+    throw new Error(
+      `This ${extension || "text"} resource must be smaller than ${textLimit} MB.`,
     );
   const document = complete.content.find((part) => part.type === "file");
-  const extension = file.name.split(".").at(-1)?.toLowerCase();
   return attachmentSchema.parse({
     id: complete.id,
     name: file.name || "Pasted sketch",
@@ -76,7 +88,8 @@ export async function parseAttachment(file: File): Promise<ChatAttachment> {
             ? "dxf"
             : "text",
     image: image?.type === "image" ? image.image : undefined,
-    text: content?.type === "text" ? content.text : undefined,
+    text: rawText,
+    textFormat: content?.type === "text" ? "raw" : undefined,
     file:
       document?.type === "file"
         ? `data:application/pdf;base64,${document.data}`

@@ -21,7 +21,7 @@ const config = {
 };
 
 describe("provider message construction", () => {
-  it("forwards native PDF files, images and textual SVG/DXF references only on their explicit request", () => {
+  it("sends attachment metadata without default source, image or PDF injection", () => {
     const input = drawingRequestSchema.parse({
       config,
       mode: "generate",
@@ -52,27 +52,59 @@ describe("provider message construction", () => {
       ],
     });
     const content = drawingMessages(input).at(-1)!.content;
-    expect(content).toEqual(
-      expect.arrayContaining([
-        {
-          type: "file",
-          file: {
-            filename: "sheet.pdf",
-            file_data: "data:application/pdf;base64,JVBERg==",
-          },
-        },
-        {
-          type: "image_url",
-          image_url: { url: "data:image/png;base64,AAAA", detail: "high" },
-        },
-      ]),
-    );
-    expect(JSON.stringify(content)).toContain("ENTITIES");
-    expect(JSON.stringify(content)).toContain("<svg/>");
+    expect(JSON.stringify(content)).not.toContain("file_data");
+    expect(JSON.stringify(content)).not.toContain("image_url");
+    expect(JSON.stringify(content)).not.toContain("ENTITIES");
+    expect(JSON.stringify(content)).not.toContain("<svg/>");
+    expect(JSON.stringify(content)).toContain("sheet.pdf");
+    expect(JSON.stringify(content)).toContain("drawing.svg");
     expect(JSON.stringify(content)).not.toContain(config.apiKey);
     const next = drawingMessages({ ...input, attachments: [] });
     expect(JSON.stringify(next)).not.toContain("file_data");
     expect(JSON.stringify(next)).not.toContain("image_url");
+  });
+  it("attaches a selected-page visual only after tool access, preserving matching calls/results", () => {
+    const input = drawingRequestSchema.parse({
+      config,
+      mode: "generate",
+      instruction: "Inspect",
+      resources: [],
+      agentTurns: [
+        {
+          questionRound: 0,
+          content: "",
+          calls: [
+            {
+              id: "preview",
+              name: "inspect_resource",
+              arguments: '{"resource_id":"pdf","preview":true,"page":2}',
+            },
+          ],
+          results: ['{"ok":true}'],
+          previews: [
+            {
+              resourceId: "pdf",
+              name: "sheet.pdf",
+              page: 2,
+              image: "data:image/png;base64,AAAA",
+            },
+          ],
+        },
+      ],
+    });
+    const messages = drawingMessages(input);
+    expect(messages[3]).toMatchObject({
+      role: "tool",
+      tool_call_id: "preview",
+    });
+    expect(messages[4]).toMatchObject({
+      role: "user",
+      content: [
+        { type: "text", text: expect.stringContaining("page 2") },
+        { type: "image_url" },
+      ],
+    });
+    expect(JSON.stringify(messages)).not.toContain("file_data");
   });
   it("requests localized replies and questions without changing source context or tool contracts", () => {
     for (const language of ["en", "zh-CN"] as const) {
@@ -113,7 +145,10 @@ describe("provider message construction", () => {
       history: [{ role: "assistant", text: "Previous answer" }],
     });
     const messages = drawingMessages(input);
-    expect(messages[0]).toEqual({ role: "system", content: EDIT_PROMPT });
+    expect(messages[0]).toEqual({
+      role: "system",
+      content: expect.stringContaining(EDIT_PROMPT),
+    });
     expect(messages[1]).toEqual({
       role: "assistant",
       content: "Previous answer",
@@ -157,7 +192,10 @@ describe("provider message construction", () => {
       ],
     });
     const messages = drawingMessages(input);
-    expect(messages[0]).toEqual({ role: "system", content: DRAWING_PROMPT });
+    expect(messages[0]).toEqual({
+      role: "system",
+      content: expect.stringContaining(DRAWING_PROMPT),
+    });
     expect(messages.map((m) => m.role)).toEqual([
       "system",
       "user",

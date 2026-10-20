@@ -144,7 +144,11 @@ test("sketch → clarification → generated code → targeted edit → undo/red
   });
   await page.goto("/");
   const frame = page.frameLocator('iframe[title="Technical drawing preview"]');
-  await expect(frame.locator("#plate-outline")).toHaveAttribute("width", "120");
+  await expect(frame.locator("#plate-outline")).toHaveAttribute(
+    "width",
+    "120",
+    { timeout: 10000 },
+  );
   await expect(page.getByText("5 geometry elements")).toBeVisible();
   await expect
     .poll(
@@ -211,9 +215,10 @@ test("sketch → clarification → generated code → targeted edit → undo/red
   await expect(page.locator(".cm-line").nth(1)).toHaveText("<html>");
   await expect(page.locator(".cm-line").nth(2)).toHaveText("  <body>");
   await page.getByRole("button", { name: "Drawing", exact: true }).click();
-  expect(
-    requests.some((r) => JSON.stringify(r).includes("image_url")),
-  ).toBeTruthy();
+  expect(requests.some((r) => JSON.stringify(r).includes("image_url"))).toBe(
+    false,
+  );
+  expect(JSON.stringify(requests)).toContain("Project resource catalog");
 
   await frame.locator("#hole-top-left").click();
   await expect(
@@ -637,7 +642,7 @@ test("projects and large references survive a full browser restart", async ({
   const options = {
     channel: process.env.PLAYWRIGHT_CHANNEL || "msedge",
     headless: true,
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: test.info().project.use.baseURL,
     viewport: { width: 1440, height: 900 },
   };
   let context = await playwright.chromium.launchPersistentContext(

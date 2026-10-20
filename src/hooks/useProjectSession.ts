@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, type SetStateAction } from "react";
 import type { Drawing } from "../lib/contracts";
 import type { DrawingChanges } from "../lib/drawing-changes";
 import type { DrawingContext } from "../lib/ai-workflow";
+import type { DrawingAgentCheckpoint } from "../lib/drawing-agent";
 
 function newSession() {
   return {
@@ -11,6 +12,12 @@ function newSession() {
     abort: { current: null as AbortController | null },
     reply: { current: null as string | null },
     retry: { current: null as DrawingContext | null },
+    recovery: {
+      current: null as {
+        replyId: string;
+        checkpoint: DrawingAgentCheckpoint;
+      } | null,
+    },
     editContext: {
       current: null as { drawing: Drawing | null; ids: string[] } | null,
     },

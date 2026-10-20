@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { AgentActivity } from "./agent-activity";
+import { resourceMetadataSchema } from "./resource-contracts";
 import {
   agentCallsResultSchema,
   agentTurnSchema,
@@ -119,7 +120,11 @@ export const attachmentSchema = z.object({
     .max(11_000_000)
     .regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/)
     .optional(),
-  text: z.string().max(100_000).optional(),
+  text: z
+    .string()
+    .max(8 * 1024 * 1024)
+    .optional(),
+  textFormat: z.literal("raw").optional(),
   file: z
     .string()
     .max(11_000_000)
@@ -161,17 +166,20 @@ export type ChatMessage = {
   code?: string;
   received?: number;
   activities?: AgentActivity[];
+  resumable?: boolean;
   reference?: { data: string; name: string };
   attachments?: ChatAttachment[];
   selectedIds?: string[];
 };
 
 export const drawingRequestSchema = z.object({
+  recovering: z.boolean().optional(),
   config: configSchema,
   language: z.enum(["en", "zh-CN"]).optional(),
   mode: z.enum(["generate", "edit"]),
   instruction: z.string().min(1).max(8000),
   attachments: attachmentsSchema.optional(),
+  resources: z.array(resourceMetadataSchema).max(100).optional(),
   image: z
     .string()
     .max(11_000_000)

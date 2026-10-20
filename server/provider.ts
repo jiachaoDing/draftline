@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { resultSchema, type ModelConfig } from "../src/lib/contracts";
+import { ModelFailure } from "../src/lib/model-failure";
 
 export function normalizeBaseURL(value: string, allowLocal = false) {
   const url = new URL(value.trim());
@@ -51,15 +52,39 @@ export function parseAIResult(content: string) {
   let result: unknown;
   try {
     result = JSON.parse(cleaned);
-  } catch {
-    throw new Error(
-      "The model returned invalid JSON. Try again or choose a model that supports structured instructions.",
-    );
+  } catch (error) {
+    const message = (error as Error).message;
+    const position = /position (\d+)/i.exec(message)?.[1];
+    throw new ModelFailure("The model returned invalid JSON.", {
+      code: "invalid_json",
+      retryable: true,
+      diagnostic: {
+        category: !/^[{[]/.test(cleaned)
+          ? "plain_text"
+          : /escape|unicode/i.test(message)
+            ? "invalid_escape"
+            : /end of|unterminated/i.test(message)
+              ? "truncated_json"
+              : "malformed_json",
+        length: Math.min(content.length, 1_200_000),
+        finish: "stop",
+        ...(position ? { position: Number(position) } : {}),
+      },
+    });
   }
   const parsed = resultSchema.safeParse(result);
   if (!parsed.success)
-    throw new Error(
-      "The model returned an incomplete drawing response. Try again with a more capable model.",
+    throw new ModelFailure(
+      "The model returned an incomplete drawing response.",
+      {
+        code: "invalid_response",
+        retryable: true,
+        diagnostic: {
+          category: "invalid_shape",
+          length: Math.min(content.length, 1_200_000),
+          finish: "stop",
+        },
+      },
     );
   return parsed.data;
 }

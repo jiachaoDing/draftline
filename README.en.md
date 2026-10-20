@@ -47,7 +47,7 @@ An example instruction:
 
 > Draw a 120 × 80 mm rectangular plate with 8 mm corner radii. Add a centered 20 mm diameter hole and dimension the outline and hole.
 
-Choose a model with **streamed tool calling**. Image and PDF input also require support from the model and endpoint. Attach up to 10 files totaling 8 MB per message. Your model provider charges for API usage.
+Choose a model with **streamed tool calling** and vision support to inspect image, SVG and PDF previews. Upload up to 10 files totaling 8 MB per message: SVG up to 4 MB, text up to 2 MB, and images/PDF/DXF up to 8 MB each. Files persist as project resources; AI receives a metadata catalog and requests previews, searches or bounded text segments as needed. SVG logos can be sized and centered by measured artwork bounds, or placed by their full canvas to preserve whitespace; unsupported measurements return explicit feedback. Your model provider charges for API usage.
 
 ## Quick start
 

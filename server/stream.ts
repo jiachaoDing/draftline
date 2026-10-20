@@ -4,10 +4,11 @@ import OpenAI from "openai";
 import { userInputResultSchema } from "../src/lib/contracts";
 import { agentCallsResultSchema } from "../src/lib/agent-contracts";
 import { toolPendingSchema } from "../src/lib/agent-activity";
+import { ModelFailure } from "../src/lib/model-failure";
 
-export class AIStreamError extends Error {}
+export class AIStreamError extends ModelFailure {}
 export function providerErrorMessage(error: Error, streaming = false) {
-  if (error instanceof AIStreamError) return error.message;
+  if (error instanceof ModelFailure) return error.message;
   if (error instanceof OpenAI.APIError) {
     const messages: Record<number, string> = {
       400: "The provider rejected the request. Check model compatibility and image support.",
@@ -153,6 +154,18 @@ export function streamAI<T>(
         );
       if (finishReason === "tool_calls" && allowUserInput) {
         const ordered = [...calls.entries()].sort(([a], [b]) => a - b);
+        if (
+          ordered.some(
+            ([, call]) =>
+              !params.tools?.some(
+                (tool) =>
+                  tool.type === "function" && tool.function.name === call.name,
+              ),
+          )
+        )
+          throw new AIStreamError(
+            "The model returned an unsupported tool call.",
+          );
         if (ordered.some(([index], position) => index !== position))
           throw new AIStreamError(
             "The model returned invalid tool call indices. Please try again.",
@@ -201,16 +214,45 @@ export function streamAI<T>(
       if (calls.size)
         throw new AIStreamError(
           "The provider ended a tool call before completion. Please try again.",
+          {
+            code: finishReason === "length" ? "truncated" : "connection",
+            retryable: true,
+            diagnostic: {
+              category:
+                finishReason === "length" ? "token_limit" : "incomplete_stream",
+              length: content.length,
+              finish: finishReason === "length" ? "length" : "missing",
+            },
+          },
         );
       if (finishReason !== "stop")
         throw new AIStreamError(
           finishReason === "length"
             ? "The model response was cut off by its token limit. Please try again with a smaller drawing."
             : "The provider ended the stream before completion. Check streaming support and try again.",
+          {
+            code: finishReason === "length" ? "truncated" : "connection",
+            retryable: true,
+            diagnostic: {
+              category:
+                finishReason === "length" ? "token_limit" : "incomplete_stream",
+              length: content.length,
+              finish: finishReason === "length" ? "length" : "missing",
+            },
+          },
         );
       if (!content.trim())
         throw new AIStreamError(
           "The model returned no content. Check model compatibility.",
+          {
+            code: "invalid_response",
+            retryable: true,
+            diagnostic: {
+              category: "invalid_completion",
+              length: content.length,
+              finish: "stop",
+            },
+          },
         );
       const result = finalize(content);
       if (!controller.signal.aborted && !output.aborted)
@@ -225,7 +267,18 @@ export function streamAI<T>(
           : providerErrorMessage(error as Error, true);
         await output.writeSSE({
           event: "error",
-          data: JSON.stringify({ error: message }),
+          data: JSON.stringify({
+            error: message,
+            ...(error instanceof ModelFailure && error.info
+              ? error.info
+              : timedOut ||
+                  (!(error instanceof ModelFailure) &&
+                    (!(error instanceof OpenAI.APIError) ||
+                      !error.status ||
+                      error.status >= 500))
+                ? { code: "connection", retryable: true }
+                : {}),
+          }),
         });
       }
     } finally {

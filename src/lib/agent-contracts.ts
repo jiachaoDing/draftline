@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { resourcePreviewSchema } from "./resource-contracts";
 
 export const sourceSchema = z.object({
   path: z.literal("drawing.html"),
@@ -23,11 +24,18 @@ export const agentTurnSchema = z
     content: z.string().max(16000),
     calls: z.array(agentCallSchema).min(1).max(4),
     results: z.array(z.string().max(64_000)).min(1).max(4),
+    previews: z.array(resourcePreviewSchema).max(4).optional(),
   })
   .refine((turn) => turn.calls.length === turn.results.length);
 export type VirtualSource = z.infer<typeof sourceSchema>;
 export type AgentCall = z.infer<typeof agentCallSchema>;
 export type AgentTurn = z.infer<typeof agentTurnSchema>;
+export const finishDrawingSchema = z
+  .object({
+    revision: z.string().min(1).max(200),
+    summary: z.string().trim().min(1).max(3000),
+  })
+  .strict();
 
 const file = { file_path: z.enum(["drawing.html"]) };
 export const readSourceSchema = z

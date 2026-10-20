@@ -59,7 +59,7 @@ await build({
     import { createApp } from './server/app.ts';
     const assets = ${JSON.stringify(assets)};
     const app = createApp();
-    const types = { js:'text/javascript; charset=utf-8', css:'text/css; charset=utf-8', svg:'image/svg+xml', html:'text/html; charset=utf-8' };
+    const types = { js:'text/javascript; charset=utf-8', mjs:'text/javascript; charset=utf-8', css:'text/css; charset=utf-8', svg:'image/svg+xml', html:'text/html; charset=utf-8' };
     app.get('*', c => {
       const requestPath = new URL(c.req.url).pathname;
       const key = assets[requestPath] ? requestPath : requestPath === '/' ? '/index.html' : null;

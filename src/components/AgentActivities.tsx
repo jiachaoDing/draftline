@@ -75,6 +75,18 @@ export default function AgentActivities({
           : t("{{count}} activities completed", { count: completed }) +
             (failed ? t(" · {{count}} failed", { count: failed }) : "")}
       </span>
+      {active &&
+        activities.some(
+          (step) =>
+            step.status === "completed" &&
+            ["apply_patch", "place_svg", "transform_object"].includes(
+              step.kind,
+            ),
+        ) && (
+          <small>
+            {t("Steps succeeded — changes staged, not yet applied")}
+          </small>
+        )}
       {finished.length > 0 && (
         <details key={String(active)} className="agent-history">
           <summary>

@@ -124,6 +124,7 @@ describe("versioned virtual source tools", () => {
     let completeValidation!: () => void;
     let rounds = 0;
     const result = runDrawingAgent({
+      projectId: "test-project",
       context: drawingContext("Resize", [], EXAMPLE),
       config,
       drawing: EXAMPLE,
@@ -399,6 +400,7 @@ describe("inspect → patch → feedback → retry agent loop", () => {
       return { kind: "message", message: "Updated the selected hole to Ø14." };
     };
     const outcome = await runDrawingAgent({
+      projectId: "test-project",
       onActivity: (activity) => activities.push(activity),
       context: drawingContext(
         "Resize",
@@ -486,6 +488,7 @@ describe("inspect → patch → feedback → retry agent loop", () => {
       };
       await expect(
         runDrawingAgent({
+          projectId: "test-project",
           context: drawingContext("Resize", [], EXAMPLE),
           config,
           drawing: EXAMPLE,

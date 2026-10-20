@@ -25,8 +25,9 @@ export function ensureObjectIds(svg: SVGSVGElement) {
 }
 export function sanitizeSVG(source: string): SVGSVGElement {
   const clean = DOMPurify.sanitize(source, {
-    USE_PROFILES: { svg: true },
-    ADD_ATTR: ["data-layer", "data-for", "data-label"],
+    USE_PROFILES: { svg: true, svgFilters: true },
+    ADD_TAGS: ["use"],
+    ADD_ATTR: ["data-layer", "data-for", "data-label", "data-resource-id"],
     FORBID_TAGS: [
       "script",
       "style",
@@ -37,7 +38,7 @@ export function sanitizeSVG(source: string): SVGSVGElement {
       "animateMotion",
       "animateTransform",
       "set",
-      "filter",
+      "feImage",
     ],
     FORBID_ATTR: ["style"],
   });
@@ -109,7 +110,9 @@ export function validateSVG(svg: SVGSVGElement) {
     );
   }
   if (
-    svg.querySelector("svg") ||
+    [...svg.querySelectorAll("svg")].some(
+      (node) => !node.closest("#geometry [data-resource-id]"),
+    ) ||
     [...svg.children].some(
       (n) =>
         !["defs", "title", "desc"].includes(n.localName) &&

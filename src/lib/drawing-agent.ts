@@ -2,19 +2,28 @@
 // no follow-up tool work remains. See third_party/codex/apply-patch/README.md.
 import type { DrawingContext } from "./ai-workflow";
 import { drawingRevision } from "./ai-workflow";
-import { agentCallsResultSchema, type AgentTurn } from "./agent-contracts";
+import {
+  agentCallsResultSchema,
+  finishDrawingSchema,
+  type AgentTurn,
+} from "./agent-contracts";
 import type {
   Drawing,
   DrawingRequest,
   DrawingResult,
   ModelConfig,
+  ChatAttachment,
 } from "./contracts";
 import {
   DrawingToolSession,
   type SourceValidator,
+  type DrawingToolSnapshot,
 } from "./drawing-tool-session";
 import { formatDrawingSource } from "./format-source";
 import { svgToHTML } from "./drawing";
+import { ResourceToolSession } from "./resource-tool-session";
+import { placeSvgSchema } from "./resource-contracts";
+import { ModelFailure } from "./model-failure";
 import {
   toolPendingSchema,
   type ActivityHandler,
@@ -22,6 +31,8 @@ import {
 } from "./agent-activity";
 
 type AgentOptions = {
+  projectId: string;
+  recovery?: DrawingAgentCheckpoint;
   context: DrawingContext;
   config: ModelConfig;
   drawing: Drawing | null;
@@ -37,13 +48,44 @@ type AgentOptions = {
   onDelta: (text: string) => void;
   onRound: () => void;
   onActivity?: ActivityHandler;
+  resources?: ChatAttachment[];
 };
+export type DrawingAgentCheckpoint = {
+  projectId: string;
+  baseRevision?: string;
+  context: DrawingContext;
+  resources: ChatAttachment[];
+  session?: DrawingToolSnapshot;
+  round: number;
+  attempt: number;
+};
+export class DrawingAgentRecoveryError extends Error {
+  constructor(
+    public checkpoint: DrawingAgentCheckpoint,
+    failure: Error,
+  ) {
+    super(failure.message);
+  }
+}
 export async function runDrawingAgent(options: AgentOptions): Promise<{
   result: DrawingResult;
   context: DrawingContext;
   drawing?: Drawing;
 }> {
   const { signal, drawing } = options;
+  const recovery = options.recovery;
+  const projectId = options.projectId;
+  const baseRevision = drawing ? drawingRevision(drawing) : undefined;
+  signal.throwIfAborted();
+  if (
+    recovery &&
+    (recovery.projectId !== projectId ||
+      recovery.baseRevision !== baseRevision ||
+      !options.isCurrent())
+  )
+    throw new Error(
+      "Revision conflict: the committed drawing changed. Start a new request.",
+    );
   const emit: ActivityHandler = (activity) => {
     let detail = activity.detail;
     if (detail) {
@@ -52,13 +94,41 @@ export async function runDrawingAgent(options: AgentOptions): Promise<{
     }
     options.onActivity?.({ ...activity, detail: detail?.slice(0, 2000) });
   };
+  const permittedResources = recovery?.resources || [
+    ...(options.resources || options.context.attachments || []),
+    ...(options.context.image
+      ? [
+          {
+            id: "reference-sketch",
+            name: "Reference sketch",
+            type: "image" as const,
+            size: Math.floor(options.context.image.length * 0.75),
+            image: options.context.image,
+          },
+        ]
+      : []),
+  ];
+  const resources = new ResourceToolSession(permittedResources);
   let context = {
-    ...options.context,
-    agentTurns: options.context.agentTurns || [],
-    toolTurns: options.context.toolTurns || [],
+    ...(recovery?.context || options.context),
+    attachments: undefined,
+    image: undefined,
+    resources: resources.metadata.slice(0, 100),
+    agentTurns:
+      recovery?.context.agentTurns || options.context.agentTurns || [],
+    toolTurns: recovery?.context.toolTurns || options.context.toolTurns || [],
   };
   let session: DrawingToolSession | undefined;
-  if (context.source && drawing) {
+  if (recovery?.session) {
+    session = new DrawingToolSession(
+      recovery.session.source,
+      recovery.session.drawing,
+      options.validate,
+      options.isCurrent,
+      (id) => resources.get(id),
+      recovery.session,
+    );
+  } else if (context.source && drawing) {
     if (
       context.source.revision !== drawingRevision(drawing) ||
       !options.isCurrent()
@@ -80,40 +150,132 @@ export async function runDrawingAgent(options: AgentOptions): Promise<{
       drawing,
       options.validate,
       options.isCurrent,
+      (id) => resources.get(id),
     );
   }
   const ids = new Set([
     ...context.agentTurns.flatMap((turn) => turn.calls.map((c) => c.id)),
     ...context.toolTurns.flatMap((turn) => turn.calls.map((c) => c.id)),
   ]);
-  let round = 0;
+  let round = recovery?.round || 0;
+  let attempt = recovery?.attempt || 0;
+  let failures = 0;
   while (true) {
     signal.throwIfAborted();
     if (!options.isCurrent())
       throw new Error(
         "Revision conflict: the committed drawing changed. Start a new request.",
       );
-    if (session) context = { ...context, source: session.source };
+    if (session)
+      context = {
+        ...context,
+        mode: "edit",
+        svg: session.drawing.svg,
+        source: session.source,
+      };
     options.onRound();
-    const modelId = `model:${round}`;
-    const toolId = (index: number) => `tool:${round}:${index}`;
-    emit({ id: modelId, kind: "model", status: "running" });
-    const result = await options.request(
-      { ...context, config: options.config },
-      signal,
-      options.onDelta,
-      ({ index, name }) => {
-        if (!signal.aborted)
-          emit({
-            id: toolId(index),
-            kind: name,
-            status: "pending",
-            detail:
-              "The model is preparing tool arguments. Execution starts after a successful complete response.",
-          });
-      },
-    );
+    const modelId = `model:${round}${attempt ? `:attempt:${attempt}` : ""}`;
+    const toolId = (index: number) =>
+      `tool:${round}:${index}${attempt ? `:attempt:${attempt}` : ""}`;
+    const pendingTools = new Map<number, ToolPending["name"]>();
+    emit({ id: modelId, kind: "model", status: "running", retry: attempt > 0 });
+    let result: DrawingResult;
+    try {
+      result = await options.request(
+        { ...context, config: options.config },
+        signal,
+        options.onDelta,
+        ({ index, name }) => {
+          pendingTools.set(index, name);
+          if (!signal.aborted)
+            emit({
+              id: toolId(index),
+              kind: name,
+              status: "pending",
+              detail:
+                "The model is preparing tool arguments. Execution starts after a successful complete response.",
+            });
+        },
+      );
+      signal.throwIfAborted();
+      if (
+        result.kind === "tool_calls" &&
+        result.calls.some((c) => c.name === "finish_drawing")
+      ) {
+        const call = result.calls[0];
+        let completion;
+        try {
+          completion = finishDrawingSchema.parse(JSON.parse(call.arguments));
+        } catch {
+          // Never reflect arguments or parser errors in diagnostics.
+        }
+        if (
+          result.calls.length !== 1 ||
+          call.name !== "finish_drawing" ||
+          ids.has(call.id) ||
+          !completion ||
+          !session?.changed ||
+          session.patchFailed ||
+          completion.revision !== session.source.revision
+        )
+          throw new ModelFailure(
+            "The model returned an invalid drawing completion.",
+            {
+              code: "invalid_response",
+              retryable: true,
+              diagnostic: {
+                category: "invalid_completion",
+                length: Math.min(call.arguments.length, 1_200_000),
+              },
+            },
+          );
+        emit({ id: toolId(0), kind: "finish_drawing", status: "completed" });
+        result = { kind: "message", message: completion.summary };
+      }
+    } catch (error) {
+      signal.throwIfAborted();
+      if (!options.isCurrent())
+        throw new Error(
+          "Revision conflict: the committed drawing changed. Start a new request.",
+        );
+      if (
+        !(error instanceof ModelFailure) ||
+        !error.info?.retryable ||
+        !context.agentTurns.length
+      )
+        throw error;
+      for (const [index, name] of pendingTools)
+        emit({
+          id: toolId(index),
+          kind: name,
+          status: "failed",
+          detail: "Model response incomplete; this tool was not executed.",
+        });
+      emit({
+        id: modelId,
+        kind: "model",
+        status: "failed",
+        detail: `Model round ${round}, attempt ${attempt}: ${JSON.stringify(error.info)}. Successful steps remain staged; no changes have been applied.`,
+      });
+      context = { ...context, recovering: true };
+      attempt++;
+      if (++failures > 2)
+        throw new DrawingAgentRecoveryError(
+          {
+            projectId,
+            baseRevision,
+            context,
+            resources: permittedResources,
+            session: session?.snapshot(),
+            round,
+            attempt,
+          },
+          error,
+        );
+      continue;
+    }
     signal.throwIfAborted();
+    failures = 0;
     emit({
       id: modelId,
       kind: "model",
@@ -161,7 +323,6 @@ export async function runDrawingAgent(options: AgentOptions): Promise<{
       }
       return { result, context };
     }
-    if (!session) throw new Error("Source tools require an existing drawing.");
     const toolResult =
       result.kind === "tool_calls"
         ? agentCallsResultSchema.parse(result)
@@ -177,6 +338,7 @@ export async function runDrawingAgent(options: AgentOptions): Promise<{
         "The drawing reached its tool-round limit. Your drawing is unchanged; start a new request.",
       );
     const results: string[] = [];
+    const previews: NonNullable<AgentTurn["previews"]> = [];
     toolResult.calls.forEach((call, index) => {
       const kind = toolPendingSchema.shape.name.safeParse(call.name);
       emit({
@@ -203,29 +365,81 @@ export async function runDrawingAgent(options: AgentOptions): Promise<{
       const activity = {
         id: toolId(index),
         kind: kind.success ? kind.data : ("tool" as const),
-        retry: call.name === "apply_patch" && session.patchFailed,
+        retry: call.name === "apply_patch" && !!session?.patchFailed,
         selected: call.name === "read_source" && !!elementId,
       };
       emit({
         ...activity,
         status: "running",
-        detail: "Executing against the current virtual drawing.html.",
+        detail: [
+          "list_resources",
+          "inspect_resource",
+          "read_resource",
+        ].includes(call.name)
+          ? "Accessing permitted resources in the originating project."
+          : "Executing against the current virtual drawing.html.",
       });
-      const output = await session.execute(call, signal, (status) =>
-        emit({
-          id: `${activity.id}:validation`,
-          kind: "validation",
-          status,
-          detail:
-            "Sandbox execution, millimeter scale and SVG structure checks.",
-        }),
-      );
+      if (!session && call.name === "place_svg") {
+        try {
+          const input = placeSvgSchema.parse(JSON.parse(call.arguments));
+          if (input.canvas) {
+            const { width, height } = input.canvas;
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" id="drawing" width="${width}mm" height="${height}mm" viewBox="0 0 ${width} ${height}"><g id="geometry" data-layer="geometry"/><g id="dimensions" data-layer="dimensions"/></svg>`;
+            session = new DrawingToolSession(
+              {
+                path: "drawing.html",
+                revision: "empty-canvas",
+                html: svgToHTML(svg),
+              },
+              {
+                title: "Drawing",
+                summary: "",
+                notes: context.notes,
+                svg,
+                html: svgToHTML(svg),
+              },
+              options.validate,
+              options.isCurrent,
+              (id) => resources.get(id),
+            );
+          }
+        } catch {
+          /* Invalid arguments become bounded tool feedback below. */
+        }
+      }
+      const resourceCall = [
+        "list_resources",
+        "inspect_resource",
+        "read_resource",
+      ].includes(call.name);
+      const access = resourceCall
+        ? await resources.execute(call, signal)
+        : undefined;
+      if (access?.preview) previews.push(access.preview);
+      const output =
+        access?.output ||
+        (session
+          ? await session.execute(call, signal, (status) =>
+              emit({
+                id: `${activity.id}:validation`,
+                kind: "validation",
+                status,
+                detail:
+                  "Sandbox execution, millimeter scale and SVG structure checks.",
+              }),
+            )
+          : JSON.stringify({
+              ok: false,
+              error:
+                "Create a drawing first, or use place_svg with explicit canvas width and height in millimeters. Ask the user for missing measurements.",
+            }));
       const feedback = JSON.parse(output);
       emit({
         ...activity,
         status: feedback.ok ? "completed" : "failed",
         detail: feedback.ok
           ? feedback.message ||
+            (resourceCall ? "Project resource access completed." : undefined) ||
             (typeof feedback.matches === "number"
               ? `Found ${feedback.matches} matches in drawing.html.`
               : activity.selected
@@ -243,13 +457,17 @@ export async function runDrawingAgent(options: AgentOptions): Promise<{
     };
     context = {
       ...context,
-      source: session.source,
-      agentTurns: [...context.agentTurns, turn],
+      source: session?.source,
+      agentTurns: [
+        ...context.agentTurns,
+        { ...turn, ...(previews.length ? { previews } : {}) },
+      ],
     };
-    if (JSON.stringify(context.agentTurns).length > 3_000_000)
+    if (JSON.stringify(context.agentTurns).length > 6_000_000)
       throw new Error(
         "The tool conversation is too large. Your drawing is unchanged.",
       );
     round++;
+    attempt = 0;
   }
 }

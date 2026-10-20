@@ -271,6 +271,27 @@ describe("OpenAI-compatible server integration", () => {
       );
     }
   });
+  it("carries bounded JSON diagnostics through SSE without reflecting model content", async () => {
+    responseContent = String.raw`{"kind":"message","message":"private test-only-key \q <svg>"}`;
+    const error = await readAIStream<never>(
+      await call("/api/draw", {
+        config: config(),
+        mode: "generate",
+        instruction: "Malformed final summary",
+      }),
+    ).catch((error) => error);
+    expect(error.info).toMatchObject({
+      code: "invalid_json",
+      retryable: true,
+      diagnostic: {
+        category: "invalid_escape",
+        finish: "stop",
+        length: responseContent.length,
+      },
+    });
+    expect(JSON.stringify(error)).not.toContain("test-only-key");
+    expect(JSON.stringify(error)).not.toContain("<svg>");
+  });
   it("sanitizes errors received inside an already-started provider stream", async () => {
     const response = await call("/api/draw", {
       config: config(),
@@ -286,6 +307,33 @@ describe("OpenAI-compatible server integration", () => {
 });
 
 describe("provider URL and output handling", () => {
+  it.each([
+    ["Finished placing private test-only-key <svg>drawing</svg>", "plain_text"],
+    [
+      String.raw`{"kind":"message","message":"bad\q test-only-key"}`,
+      "invalid_escape",
+    ],
+    ['{"kind":"message","message":"test-only-key', "truncated_json"],
+    ['{"kind":"message",,"message":"test-only-key"}', "malformed_json"],
+    ['{"kind":"drawing","private":"test-only-key"}', "invalid_shape"],
+  ])(
+    "classifies malformed output without retaining content: %s",
+    (content, category) => {
+      try {
+        parseAIResult(content);
+        expect.fail("Invalid output must not complete a drawing");
+      } catch (error) {
+        const failure =
+          error as import("../src/lib/model-failure").ModelFailure;
+        expect(failure.info?.diagnostic?.category).toBe(category);
+        expect(failure.info?.diagnostic?.length).toBe(content.length);
+        expect(failure.info?.retryable).toBe(true);
+        expect(JSON.stringify(failure)).not.toContain("test-only-key");
+        expect(failure.message).not.toContain("<svg>");
+        expect(JSON.stringify(failure).length).toBeLessThan(400);
+      }
+    },
+  );
   it("normalizes public API roots and blocks private addresses in hosted mode", () => {
     expect(normalizeBaseURL("https://api.example.com/")).toBe(
       "https://api.example.com/v1",

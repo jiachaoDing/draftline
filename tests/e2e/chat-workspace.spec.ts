@@ -319,15 +319,12 @@ test("assistant-ui attaches multiple formats once and persists attachments on th
   const parts = requests[0].messages.at(-1).content;
   expect(
     parts.some(
-      (part: any) =>
-        part.type === "file" &&
-        part.file.filename === "sheet.pdf" &&
-        part.file.file_data.startsWith("data:application/pdf;base64,"),
+      (part: any) => part.type === "file" || part.type === "image_url",
     ),
-  ).toBe(true);
-  expect(parts.some((part: any) => part.type === "image_url")).toBe(true);
-  expect(JSON.stringify(parts)).toContain("Dimensions: 40 x 30 mm.");
-  expect(JSON.stringify(parts)).toContain("ENTITIES");
+  ).toBe(false);
+  expect(JSON.stringify(parts)).not.toContain("Dimensions: 40 x 30 mm.");
+  expect(JSON.stringify(parts)).not.toContain("ENTITIES");
+  expect(JSON.stringify(parts)).toContain("sheet.pdf");
   await page.getByLabel("Drawing instructions").fill("A fresh message");
   await page.getByRole("button", { name: "Send drawing instruction" }).click();
   await expect(
@@ -340,6 +337,7 @@ test("assistant-ui attaches multiple formats once and persists attachments on th
     ),
   ).toBe(false);
   expect(JSON.stringify(fresh)).not.toContain("ENTITIES");
+  expect(JSON.stringify(fresh)).toContain("reference.svg");
   await page.reload();
   await expect(
     page.locator(".chat-message.user .message-reference"),

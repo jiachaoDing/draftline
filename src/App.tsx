@@ -74,7 +74,12 @@ import {
 } from "./lib/drawing";
 import { pushHistory } from "./lib/history";
 import { requestDrawing } from "./lib/api";
-import { runDrawingAgent } from "./lib/drawing-agent";
+import {
+  runDrawingAgent,
+  DrawingAgentRecoveryError,
+  type DrawingAgentCheckpoint,
+} from "./lib/drawing-agent";
+import { projectResources } from "./lib/resources";
 import { validateDrawingSource } from "./lib/validate-source";
 import {
   settleActivities,
@@ -157,6 +162,7 @@ export default function App() {
     abort,
     reply: activeReply,
     retry: retryContext,
+    recovery: recoveryPoint,
     editContext,
     sessions,
   } = useProjectSession(activeId);
@@ -593,10 +599,13 @@ export default function App() {
     return () => document.removeEventListener("keydown", keyboard);
   }, [busy, pending, userInput, review, setHistory]);
 
-  async function runAI(input: DrawingContext) {
+  async function runAI(
+    input: DrawingContext,
+    recovery?: DrawingAgentCheckpoint,
+  ) {
     if (abort.current || review) return;
     input = { ...input, language: currentLocale() };
-    retryContext.current = input;
+    if (!recovery) retryContext.current = input;
     editContext.current = {
       drawing,
       ids: input.selectedIds || (input.selectedId ? [input.selectedId] : []),
@@ -607,6 +616,7 @@ export default function App() {
       return;
     }
     setBusy(true);
+    recoveryPoint.current = null;
     setNotice(null);
     setClarification(null);
     const controller = new AbortController();
@@ -614,20 +624,22 @@ export default function App() {
     const replyId = crypto.randomUUID();
     activeReply.current = replyId;
     setMessages((messages) => [
-      ...messages,
+      ...messages.map((message) => ({ ...message, resumable: false })),
       {
         id: replyId,
         role: "assistant",
         text: "",
         status: "streaming",
-        activities: [
-          {
-            id: "model:0",
-            kind: "model",
-            status: "pending",
-            detail: "Request submitted. Connecting to your model.",
-          },
-        ],
+        activities: recovery
+          ? []
+          : [
+              {
+                id: "model:0",
+                kind: "model",
+                status: "pending",
+                detail: "Request submitted. Connecting to your model.",
+              },
+            ],
       },
     ]);
     const onActivity: ActivityHandler = (activity) => {
@@ -670,7 +682,12 @@ export default function App() {
       const projectId = activeIdRef.current;
       const baseRevision = drawing ? drawingRevision(drawing) : undefined;
       const outcome = await runDrawingAgent({
+        projectId,
+        recovery: recovery ? { ...recovery, context: input } : undefined,
         context: input,
+        resources: activeProject
+          ? projectResources(activeProject, input.attachments)
+          : input.attachments,
         config,
         drawing,
         signal: controller.signal,
@@ -762,9 +779,15 @@ export default function App() {
       if (clarification) setClarification(input);
       if (userInput) setUserInput(userInput);
       if ((error as Error).name === "AbortError") {
+        recoveryPoint.current = null;
         finishReply("cancelled", undefined, true);
         tell("Generation stopped. Your drawing is unchanged.");
       } else {
+        const resumable =
+          error instanceof DrawingAgentRecoveryError &&
+          !controller.signal.aborted;
+        if (resumable)
+          recoveryPoint.current = { replyId, checkpoint: error.checkpoint };
         tell((error as Error).message, true);
         setMessages((messages) =>
           messages.map((message) =>
@@ -772,6 +795,7 @@ export default function App() {
               ? {
                   ...message,
                   status: "error",
+                  resumable,
                   activities: settleActivities(message.activities, "failed"),
                   text: `${message.text}\n\n${t((error as Error).message)}`,
                 }
@@ -870,6 +894,24 @@ export default function App() {
   };
   const retryResponse = async (id: string) => {
     if (busy || review) return;
+    // assistant-ui reload supplies the parent user ID; direct callers may supply
+    // the failed assistant ID. Both must resolve to this checkpoint's request.
+    const recoveryIndex = messages.findIndex(
+      (message) => message.id === recoveryPoint.current?.replyId,
+    );
+    const recoveryUser = messages
+      .slice(0, recoveryIndex)
+      .reverse()
+      .find((message) => message.role === "user");
+    if (
+      recoveryPoint.current &&
+      messages[recoveryIndex]?.resumable &&
+      (recoveryPoint.current.replyId === id || recoveryUser?.id === id)
+    ) {
+      const checkpoint = recoveryPoint.current.checkpoint;
+      await runAI(checkpoint.context, checkpoint);
+      return;
+    }
     const index = messages.findIndex((message) => message.id === id);
     const preceding =
       index >= 0

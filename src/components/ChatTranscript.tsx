@@ -117,7 +117,11 @@ function Message() {
                   ? t("Review proposed changes before applying")
                   : message.status === "cancelled"
                     ? t("Stopped")
-                    : t("Response incomplete — drawing unchanged")}
+                    : message.resumable
+                      ? t(
+                          "Completion failed — changes staged, not applied; continue from the failed step",
+                        )
+                      : t("Response incomplete — drawing unchanged")}
           </small>
         )}
         {message.text &&
@@ -133,9 +137,17 @@ function Message() {
               {isLast &&
                 (message.status === "error" ||
                   message.status === "cancelled") && (
-                  <ActionBarPrimitive.Reload aria-label={t("Retry response")}>
+                  <ActionBarPrimitive.Reload
+                    aria-label={t(
+                      message.resumable
+                        ? "Continue from failed step"
+                        : "Retry response",
+                    )}
+                  >
                     <RotateCcw size={13} />
-                    {t("Retry")}
+                    {t(
+                      message.resumable ? "Continue from failed step" : "Retry",
+                    )}
                   </ActionBarPrimitive.Reload>
                 )}
             </ActionBarPrimitive.Root>

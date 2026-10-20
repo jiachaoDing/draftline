@@ -18,6 +18,7 @@ let requests: any[] = [];
 let held = false;
 let releaseActivity = () => {};
 let activityStage = "";
+let terminalAttempts = 0;
 async function pauseActivity(
   res: import("node:http").ServerResponse,
   stage: string,
@@ -253,6 +254,25 @@ test.beforeAll(async () => {
         "dimension",
         `*** Begin Patch\n*** Update File: drawing.html\n@@\n-${line}\n+${line.replace("4 × Ø10", "Ø14; 3 × Ø10")}\n*** End Patch`,
       );
+    } else if (instruction.includes("recover terminal")) {
+      terminalAttempts++;
+      if (terminalAttempts === 2 && instruction.includes("hold retry"))
+        await pauseActivity(res, "terminal-retry");
+      if (terminalAttempts <= (instruction.includes("manual") ? 3 : 1)) {
+        if (instruction.includes("connection")) {
+          openCompletion(res);
+          contentChunk(res, '{"kind":"message","message":"Partial');
+          res.end();
+        } else
+          completeResponse(res, "Finished placing and modifying the drawing.");
+      } else {
+        toolResponse(res, [
+          tool("finish", "finish_drawing", {
+            revision,
+            summary: "Recovered drawing completion.",
+          }),
+        ]);
+      }
     } else if (instruction.includes("stop staged")) {
       held = true;
       openCompletion(res);
@@ -280,6 +300,7 @@ async function open(page: Page) {
   requests = [];
   held = false;
   activityStage = "";
+  terminalAttempts = 0;
   await page.addInitScript((baseURL) => {
     if (window !== window.top) return;
     localStorage.setItem(
@@ -307,6 +328,158 @@ async function send(page: Page, text: string) {
     .getByRole("button", { name: "Send drawing instruction", exact: true })
     .click();
 }
+
+test("invalid final JSON recovers without replaying edits and applies as one undo step", async ({
+  page,
+}) => {
+  const frame = await open(page);
+  await send(page, "Resize to Ø14; recover terminal");
+  await expect(
+    page.getByText("Recovered drawing completion.", { exact: true }),
+  ).toBeVisible();
+  expect(terminalAttempts).toBe(2);
+  expect(
+    requests.at(-1).messages.filter((m: any) => m.role === "tool"),
+  ).toEqual(requests.at(-2).messages.filter((m: any) => m.role === "tool"));
+  await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "7");
+  const activities = page.getByLabel("Agent activity");
+  await activities.locator(".agent-history > summary").click();
+  await expect(activities.locator('[data-activity-id="tool:6:0"]')).toHaveCount(
+    1,
+  );
+  await expect(activities).toContainText("plain_text");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "5");
+  await expect(frame.locator("#dim-hole text")).toHaveText("4 × Ø10");
+});
+
+test("an interrupted final model connection retries only that model round", async ({
+  page,
+}) => {
+  const frame = await open(page);
+  await send(page, "Resize to Ø14; recover terminal connection");
+  await expect(
+    page.getByText("Recovered drawing completion.", { exact: true }),
+  ).toBeVisible();
+  expect(terminalAttempts).toBe(2);
+  expect(
+    requests.at(-1).messages.filter((m: any) => m.role === "tool"),
+  ).toEqual(requests.at(-2).messages.filter((m: any) => m.role === "tool"));
+  await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "7");
+});
+
+test("exhausted finalization preserves changes for manual continuation in the original project", async ({
+  page,
+}) => {
+  const frame = await open(page);
+  await send(page, "Resize to Ø14; recover terminal manual");
+  const resume = page.getByRole("button", {
+    name: "Continue from failed step",
+    exact: true,
+  });
+  await expect(resume).toBeVisible();
+  expect(terminalAttempts).toBe(3);
+  await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "5");
+  await page.getByRole("button", { name: "New Drawing", exact: true }).click();
+  await expect(resume).toHaveCount(0);
+  await page.getByLabel("Drawing instructions").fill("B draft");
+  await page
+    .getByRole("button", { name: "Open drawing Mounting plate", exact: true })
+    .click();
+  await resume.click();
+  await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "7");
+  expect(terminalAttempts).toBe(4);
+  await expect(
+    page
+      .getByLabel("Agent activity")
+      .last()
+      .locator('[data-status="pending"], [data-status="running"]'),
+  ).toHaveCount(0);
+  expect(
+    requests.at(-1).messages.filter((m: any) => m.role === "tool"),
+  ).toEqual(requests.at(-2).messages.filter((m: any) => m.role === "tool"));
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "5");
+});
+
+test("manual continuation rejects a changed base drawing before requesting the provider", async ({
+  page,
+}) => {
+  const frame = await open(page);
+  await send(page, "Resize to Ø14; recover terminal manual");
+  await expect(
+    page.getByRole("button", {
+      name: "Continue from failed step",
+      exact: true,
+    }),
+  ).toBeVisible();
+  const count = requests.length;
+  await page.getByRole("button", { name: "Code", exact: true }).click();
+  await page
+    .getByLabel("Drawing source code")
+    .fill(
+      `${EXAMPLE_SVG}<script>document.getElementById('hole-top-left').setAttribute('r','6')</script>`,
+    );
+  await page.getByRole("button", { name: "Apply code" }).click();
+  await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "6");
+  await page
+    .getByRole("button", { name: "Continue from failed step", exact: true })
+    .click();
+  await expect(page.locator(".chat-message.assistant").last()).toContainText(
+    "Revision conflict",
+  );
+  expect(requests).toHaveLength(count);
+  await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "6");
+});
+
+test("automatic recovery stays with its originating project after navigation", async ({
+  page,
+}) => {
+  const frame = await open(page);
+  await send(page, "Resize to Ø14; recover terminal hold retry");
+  await expect.poll(() => activityStage).toBe("terminal-retry");
+  await page.getByRole("button", { name: "New Drawing", exact: true }).click();
+  await page
+    .getByLabel("Drawing instructions")
+    .fill("Background recovery must preserve B");
+  releaseActivity();
+  await expect(page.locator(".project-open .spin")).toHaveCount(0);
+  await expect(
+    page.getByText("A fresh page for your next idea."),
+  ).toBeVisible();
+  await expect(page.getByLabel("Drawing instructions")).toHaveValue(
+    "Background recovery must preserve B",
+  );
+  await page
+    .getByRole("button", { name: "Open drawing Mounting plate", exact: true })
+    .click();
+  await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "7");
+  expect(terminalAttempts).toBe(2);
+});
+
+test("active cancellation during recovery discards staged changes and never auto-resumes", async ({
+  page,
+}) => {
+  const frame = await open(page);
+  await send(page, "Resize to Ø14; recover terminal hold retry");
+  await expect.poll(() => activityStage).toBe("terminal-retry");
+  await expect(
+    page.getByText("Steps succeeded — changes staged, not yet applied"),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Stop generation", exact: true })
+    .click();
+  await expect(page.getByText("Stopped", { exact: true })).toBeVisible();
+  releaseActivity();
+  await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "5");
+  await expect(
+    page.getByRole("button", {
+      name: "Continue from failed step",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  expect(terminalAttempts).toBe(2);
+});
 
 test("source reads accept null options immediately and return actionable invalid-field feedback", async ({
   page,
@@ -536,6 +709,12 @@ test("real provider loop retries patch/validation/identity/revision errors, then
   ).toHaveLength(2);
   expect(requests[0].tools.map((t: any) => t.function.name)).toEqual([
     "request_user_input",
+    "list_resources",
+    "inspect_resource",
+    "read_resource",
+    "place_svg",
+    "finish_drawing",
+    "transform_object",
     "read_source",
     "search_source",
     "apply_patch",

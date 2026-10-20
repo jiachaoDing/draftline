@@ -53,6 +53,7 @@ const messageSchema = z
   })
   .transform((message) => ({
     ...message,
+    resumable: false,
     activities: settleActivities(message.activities, "cancelled"),
     status:
       message.status === "streaming" ||

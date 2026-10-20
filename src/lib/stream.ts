@@ -1,9 +1,11 @@
 import { EventSourceParserStream } from "eventsource-parser/stream";
 import { toolPendingSchema, type ToolPending } from "./agent-activity";
+import { ModelFailure, modelFailureSchema } from "./model-failure";
 
 const INTERRUPTED =
   "The streaming connection was interrupted before completion. Please try again.";
-export class AIStreamError extends Error {}
+export class AIStreamError extends ModelFailure {}
+const connectionFailure = { code: "connection", retryable: true } as const;
 export type DeltaHandler = (text: string) => void;
 
 /** Decode actual SSE frames and UTF-8 packet boundaries. A terminal result is mandatory. */
@@ -17,6 +19,7 @@ export async function readAIStream<T>(
     const body = await response.json().catch(() => null);
     throw new AIStreamError(
       body?.error || "The server could not start the AI request.",
+      response.status >= 500 ? connectionFailure : undefined,
     );
   }
   if (
@@ -25,6 +28,7 @@ export async function readAIStream<T>(
   )
     throw new AIStreamError(
       "The server did not return a streaming response. Check your connection.",
+      connectionFailure,
     );
   const reader = response.body
     .pipeThrough(
@@ -46,7 +50,7 @@ export async function readAIStream<T>(
   try {
     while (true) {
       const { value, done } = await reader.read();
-      if (done) throw new AIStreamError(INTERRUPTED);
+      if (done) throw new AIStreamError(INTERRUPTED, connectionFailure);
       if (
         !["delta", "result", "error", "tool_pending"].includes(
           value.event || "",
@@ -59,11 +63,13 @@ export async function readAIStream<T>(
       } catch {
         throw new AIStreamError(
           "The server sent an invalid stream event. Please try again.",
+          connectionFailure,
         );
       }
       if (value.event === "error")
         throw new AIStreamError(
           typeof data.error === "string" ? data.error : INTERRUPTED,
+          modelFailureSchema.safeParse(data).data,
         );
       if (value.event === "tool_pending") {
         const parsed = toolPendingSchema.safeParse(data);
@@ -133,9 +139,10 @@ export async function streamPost<T>(
     if (timedOut)
       throw new AIStreamError(
         "The streaming connection stopped sending data. Please try again.",
+        connectionFailure,
       );
     if (error instanceof AIStreamError) throw error;
-    throw new AIStreamError(INTERRUPTED);
+    throw new AIStreamError(INTERRUPTED, connectionFailure);
   } finally {
     clearTimeout(timer!);
     transport.abort();
