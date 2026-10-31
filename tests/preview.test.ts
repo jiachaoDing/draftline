@@ -67,7 +67,7 @@ describe("preview startup bridge", () => {
               onSelection,
               onZoom: () => {},
               selection: { ids: [], rootId: null },
-              layers: { geometry: true, dimensions: true, presentation: true },
+              layers: { dimensions: true },
               mode: "select",
             }),
             createElement(FrameStartup),

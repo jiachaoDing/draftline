@@ -1,6 +1,6 @@
 # Working on Draftline
 
-Draftline turns sketches and measured instructions into editable millimeter SVG drawings. Preserve streaming replies, synchronous generated HTML/JavaScript, targeted edits, project conversations, undo/redo, and both SVG export modes. Ask for essential missing measurements; never invent manufacturing requirements.
+Draftline turns sketches and measured instructions into editable millimeter SVG drawings. Preserve streaming replies, synchronous generated HTML/JavaScript, targeted edits, project conversations, undo/redo, and side-by-side SVG/PDF export. Ask for essential missing measurements; never invent manufacturing requirements.
 
 ## Start here
 
@@ -14,7 +14,7 @@ Draftline turns sketches and measured instructions into editable millimeter SVG 
 - `src/App.tsx` coordinates the active workspace, request lifecycle and drawing commits. `src/components/` owns focused UI; `src/hooks/` owns React side effects with one responsibility.
 - `src/lib/contracts.ts` and `user-input.ts` provide universal Zod contracts; keep their runtime dependencies usable in both browser and server.
 - `ai-workflow.ts` and `user-input-flow.ts` build credential-free request context and drawing/question transitions. They do not fetch or save.
-- `drawing.ts` owns sanitization, SVG validation, patch boundaries and exports; `presentation.ts` derives sheet information. `sandbox.ts` and `components/Preview.tsx` own execution and the frame bridge.
+- `drawing.ts` owns sanitization, SVG validation, patch boundaries and exports; `sandbox.ts` and `components/Preview.tsx` own execution and the frame bridge.
 - `projects.ts` owns project validation and IndexedDB; `model-settings.ts` owns credential settings restoration. Credentials belong only in settings and provider requests.
 - `src/lib/api.ts` and `stream.ts` are browser transport. `server/` owns provider SDK access, messages, SSE, redaction and API policy. Biome forbids server/Node/provider imports from `src/`.
 

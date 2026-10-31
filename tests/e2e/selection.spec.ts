@@ -174,14 +174,11 @@ test("marquee selection uses visible groups after zoom, adds with Shift and keep
   await expect(page.locator(".selection-card strong")).toHaveText(
     "2 objects selected",
   );
-  await page
-    .getByRole("button", { name: "Drawing layers", exact: true })
-    .click();
-  await page.getByLabel("Show dimensions").uncheck();
+  await page.getByRole("button", { name: "Dimensions", exact: true }).click();
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "Export SVG", exact: true }).click();
+  await page.getByRole("button", { name: "Export", exact: true }).click();
   const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: /Geometry only/ }).click();
+  await page.getByRole("menuitem", { name: "Export SVG", exact: true }).click();
   const stream = await (await download).createReadStream();
   let exported = "";
   for await (const chunk of stream!) exported += chunk.toString();

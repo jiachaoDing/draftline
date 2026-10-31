@@ -151,9 +151,9 @@ test("Chinese questions survive refresh and resume through the provider with mat
   expect(requests[1].messages.at(-1)?.content).toContain(
     "120 mm，保持其他尺寸",
   );
-  await page.getByRole("button", { name: "导出 SVG" }).click();
+  await page.getByRole("button", { name: "导出", exact: true }).click();
   const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: /仅几何图形/ }).click();
+  await page.getByRole("menuitem", { name: "导出 SVG" }).click();
   expect((await download).suggestedFilename()).toBe("中文测试图纸.svg");
 });
 
@@ -173,7 +173,7 @@ test.describe("saved Chinese preference", () => {
       page.getByRole("button", { name: "模型设置", exact: true }),
     ).toBeInViewport();
     await expect(
-      page.getByRole("button", { name: "导出 SVG" }),
+      page.getByRole("button", { name: "导出", exact: true }),
     ).toBeInViewport();
     const bounds = await page.locator(".app-header").evaluate((header) => ({
       scroll: header.scrollWidth,
@@ -185,7 +185,7 @@ test.describe("saved Chinese preference", () => {
       page.getByRole("combobox", { name: "语言", exact: true }),
     ).toBeInViewport();
     await expect(
-      page.getByRole("button", { name: "导出 SVG" }),
+      page.getByRole("button", { name: "导出", exact: true }),
     ).toBeInViewport();
     const narrowBounds = await page
       .locator(".app-header")

@@ -26,15 +26,15 @@
 
 Draftline is an open-source AI drawing workspace. Supply a sketch and dimensions, generate a drawing, then select objects and refine them through conversation. Each project keeps its own references, conversation and undo history.
 
-| Feature               | How it works                                                                                                            |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Sketch to drawing     | Describe a part or attach images, SVG, PDF, DXF or text; AI asks for essential missing measurements                     |
-| Targeted edits        | Select objects, draw a marquee or enter groups; changes beyond the selection require review                             |
-| Source editing        | Inspect, edit and format HTML / SVG / JavaScript in CodeMirror, then validate changes in the sandbox                    |
-| Millimeter SVG export | One SVG unit equals 1 mm; export geometry only or a drawing with dimensions, title block and notes                      |
-| Separate projects     | Autosave drawings, conversations, attachments and drafts; undo / redo and switch projects during generation             |
-| Your choice of model  | Bring an OpenAI-compatible endpoint or NewAPI instance and your own API key; replies and activity stream as they arrive |
-| Two languages         | Simplified Chinese by default, with instant English switching and desktop, tablet and mobile layouts                    |
+| Feature              | How it works                                                                                                            |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Sketch to drawing    | Describe a part or attach images, SVG, PDF, DXF or text; AI asks for essential missing measurements                     |
+| Targeted edits       | Select objects, draw a marquee or enter groups; changes beyond the selection require review                             |
+| Source editing       | Inspect, edit and format HTML / SVG / JavaScript in CodeMirror, then validate changes in the sandbox                    |
+| SVG / PDF export     | One SVG unit equals 1 mm; export SVG or vector PDF with geometry on the left and dimensioned geometry on the right      |
+| Separate projects    | Autosave drawings, conversations, attachments and drafts; undo / redo and switch projects during generation             |
+| Your choice of model | Bring an OpenAI-compatible endpoint or NewAPI instance and your own API key; replies and activity stream as they arrive |
+| Two languages        | Simplified Chinese by default, with instant English switching and desktop, tablet and mobile layouts                    |
 
 ## Try the workspace
 

@@ -222,56 +222,11 @@ p {
 .connection-dot.connected {
   background: #3aaf80;
 }
-.export-wrap {
-  position: relative;
-}
-.export-menu {
-  position: absolute;
-  top: 44px;
-  right: 0;
-  width: 260px;
-  background: white;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  box-shadow: 0 12px 35px #26364a1f;
-  padding: 7px;
-  z-index: 30;
-}
 .menu-label {
   padding: 9px 10px 7px;
   font-size: 9px;
   letter-spacing: 1px;
   color: #8a94a3;
-}
-.export-menu button {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 11px 10px;
-  text-align: left;
-  border-radius: 5px;
-}
-.export-menu button:hover {
-  background: #f3f6ff;
-}
-.export-menu button > span {
-  flex: 1;
-  font-weight: 550;
-}
-.export-menu small {
-  display: block;
-  font-weight: 400;
-  color: #8790a0;
-  font-size: 10px;
-  margin-top: 4px;
-}
-.export-menu p {
-  font-size: 10px;
-  padding: 11px 10px 7px;
-  color: #98a1b1;
-  border-top: 1px solid var(--line);
-  margin-top: 5px;
 }
 .studio {
   --sidebar-width: 244px;
@@ -423,22 +378,6 @@ kbd {
   align-items: center;
   color: #768ba9;
   gap: 3px;
-}
-.layer-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 11px 0;
-  font-size: 11px;
-}
-.layer-row > span:nth-child(2) {
-  flex: 1;
-}
-.layer-row input {
-  accent-color: var(--blue);
-  width: 13px;
-  height: 13px;
-  cursor: pointer;
 }
 .text-button {
   display: inline-flex;

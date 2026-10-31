@@ -271,8 +271,7 @@
 .project-rename .icon-button {
   flex-shrink: 0;
 }
-.project-menu,
-.layers-popover {
+.project-menu {
   --anchor-gap: 6px;
   --anchor-padding: 10px;
   z-index: 65;
@@ -299,29 +298,6 @@
 }
 .project-menu .danger-action {
   color: #bc4545;
-}
-.layers-toggle[data-open] {
-  background: #edf2ff;
-  color: var(--blue);
-}
-.layers-popover {
-  width: 218px;
-  padding: 12px;
-}
-.layers-popover h2 {
-  font-size: 12px;
-  font-weight: 600;
-  margin: 2px 3px 7px;
-}
-.layers-popover .layer-row {
-  padding: 9px 3px;
-  gap: 10px;
-  font-size: 13px;
-}
-.layers-popover input {
-  width: 15px;
-  height: 15px;
-  margin: 0;
 }
 .empty-canvas {
   height: 100%;

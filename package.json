@@ -45,10 +45,12 @@
     "hono": "4.13.13",
     "i18next": "^26.4.6",
     "idb": "^8.0.4",
+    "jspdf": "^4.2.1",
     "lucide-react": "1.55.0",
     "openai": "7.32.0",
     "parse5": "8.0.1",
     "partial-json": "0.1.7",
+    "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.4.299",
     "prettier": "3.9.10",
     "react": "19.3.0",
@@ -56,6 +58,7 @@
     "react-i18next": "^17.0.18",
     "specificity": "^1.0.0",
     "svg-pan-zoom": "3.6.2",
+    "svg2pdf.js": "^2.9.0",
     "zod": "4.6.7"
   },
   "devDependencies": {

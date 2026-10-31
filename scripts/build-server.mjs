@@ -10,6 +10,12 @@ import path from "node:path";
 import { PAGE_CSP } from "../server/security.ts";
 
 const assets = {};
+await mkdir("dist/client/licenses/pdf-fonts", { recursive: true });
+for (const name of ["OFL.txt", "README.md"])
+  await copyFile(
+    `third_party/pdf-fonts/${name}`,
+    `dist/client/licenses/pdf-fonts/${name}.txt`,
+  );
 await mkdir("dist/client/licenses/codex", { recursive: true });
 for (const name of ["LICENSE", "NOTICE", "README.md"])
   await copyFile(

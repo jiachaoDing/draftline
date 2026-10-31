@@ -183,7 +183,7 @@ test("drawing navigation supports search, long lists, collapse and keyboard acti
   await expect(last).toHaveAttribute("aria-current", "page");
 });
 
-test("mobile drawer closes on navigation and canvas layers retain per-drawing visibility", async ({
+test("mobile drawer closes on navigation and dimensions retain per-drawing visibility", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -194,13 +194,12 @@ test("mobile drawer closes on navigation and canvas layers retain per-drawing vi
     page.getByRole("button", { name: "Expand sidebar" }),
   ).toHaveAttribute("aria-expanded", "false");
   const starter = await page.locator(".project-title").textContent();
-  await page
-    .getByRole("button", { name: "Drawing layers", exact: true })
-    .click();
-  for (const layer of ["geometry", "dimensions", "presentation"]) {
-    await page.getByLabel(`Show ${layer}`, { exact: true }).uncheck();
-    await expect(frame.locator(`#${layer}`)).toHaveAttribute("display", "none");
-  }
+  await page.getByRole("button", { name: "Dimensions", exact: true }).click();
+  await expect(frame.locator("#dimensions")).toHaveAttribute("display", "none");
+  await expect(frame.locator("#plate-outline")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Dimensions", exact: true }),
+  ).toHaveAttribute("aria-pressed", "false");
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Expand sidebar" }).click();
   const drawer = page.getByRole("dialog", { name: "Drawing navigation" });
@@ -220,7 +219,7 @@ test("mobile drawer closes on navigation and canvas layers retain per-drawing vi
   await page.getByRole("button", { name: "New Drawing", exact: true }).click();
   await expect(drawer).toBeHidden();
   await expect(
-    page.getByRole("button", { name: "Drawing layers", exact: true }),
+    page.getByRole("button", { name: "Dimensions", exact: true }),
   ).toBeDisabled();
   await page.getByRole("button", { name: "Expand sidebar" }).click();
   await expect
@@ -248,15 +247,15 @@ test("mobile drawer closes on navigation and canvas layers retain per-drawing vi
     .getByRole("button", { name: `Open drawing ${starter}`, exact: true })
     .click();
   await expect(drawer).toBeHidden();
-  await page
-    .getByRole("button", { name: "Drawing layers", exact: true })
-    .click();
-  for (const layer of ["geometry", "dimensions", "presentation"]) {
-    await expect(
-      page.getByLabel(`Show ${layer}`, { exact: true }),
-    ).not.toBeChecked();
-    await page.getByLabel(`Show ${layer}`, { exact: true }).check();
-  }
+  await expect(
+    page.getByRole("button", { name: "Dimensions", exact: true }),
+  ).toHaveAttribute("aria-pressed", "false");
+  await expect(frame.locator("#dimensions")).toHaveAttribute("display", "none");
+  await page.getByRole("button", { name: "Dimensions", exact: true }).click();
+  await expect(frame.locator("#dimensions")).toHaveAttribute(
+    "display",
+    "inline",
+  );
   await expect(frame.locator("#plate-outline")).toBeVisible();
   await page.keyboard.press("Escape");
   await page.screenshot({

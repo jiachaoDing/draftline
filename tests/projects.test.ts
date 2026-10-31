@@ -28,6 +28,15 @@ describe("local model settings", () => {
   });
 });
 describe("project restoration", () => {
+  it("restores dimension visibility while keeping geometry visible in saved projects", () => {
+    const project = newProject();
+    const restored = projectSchema.parse({
+      ...project,
+      layers: { geometry: false, dimensions: false, presentation: false },
+    });
+    expect(restored.layers).toEqual({ dimensions: false });
+    expect(newProject().layers).toEqual({ dimensions: true });
+  });
   it("restores message attachments independently of the empty composer and defaults older records", () => {
     const project = newProject();
     project.messages.push({

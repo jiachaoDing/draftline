@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   applyPatches,
   cleanDrawing,
@@ -7,50 +7,79 @@ import {
 } from "../src/lib/drawing";
 import { EXAMPLE_SVG } from "../src/lib/example";
 import { pushHistory } from "../src/lib/history";
-import { addPresentation } from "../src/lib/presentation";
-
-// Unit tests use deterministic font metrics; browser tests exercise actual Arial measurements.
-beforeAll(() => {
-  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
-    font: "",
-    measureText(this: { font: string }, text: string) {
-      return {
-        width: [...text].length * parseFloat(this.font.split(" ")[1]) * 0.55,
-      };
-    },
-  } as unknown as CanvasRenderingContext2D);
-});
 
 describe("millimeter vector drawing contract", () => {
   it("preserves physical dimensions and vector coordinates through export", () => {
-    const result = exportSVG(EXAMPLE_SVG, true);
+    const result = exportSVG(EXAMPLE_SVG);
     const svg = new DOMParser().parseFromString(
       result,
       "image/svg+xml",
     ).documentElement;
-    expect(svg.getAttribute("width")).toBe("164mm");
-    expect(
-      Number(svg.getAttribute("height")!.replace("mm", "")),
-    ).toBeGreaterThan(124);
-    expect(svg.getAttribute("viewBox")!.split(" ").slice(0, 3)).toEqual([
-      "-22",
-      "-22",
-      "164",
-    ]);
-    expect(svg.querySelector("#plate-outline")?.getAttribute("width")).toBe(
-      "120",
+    expect(svg.getAttribute("width")).toBe("338mm");
+    expect(svg.getAttribute("height")).toBe("124mm");
+    expect(svg.getAttribute("viewBox")).toBe("-22 -22 338 124");
+    const [left, right] = [...svg.children];
+    expect(left.getAttribute("x")).toBe("-22");
+    expect(right.getAttribute("x")).toBe("152");
+    for (const panel of [left, right]) {
+      expect(panel.getAttribute("viewBox")).toBe("-22 -22 164 124");
+      expect(panel.querySelector("rect")?.getAttribute("width")).toBe("120");
+    }
+    expect(left.querySelector('[data-layer="dimensions"]')).toBeNull();
+    expect(right.querySelector('[data-layer="dimensions"]')).not.toBeNull();
+    expect(svg.querySelector('[data-layer="presentation"]')).toBeNull();
+    const ids = [...svg.querySelectorAll("[id]")].map((n) => n.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(cleanDrawing(EXAMPLE_SVG)).toContain('id="dimensions"');
+  });
+  it("keeps fragment references within each copy without duplicating inherited opacity", () => {
+    const source = EXAMPLE_SVG.replace(
+      'id="drawing"',
+      'id="drawing" opacity="0.5"',
+    )
+      .replace(
+        "<defs>",
+        '<defs><linearGradient id="ink"><stop offset="0" stop-color="red"/></linearGradient><clipPath id="cut"><rect width="120" height="80"/></clipPath>',
+      )
+      .replace('id="plate-outline"', 'id="annotated-plate-outline"')
+      .replaceAll(
+        'data-for="plate-outline"',
+        'data-for="annotated-plate-outline"',
+      )
+      .replace(
+        '</g>\n<g id="dimensions"',
+        '<use id="repeat" href="#annotated-plate-outline" fill="url(#ink)" clip-path="url(#cut)"/></g>\n<g id="dimensions"',
+      );
+    const svg = new DOMParser().parseFromString(
+      exportSVG(source),
+      "image/svg+xml",
+    ).documentElement;
+    expect(svg.hasAttribute("opacity")).toBe(false);
+    for (const panel of [...svg.children]) {
+      expect(panel.getAttribute("opacity")).toBe("0.5");
+      for (const node of panel.querySelectorAll("*")) {
+        for (const attr of [...node.attributes]) {
+          const id = attr.value.match(/^#([\w.-]+)$|^url\(#([\w.-]+)\)$/);
+          if (id && (attr.name === "href" || attr.value.startsWith("url("))) {
+            expect(
+              panel.querySelector(`[id="${id[1] || id[2]}"]`),
+            ).not.toBeNull();
+          }
+        }
+      }
+    }
+    const ids = [...svg.querySelectorAll("[id]")].map((node) => node.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(svg.querySelectorAll("use")).toHaveLength(2);
+  });
+  it("exports an empty dimensions group and rejects invalid input", () => {
+    const source = EXAMPLE_SVG.replace(
+      /<g id="dimensions"[\s\S]*<\/g><\/svg>/,
+      '<g id="dimensions" data-layer="dimensions"/></svg>',
     );
-    expect(svg.querySelector("#dimensions")).not.toBeNull();
-    expect(
-      svg.querySelector('#presentation [data-field="title"]')?.textContent,
-    ).toBe("Mounting plate");
-    expect(
-      svg.querySelector('#presentation [data-field="scale"]')?.textContent,
-    ).toBe("1:1");
-    expect(exportSVG(EXAMPLE_SVG, false)).not.toContain('id="dimensions"');
-    expect(exportSVG(EXAMPLE_SVG, false)).not.toContain('id="presentation"');
-    expect(exportSVG(EXAMPLE_SVG, false)).toContain(
-      'viewBox="-22 -22 164 124"',
+    expect(exportSVG(source)).toContain('id="annotated-dimensions"');
+    expect(() => exportSVG(EXAMPLE_SVG.replace("164mm", "328mm"))).toThrow(
+      "millimeter",
     );
   });
   it("rejects mismatched physical scale and duplicate IDs", () => {
@@ -133,66 +162,5 @@ describe("millimeter vector drawing contract", () => {
     for (let i = 1; i < 100; i++) history = pushHistory(history, i);
     expect(history.items).toHaveLength(30);
     expect(history.items[history.index]).toBe(99);
-  });
-  it("keeps presentation outside geometry and restores canonical bounds without accumulating footers", () => {
-    const before = sanitizeSVG(EXAMPLE_SVG);
-    const sheet = addPresentation(sanitizeSVG(EXAMPLE_SVG), {
-      title: "Plate <A> & B",
-      notes: ["Material: user-specified aluminum."],
-    });
-    expect(sheet.querySelector("#geometry")!.outerHTML).toBe(
-      before.querySelector("#geometry")!.outerHTML,
-    );
-    expect(sheet.querySelector("#dimensions")!.outerHTML).toBe(
-      before.querySelector("#dimensions")!.outerHTML,
-    );
-    expect(sheet.querySelector("#presentation")!.parentElement).toBe(sheet);
-    expect(sheet.querySelector("#presentation")!.textContent).toContain(
-      "Plate <A> & B",
-    );
-    expect(sheet.querySelector("#presentation")!.textContent).not.toMatch(
-      /tolerance|finish|revision|deburr/i,
-    );
-    const height = sheet.getAttribute("height");
-    addPresentation(sheet, {
-      title: "Plate <A> & B",
-      notes: ["Material: user-specified aluminum."],
-    });
-    expect(sheet.querySelectorAll("#presentation")).toHaveLength(1);
-    expect(sheet.getAttribute("height")).toBe(height);
-    const restored = cleanDrawing(new XMLSerializer().serializeToString(sheet));
-    expect(restored).not.toContain('id="presentation"');
-    expect(restored).toContain('viewBox="-22 -22 164 124"');
-  });
-  it("expands narrow sheets and wraps long titles and Unicode notes below the drawing", () => {
-    const source =
-      '<svg id="drawing" xmlns="http://www.w3.org/2000/svg" width="36mm" height="26mm" viewBox="0 0 36 26"><g id="geometry" data-layer="geometry"><rect id="spacer-outline" x="8" y="8" width="20" height="10" /></g><g id="dimensions" data-layer="dimensions" /></svg>';
-    const title =
-      "A very long precision mounting component title that must wrap without truncation";
-    const note =
-      "表面处理：仅按用户提供的技术要求执行，不添加额外材料或工艺要求。";
-    const svg = addPresentation(sanitizeSVG(source), { title, notes: [note] });
-    expect(svg.getAttribute("width")).toBe("120mm");
-    expect(svg.querySelector("#spacer-outline")!.getAttribute("width")).toBe(
-      "20",
-    );
-    const titleLines = [...svg.querySelectorAll('[data-field="title"]')];
-    expect(titleLines.length).toBeGreaterThan(1);
-    expect(
-      titleLines
-        .map((n) => n.textContent)
-        .join(" ")
-        .replace(/\s/g, ""),
-    ).toBe(title.replace(/\s/g, ""));
-    expect(
-      [...svg.querySelectorAll('[data-field="note"]')]
-        .map((n) => n.textContent)
-        .join(""),
-    ).toContain(note);
-    const box = svg.getAttribute("viewBox")!.split(" ").map(Number);
-    for (const text of svg.querySelectorAll("#presentation text")) {
-      expect(Number(text.getAttribute("y"))).toBeGreaterThan(26);
-      expect(Number(text.getAttribute("y"))).toBeLessThan(box[1] + box[3] - 5);
-    }
   });
 });

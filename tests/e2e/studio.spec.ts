@@ -195,12 +195,7 @@ test("sketch → clarification → generated code → targeted edit → undo/red
     page.getByRole("button", { name: "New Drawing", exact: true }),
   ).toBeEnabled({ timeout: 10_000 });
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "6");
-  await expect(frame.locator("#presentation")).toContainText(
-    "Material: 3 mm stainless steel.",
-  );
-  await expect(frame.locator('#presentation [data-field="scale"]')).toHaveText(
-    "1:1",
-  );
+  await expect(frame.locator("#presentation")).toHaveCount(0);
   await expect(
     page
       .locator(".canvas-document-heading")
@@ -234,50 +229,50 @@ test("sketch → clarification → generated code → targeted edit → undo/red
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "6");
   await page.getByRole("button", { name: "Redo", exact: true }).click();
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "7");
-  await page
-    .getByRole("button", { name: "Drawing layers", exact: true })
-    .click();
-  await page.getByLabel("Show dimensions").uncheck();
+  await page.getByRole("button", { name: "Dimensions", exact: true }).click();
   await expect(frame.locator("#dimensions")).toHaveAttribute("display", "none");
-  await page.getByLabel("Show presentation").uncheck();
-  await expect(frame.locator("#presentation")).toHaveAttribute(
-    "display",
-    "none",
-  );
+  await expect(page.getByLabel("Show presentation")).toHaveCount(0);
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Zoom in", exact: true }).click();
   await page.getByRole("button", { name: "Pan tool", exact: true }).click();
   await expect(frame.locator("body")).toHaveAttribute("data-mode", "pan");
 
-  await page.getByRole("button", { name: "Export SVG" }).click();
-  const geometryDownload = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Geometry only" }).click();
-  const download = await geometryDownload;
+  await page.getByRole("button", { name: "Export", exact: true }).click();
+  const downloadEvent = page.waitForEvent("download");
+  await page.getByRole("menuitem", { name: "Export SVG", exact: true }).click();
+  const download = await downloadEvent;
   const stream = await download.createReadStream();
   let exported = "";
   for await (const chunk of stream!) exported += chunk.toString();
-  expect(exported).toContain('width="164mm"');
-  expect(exported).toContain('viewBox="-22 -22 164 124"');
+  expect(exported).toContain('width="338mm"');
+  expect(exported).toContain('viewBox="-22 -22 338 124"');
   expect(exported).toContain('r="7"');
-  expect(exported).not.toContain('id="dimensions"');
-  expect(exported).not.toContain('id="presentation"');
+  expect(exported).toContain('id="annotated-dimensions"');
+  expect(exported).toContain("Ø14");
   expect(exported).not.toMatch(
-    /script|svg-pan-zoom|data-selected|browser-test-key/,
+    /presentation|Material:|Deburr|script|svg-pan-zoom|data-selected|browser-test-key|display="none"/,
   );
-  await page.getByRole("button", { name: "Export SVG" }).click();
-  const annotatedDownload = page.waitForEvent("download");
-  await page.getByRole("button", { name: "With dimensions" }).click();
-  const annotated = await annotatedDownload;
-  const annotatedStream = await annotated.createReadStream();
-  let dimensioned = "";
-  for await (const chunk of annotatedStream!) dimensioned += chunk.toString();
-  expect(dimensioned).toContain('id="dimensions"');
-  expect(dimensioned).toContain("Ø14");
-  expect(dimensioned).toContain('id="presentation"');
-  expect(dimensioned).toContain("Material: 3 mm stainless steel.");
-  expect(dimensioned).toContain("Deburr edges.");
-  expect(dimensioned).toContain(">1:1</text>");
-  expect(dimensioned).not.toContain('display="none"');
+  const exportedPage = await page.context().newPage();
+  await exportedPage.setContent(exported.replace(/<\?xml[^>]*>/, ""));
+  const views = await exportedPage.locator("svg > svg").evaluateAll((panels) =>
+    panels.map((panel) => {
+      const outline = panel.querySelector("rect")!.getBoundingClientRect();
+      return {
+        x: outline.x,
+        width: outline.width,
+        dimensions:
+          panel.querySelector('[data-layer="dimensions"]')?.children.length ||
+          0,
+      };
+    }),
+  );
+  expect(views).toHaveLength(2);
+  expect(views[0].width).toBeCloseTo((120 * 96) / 25.4, 1);
+  expect(views[1].width).toBeCloseTo(views[0].width, 3);
+  expect(views[1].x - views[0].x).toBeCloseTo((174 * 96) / 25.4, 1);
+  expect(views[0].dimensions).toBe(0);
+  expect(views[1].dimensions).toBeGreaterThan(0);
+  await exportedPage.close();
   const stored = await page.evaluate(() =>
     JSON.stringify({ ...localStorage, ...sessionStorage }),
   );
@@ -286,9 +281,7 @@ test("sketch → clarification → generated code → targeted edit → undo/red
   await waitForProjectSave(page);
   await page.reload();
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "7");
-  await expect(frame.locator("#presentation")).toContainText(
-    "Material: 3 mm stainless steel.",
-  );
+  await expect(frame.locator("#presentation")).toHaveCount(0);
   await page.getByRole("button", { name: "Model settings" }).click();
   await expect(page.getByLabel("API key", { exact: true })).toHaveValue(
     "browser-test-key",
@@ -361,7 +354,9 @@ test("code editor executes synchronous SVG JavaScript and isolates parent access
   await page.getByRole("button", { name: "Apply code" }).click();
   const frame = page.frameLocator('iframe[title="Technical drawing preview"]');
   await expect(frame.locator("#plate-outline")).toHaveAttribute("width", "125");
-  await expect(page.getByRole("button", { name: "Export SVG" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Export", exact: true }),
+  ).toBeVisible();
   await expect(frame.locator("#plate-outline")).toHaveAttribute(
     "data-sandbox",
     "isolated",
@@ -501,7 +496,9 @@ test("projects retain drawings, conversations, references and isolated AI contex
   await expect(
     page.getByText("A fresh page for your next idea."),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Export SVG" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Export", exact: true }),
+  ).toBeDisabled();
   await page
     .getByRole("button", {
       name: "Drawing actions for Untitled drawing",
@@ -654,7 +651,9 @@ test("storage failures keep the assistant usable and report unsaved work", async
       .locator("#hole-top-left"),
   ).toHaveAttribute("r", "6");
   await expect(page.getByRole("alert")).toContainText("Browser storage");
-  await expect(page.getByRole("button", { name: "Export SVG" })).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "Export", exact: true }),
+  ).toBeEnabled();
 });
 
 test("ordinary chat is visible before the provider completes its stream", async ({

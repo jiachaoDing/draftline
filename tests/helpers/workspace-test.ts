@@ -46,7 +46,7 @@ export const test = base.extend<{ workspaceLanguage: "en" | "zh-CN" }>({
             chatInput: "",
             clarification: null,
             userInput: null,
-            layers: { geometry: true, dimensions: true, presentation: true },
+            layers: { dimensions: true },
           });
         };
         request.onsuccess = () => request.result.close();

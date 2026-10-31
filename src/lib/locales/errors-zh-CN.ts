@@ -77,8 +77,6 @@ export const errorsZhCN: Record<string, string> = {
     "图纸宽高必须明确使用毫米单位。",
   "SVG scale must be exactly one coordinate unit per millimeter.":
     "SVG 必须严格使用每坐标单位一毫米的比例。",
-  "Sheet information must use its own presentation group.":
-    "图纸信息必须使用独立的 presentation 分组。",
   "The drawing needs separate geometry and dimension groups.":
     "图纸必须包含独立的几何和尺寸标注分组。",
   "All drawing elements must belong to a drawing layer.":

@@ -10,6 +10,27 @@ import { EXAMPLE } from "../src/lib/example";
 import type { ChatMessage } from "../src/lib/contracts";
 
 describe("persistent conversation branches and canvases", () => {
+  it("reuses unchanged messages while replacing a streamed reply", () => {
+    const user: ChatMessage = { id: "user", role: "user", text: "Draw" };
+    const reply: ChatMessage = { id: "reply", role: "assistant", text: "A" };
+    const initial = recordConversation([user, reply]);
+    const updated = recordConversation(
+      [user, { ...reply, text: "AB" }],
+      initial,
+    );
+    expect(updated.nodes[0].message).toBe(initial.nodes[0].message);
+    expect(updated.nodes[1].message.text).toBe("AB");
+    expect(initial.nodes[1].message.text).toBe("A");
+    const before = runtimeRepository(initial);
+    const after = runtimeRepository(updated);
+    expect(after.messages[0].message).toEqual(before.messages[0].message);
+    expect(after.messages[1].message.content).toEqual([
+      { type: "text", text: "AB" },
+    ]);
+    expect(before.messages[1].message.content).toEqual([
+      { type: "text", text: "A" },
+    ]);
+  });
   it("retains sibling replies and their descendants through serialization", () => {
     const project = newProject(EXAMPLE);
     const welcome = project.messages[0];

@@ -21,7 +21,7 @@ export type PreviewHandle = { send: (type: string, payload?: unknown) => void };
 type Props = {
   title?: string;
   html: string;
-  onSnapshot: (snapshot: Snapshot) => void;
+  onSnapshot?: (snapshot: Snapshot) => void;
   onSelection: (selection: SelectionState) => void;
   onCommand?: (command: string) => void;
   onError: (message: string) => void;
@@ -29,7 +29,7 @@ type Props = {
   selection?: SelectionState;
   locked?: boolean;
   changedIds?: string[];
-  layers: { geometry: boolean; dimensions: boolean; presentation: boolean };
+  layers: { dimensions: boolean };
   mode: "select" | "pan";
 };
 export const Preview = forwardRef<PreviewHandle, Props>(
@@ -72,6 +72,7 @@ export const Preview = forwardRef<PreviewHandle, Props>(
         const { type, payload } = event.data;
         if (
           type === "snapshot" &&
+          currentProps.current.onSnapshot &&
           typeof payload === "string" &&
           payload.length <= 600_000
         ) {

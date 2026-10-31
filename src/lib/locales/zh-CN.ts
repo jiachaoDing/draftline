@@ -111,13 +111,14 @@ export const zhCN: Record<string, string> = {
   "Draftline home": "Draftline 首页",
   BETA: "测试版",
   "Model settings": "模型设置",
+  Export: "导出",
   "Export SVG": "导出 SVG",
-  "EXPORT DRAWING": "导出图纸",
-  "With dimensions": "包含尺寸标注",
-  "Dimensions, title & technical notes": "尺寸、标题和技术说明",
-  "Geometry only": "仅几何图形",
-  "Clean vector outlines": "纯矢量轮廓",
-  "Standalone SVG · true millimeter scale": "独立 SVG 文件 · 真实毫米比例",
+  "Export PDF": "导出 PDF",
+  "Exporting…": "正在导出…",
+  "PDF exported at its original millimeter scale.":
+    "已按原始毫米比例导出 PDF。",
+  "The drawing could not be exported. Please try again.":
+    "图纸导出失败，请重试。",
   Drawing: "图纸",
   Code: "代码",
   "Select tool": "选择工具",
@@ -195,8 +196,8 @@ export const zhCN: Record<string, string> = {
     "2. 新建图纸，在助手中添加或粘贴草图，填写必要尺寸后发送，并回答尺寸追问。",
   "3. Click or drag to select objects, Shift-click to toggle, and double-click to enter groups. Describe your edit; review broader AI changes before applying. Use the hand tool to pan and scroll to zoom.":
     "3. 点击或拖动框选对象，Shift 点击多选，双击进入编组。描述修改要求，涉及更大范围时请先审阅方案再应用。使用平移工具移动画布，滚轮缩放。",
-  "4. Export geometry or a dimensioned SVG. The SVG preserves millimeter scale, with page margins for annotations.":
-    "4. 导出纯几何图形或带尺寸的 SVG，保留毫米比例和标注页边距。",
+  "4. Export SVG or PDF with geometry on the left and dimensions on the right, at true millimeter scale.":
+    "4. 导出 SVG 或 PDF：左侧为纯几何图形，右侧包含尺寸标注，保持真实毫米比例。",
   "Projects, conversations, sketches and model settings are saved in this browser. Sending a request shares its sketch and drawing with your selected provider.":
     "项目、对话、草图和模型设置保存在此浏览器中。发送请求会将对应草图和图纸分享给你选择的模型服务商。",
   "Let’s draw": "开始绘图",
@@ -261,8 +262,6 @@ export const zhCN: Record<string, string> = {
   "Receiving your model’s response": "正在接收模型回复",
   "Validating geometry": "正在验证几何图形",
   "Drawing source code": "图纸源代码",
-  "Drawing layers": "图纸图层",
-  "Sheet information": "图纸信息",
   Dimensions: "尺寸标注",
   Geometry: "几何图形",
   "New Drawing": "新建图纸",
@@ -361,9 +360,6 @@ export const zhCN: Record<string, string> = {
   "Drawing actions for {{name}}": "图纸操作：{{name}}",
   "Rename drawing {{name}}": "重命名图纸 {{name}}",
   "Delete drawing {{name}}": "删除图纸 {{name}}",
-  "Show geometry": "显示几何图形",
-  "Show dimensions": "显示尺寸标注",
-  "Show presentation": "显示图纸信息",
   "{{count}} models found. Choose a vision-capable model for sketches.":
     "找到 {{count}} 个模型。请为草图选择支持视觉的模型。",
   "Model reply: {{reply}}": "模型回复：{{reply}}",

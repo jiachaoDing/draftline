@@ -232,6 +232,8 @@ export default forwardRef<AssistantChatHandle, Props>(
         }
       }
       let previousText = runtime.thread.composer.getState().text;
+      let previousRuntimeAttachments =
+        runtime.thread.composer.getState().attachments;
       let previousAttachments = JSON.stringify(
         runtime.thread.composer
           .getState()
@@ -245,6 +247,14 @@ export default forwardRef<AssistantChatHandle, Props>(
           draftRevision.current++;
           callbacks.current.onDraft(state.text);
         }
+        if (
+          state.attachments.length === previousRuntimeAttachments.length &&
+          state.attachments.every(
+            (item, index) => item === previousRuntimeAttachments[index],
+          )
+        )
+          return;
+        previousRuntimeAttachments = state.attachments;
         const items = state.attachments
           .map(savedAttachment)
           .filter((item) => item !== undefined);

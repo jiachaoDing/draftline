@@ -139,9 +139,7 @@ export const projectSchema = z
     clarification: drawingRequestSchema.omit({ config: true }).nullable(),
     userInput: pendingUserInputSchema.nullable().default(null),
     layers: z.object({
-      geometry: z.boolean(),
       dimensions: z.boolean(),
-      presentation: z.boolean(),
     }),
   })
   .transform((project) => {
@@ -210,7 +208,7 @@ export function newProject(
     chatInput: "",
     clarification: null,
     userInput: null,
-    layers: { geometry: true, dimensions: true, presentation: true },
+    layers: { dimensions: true },
   };
 }
 interface ProjectDB extends DBSchema {

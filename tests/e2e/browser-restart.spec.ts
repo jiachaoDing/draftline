@@ -118,10 +118,7 @@ test("projects and large references survive a full browser restart", async ({
     await page
       .getByLabel("Drawing instructions")
       .fill("Keep this unsent draft");
-    await page
-      .getByRole("button", { name: "Drawing layers", exact: true })
-      .click();
-    await page.getByLabel("Show dimensions").uncheck();
+    await page.getByRole("button", { name: "Dimensions", exact: true }).click();
     await page.keyboard.press("Escape");
     await waitForProjectSave(page);
     const projectData = await page.evaluate(async () => {
@@ -164,10 +161,9 @@ test("projects and large references survive a full browser restart", async ({
     await expect(page.getByLabel("Drawing instructions")).toHaveValue(
       "Keep this unsent draft",
     );
-    await page
-      .getByRole("button", { name: "Drawing layers", exact: true })
-      .click();
-    await expect(page.getByLabel("Show dimensions")).not.toBeChecked();
+    await expect(
+      page.getByRole("button", { name: "Dimensions", exact: true }),
+    ).toHaveAttribute("aria-pressed", "false");
     await page.keyboard.press("Escape");
     const frame = page.frameLocator(
       'iframe[title="Technical drawing preview"]',

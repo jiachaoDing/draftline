@@ -11,13 +11,11 @@ import {
   useState,
 } from "react";
 import {
-  ArrowDownToLine,
   ArrowRight,
   Check,
   ChevronDown,
   CircleHelp,
   Code2,
-  FileCode2,
   Focus,
   Hand,
   Layers2,
@@ -48,7 +46,8 @@ import {
 import { reviewDrawing } from "./lib/drawing-review";
 import { EMPTY_SELECTION, type SelectionState } from "./lib/contracts";
 import DrawingSidebar from "./components/DrawingSidebar";
-import DrawingLayers from "./components/DrawingLayers";
+import DimensionToggle from "./components/DimensionToggle";
+import DrawingExport from "./components/DrawingExport";
 import ChatTranscript from "./components/ChatTranscript";
 import ConversationHistory from "./components/ConversationHistory";
 import AssistantChat, {
@@ -65,14 +64,7 @@ import {
   answerQuestions,
 } from "./lib/user-input-flow";
 import { Preview, type PreviewHandle } from "./components/Preview";
-import {
-  downloadFile,
-  exportSVG,
-  presentationSVG,
-  svgToHTML,
-  listElements,
-  sanitizeSVG,
-} from "./lib/drawing";
+import { svgToHTML, listElements, sanitizeSVG } from "./lib/drawing";
 import { pushHistory } from "./lib/history";
 import {
   recordConversation,
@@ -112,7 +104,7 @@ import {
   type Project,
 } from "./lib/projects";
 import { readConfig, defaultConfig } from "./lib/model-settings";
-import type { ChatMessage, Drawing, ElementInfo } from "./lib/contracts";
+import type { ChatMessage, Drawing } from "./lib/contracts";
 
 const CodeEditor = lazy(() => import("./components/CodeEditor"));
 
@@ -182,7 +174,10 @@ export default function App() {
     editContext,
     sessions,
   } = useProjectSession(activeId);
-  const [elements, setElements] = useState<ElementInfo[]>([]);
+  const elements = useMemo(
+    () => (drawing ? listElements(sanitizeSVG(drawing.svg)) : []),
+    [drawing],
+  );
   const [selection, setSelection] = useState<SelectionState>(EMPTY_SELECTION);
   const selectedId = selection.ids[0] || null;
   const selected = elements.find((el) => el.id === selectedId);
@@ -190,15 +185,13 @@ export default function App() {
     activeProject,
     "layers",
     {
-      geometry: true,
       dimensions: true,
-      presentation: true,
     },
     updateProject,
   );
   const previewHTML = useMemo(() => {
     const shown = review?.drawing || drawing;
-    return shown ? svgToHTML(presentationSVG(shown.svg, shown)) : "";
+    return shown ? svgToHTML(shown.svg) : "";
   }, [drawing, review]);
   const [mode, setMode] = useState<"select" | "pan">("select");
   const [zoom, setZoom] = useState(100);
@@ -239,13 +232,11 @@ export default function App() {
     null,
     updateProject,
   );
-  const [exportOpen, setExportOpen] = useState(false);
   const [tab, setTab] = useState<"drawing" | "code">("drawing");
   const [objectsOpen, setObjectsOpen] = useState(false);
   const [help, setHelp] = useState(false);
   const preview = useRef<PreviewHandle>(null);
   const composer = useRef<AssistantChatHandle>(null);
-  const exporting = useRef<HTMLDivElement>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
@@ -266,11 +257,9 @@ export default function App() {
     activeIdRef.current = project.id;
     setActiveId(project.id);
     setSelection(EMPTY_SELECTION);
-    setElements([]);
     setMode("select");
     setZoom(100);
     setTab("drawing");
-    setExportOpen(false);
     setNotice(null);
   }, []);
   const persist = useCallback(
@@ -360,6 +349,10 @@ export default function App() {
     return () => {
       window.removeEventListener("pagehide", unload);
       document.removeEventListener("visibilitychange", hide);
+      clearTimeout(noticeTimer.current);
+      for (const timer of saveTimers.current.values()) clearTimeout(timer);
+      saveTimers.current.clear();
+      for (const session of sessions.values()) session.abort.current?.abort();
     };
   }, [persist, sessions]);
   async function changeProject(id?: string) {
@@ -460,7 +453,6 @@ export default function App() {
         );
       if (activeIdRef.current === activeProject?.id) {
         setSelection(EMPTY_SELECTION);
-        setElements(listElements(sanitizeSVG(next.svg)));
       }
       setClarification(null);
       setUserInput(null);
@@ -607,14 +599,6 @@ export default function App() {
     },
     [sessions],
   );
-  useEffect(() => {
-    const close = (event: MouseEvent) => {
-      if (!exporting.current?.contains(event.target as Node))
-        setExportOpen(false);
-    };
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, []);
 
   useEffect(() => {
     const keyboard = (event: KeyboardEvent) => {
@@ -641,7 +625,6 @@ export default function App() {
       }
       if (event.key === "Escape") {
         preview.current?.send("command", "escape");
-        setExportOpen(false);
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "g") {
         event.preventDefault();
@@ -1229,20 +1212,6 @@ export default function App() {
       tell("The example image could not be loaded.", true);
     }
   };
-  const exportDrawing = (annotations: boolean) => {
-    if (!drawing) return;
-    try {
-      downloadFile(
-        exportSVG(drawing.svg, annotations, drawing),
-        `${drawing.title.replace(/[^\p{L}\p{N}_-]+/gu, "-").toLowerCase()}${annotations ? "-dimensioned" : ""}.svg`,
-        "image/svg+xml;charset=utf-8",
-      );
-      tell("SVG exported at its original millimeter scale.");
-    } catch (error) {
-      tell((error as Error).message, true);
-    }
-    setExportOpen(false);
-  };
   const navigate = (delta: number) => {
     setHistory((h) => ({ ...h, index: h.index + delta }));
     setSelection(EMPTY_SELECTION);
@@ -1308,39 +1277,11 @@ export default function App() {
               className={`connection-dot ${config.apiKey && config.model ? "connected" : ""}`}
             />
           </button>
-          <div className="export-wrap" ref={exporting}>
-            <button
-              className="button primary"
-              disabled={busy || !!review || !drawing}
-              onClick={() => setExportOpen(!exportOpen)}
-            >
-              <ArrowDownToLine size={16} />
-              {t("Export SVG")}
-              <ChevronDown size={14} />
-            </button>
-            {exportOpen && (
-              <div className="export-menu">
-                <div className="menu-label">{t("EXPORT DRAWING")}</div>
-                <button onClick={() => exportDrawing(true)}>
-                  <FileCode2 size={17} />
-                  <span>
-                    {t("With dimensions")}
-                    <small>{t("Dimensions, title & technical notes")}</small>
-                  </span>
-                  <ArrowRight size={14} />
-                </button>
-                <button onClick={() => exportDrawing(false)}>
-                  <Layers2 size={17} />
-                  <span>
-                    {t("Geometry only")}
-                    <small>{t("Clean vector outlines")}</small>
-                  </span>
-                  <ArrowRight size={14} />
-                </button>
-                <p>{t("Standalone SVG · true millimeter scale")}</p>
-              </div>
-            )}
-          </div>
+          <DrawingExport
+            drawing={drawing}
+            disabled={busy || !!review}
+            onNotice={tell}
+          />
         </div>
       </header>
       <main
@@ -1392,9 +1333,9 @@ export default function App() {
               >
                 <Layers2 size={17} />
               </button>
-              <DrawingLayers
-                layers={layers}
-                onChange={setLayers}
+              <DimensionToggle
+                visible={layers.dimensions}
+                onChange={(dimensions) => setLayers({ dimensions })}
                 disabled={!drawing || tab !== "drawing"}
               />
               <span className="tool-separator" />
@@ -1467,7 +1408,6 @@ export default function App() {
                 key={activeId}
                 ref={preview}
                 html={previewHTML}
-                onSnapshot={(snapshot) => setElements(snapshot.elements)}
                 onSelection={(next) => {
                   if (review) return;
                   setSelection({
@@ -1911,7 +1851,7 @@ export default function App() {
             </p>
             <p>
               {t(
-                "4. Export geometry or a dimensioned SVG. The SVG preserves millimeter scale, with page margins for annotations.",
+                "4. Export SVG or PDF with geometry on the left and dimensions on the right, at true millimeter scale.",
               )}
             </p>
             <small>

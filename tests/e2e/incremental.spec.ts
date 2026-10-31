@@ -740,13 +740,13 @@ test("real provider loop retries patch/validation/identity/revision errors, then
   await page.reload();
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "7");
   await expect(frame.locator("#dim-hole text")).toHaveText("Ø14; 3 × Ø10");
-  await page.getByRole("button", { name: "Export SVG" }).click();
+  await page.getByRole("button", { name: "Export", exact: true }).click();
   const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Geometry only" }).click();
+  await page.getByRole("menuitem", { name: "Export SVG", exact: true }).click();
   const { readFile } = await import("node:fs/promises");
   const exported = await readFile((await (await download).path())!, "utf8");
   expect(exported).toContain('r="7"');
-  expect(exported).not.toContain('id="dimensions"');
+  expect(exported).toContain('id="annotated-dimensions"');
   await page.getByRole("button", { name: "Code", exact: true }).click();
   await page
     .getByLabel("Drawing source code")

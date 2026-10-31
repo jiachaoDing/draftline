@@ -25,7 +25,9 @@ export function recordConversation(
   const nodes = new Map(previous?.nodes.map((node) => [node.message.id, node]));
   let parentId: string | null = null;
   for (const item of messages) {
-    const message = { ...item, id: item.id || crypto.randomUUID() };
+    const message = item.id
+      ? (item as ChatMessage & { id: string })
+      : { ...item, id: crypto.randomUUID() };
     nodes.set(message.id, { parentId, message });
     parentId = message.id;
   }
@@ -52,12 +54,21 @@ export function conversationPath(
   return path.reverse();
 }
 
+const runtimeMessages = new WeakMap<
+  ChatMessage,
+  { index: number; value: ReturnType<typeof runtimeMessage> }
+>();
+
 export function runtimeRepository(conversation: Conversation) {
   return ExportedMessageRepository.fromBranchableArray(
-    conversation.nodes.map(({ parentId, message }, index) => ({
-      parentId,
-      message: runtimeMessage(message, index),
-    })),
+    conversation.nodes.map(({ parentId, message }, index) => {
+      let cached = runtimeMessages.get(message);
+      if (!cached || cached.index !== index) {
+        cached = { index, value: runtimeMessage(message, index) };
+        runtimeMessages.set(message, cached);
+      }
+      return { parentId, message: cached.value };
+    }),
     { headId: conversation.headId },
   );
 }

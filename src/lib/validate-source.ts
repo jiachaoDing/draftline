@@ -63,10 +63,15 @@ export function validateDrawingSource(
     );
     signal.addEventListener("abort", cancel, { once: true });
     window.addEventListener("message", receive);
-    const source = buildSandbox(html, channel, false);
-    container.append(frame);
-    document.body.append(container);
-    frame.getBoundingClientRect();
-    frame.srcdoc = source;
+    try {
+      const source = buildSandbox(html, channel, false);
+      signal.throwIfAborted();
+      container.append(frame);
+      document.body.append(container);
+      frame.getBoundingClientRect();
+      frame.srcdoc = source;
+    } catch (error) {
+      finish(error as Error);
+    }
   });
 }

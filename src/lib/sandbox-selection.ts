@@ -36,23 +36,33 @@ export function installSVGSelection(
       getComputedStyle(node).visibility !== "hidden"
     );
   };
-  const normalize = (ids: string[]) =>
-    [...new Set(ids)].filter((id, _, all) => {
+  const normalize = (ids: string[]) => {
+    const selected = new Set(ids);
+    return [...selected].filter((id) => {
       const node = byId.get(id);
-      return (
-        node &&
-        !all.some(
-          (parentId) => parentId !== id && byId.get(parentId)?.contains(node),
-        )
-      );
+      if (!node) return false;
+      for (
+        let parent = node.parentElement;
+        parent;
+        parent = parent.parentElement
+      )
+        if (byId.has(parent.id) && selected.has(parent.id)) return false;
+      return true;
     });
+  };
+  let renderedIds = new Set<string>();
+  let refreshFrame: number | undefined;
   const draw = () => {
+    if (refreshFrame !== undefined) cancelAnimationFrame(refreshFrame);
+    refreshFrame = undefined;
     overlay.replaceChildren();
-    objects.forEach((node) => {
-      if (state.ids.includes(node.id))
-        node.setAttribute("data-selected", "true");
-      else node.removeAttribute("data-selected");
-    });
+    const selected = new Set(state.ids);
+    for (const id of renderedIds)
+      if (!selected.has(id)) byId.get(id)?.removeAttribute("data-selected");
+    for (const id of selected)
+      if (!renderedIds.has(id))
+        byId.get(id)?.setAttribute("data-selected", "true");
+    renderedIds = selected;
     const boxes = [
       ...state.ids.map((id) => ({ id, kind: "selected" })),
       ...changedIds.map((id) => ({ id, kind: "changed" })),
@@ -235,7 +245,10 @@ export function installSVGSelection(
         exit();
       } else send("command", value);
     },
-    refresh: () => requestAnimationFrame(draw),
+    refresh: () => {
+      if (refreshFrame === undefined)
+        refreshFrame = requestAnimationFrame(draw);
+    },
     setMode: (value: string) => {
       mode = value;
     },

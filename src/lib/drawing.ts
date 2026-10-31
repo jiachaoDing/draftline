@@ -1,10 +1,5 @@
 import DOMPurify from "dompurify";
 import type { AIResult, ElementInfo } from "./contracts";
-import {
-  addPresentation,
-  removePresentation,
-  type SheetInfo,
-} from "./presentation";
 
 const SHAPES = "path,circle,ellipse,rect,line,polygon,polyline,text,use";
 const OBJECTS = `${SHAPES},g`;
@@ -91,13 +86,6 @@ export function validateSVG(svg: SVGSVGElement) {
   }
   const geometry = [...svg.children].find((n) => n.id === "geometry");
   const dimensions = [...svg.children].find((n) => n.id === "dimensions");
-  const presentation = [...svg.children].find((n) => n.id === "presentation");
-  if (
-    presentation &&
-    (presentation.localName !== "g" ||
-      presentation.getAttribute("data-layer") !== "presentation")
-  )
-    throw new Error("Sheet information must use its own presentation group.");
   if (
     svg.id !== "drawing" ||
     geometry?.localName !== "g" ||
@@ -117,8 +105,7 @@ export function validateSVG(svg: SVGSVGElement) {
       (n) =>
         !["defs", "title", "desc"].includes(n.localName) &&
         n !== geometry &&
-        n !== dimensions &&
-        n !== presentation,
+        n !== dimensions,
     )
   )
     throw new Error("All drawing elements must belong to a drawing layer.");
@@ -153,14 +140,7 @@ export function validateSVG(svg: SVGSVGElement) {
 }
 
 export function cleanDrawing(source: string) {
-  return serialize(
-    validateSVG(
-      removePresentation(validateSVG(ensureObjectIds(sanitizeSVG(source)))),
-    ),
-  );
-}
-export function presentationSVG(source: string, info: SheetInfo = {}) {
-  return serialize(addPresentation(validateSVG(sanitizeSVG(source)), info));
+  return serialize(validateSVG(ensureObjectIds(sanitizeSVG(source))));
 }
 export function serialize(svg: Element) {
   return new XMLSerializer().serializeToString(svg);
@@ -208,9 +188,7 @@ export function applyPatches(
     );
     if (
       !old ||
-      ["drawing", "geometry", "dimensions", "presentation"].includes(
-        patch.id,
-      ) ||
+      ["drawing", "geometry", "dimensions"].includes(patch.id) ||
       patched.has(patch.id) ||
       [...old.querySelectorAll("[id]")].some((child) => patched.has(child.id))
     )
@@ -251,23 +229,63 @@ export function applyPatches(
   return serialize(validateSVG(svg));
 }
 
-export function exportSVG(
-  source: string,
-  annotations: boolean,
-  info: SheetInfo = {},
-) {
-  const svg = validateSVG(removePresentation(validateSVG(sanitizeSVG(source))));
-  if (annotations) addPresentation(svg, info);
-  if (!annotations) svg.querySelector("#dimensions")?.remove();
-  svg.querySelectorAll("[data-layer],[data-for],[data-label]").forEach((el) => {
+export function exportSVG(source: string) {
+  const left = validateSVG(sanitizeSVG(source));
+  const right = left.cloneNode(true) as SVGSVGElement;
+  const [x, y, width, height] = left
+    .getAttribute("viewBox")!
+    .trim()
+    .split(/[\s,]+/)
+    .map(Number);
+  const gap = 10;
+  const svg = left.ownerDocument.createElementNS(left.namespaceURI, "svg");
+  svg.setAttribute("width", `${width * 2 + gap}mm`);
+  svg.setAttribute("height", `${height}mm`);
+  svg.setAttribute("viewBox", [x, y, width * 2 + gap, height].join(" "));
+  left.querySelector("#dimensions")!.remove();
+  // Each copy owns its definitions and fragment references, including imported SVGs.
+  let prefix = "annotated-";
+  const originalIds = [left, ...left.querySelectorAll("[id]")].map(
+    (node) => node.id,
+  );
+  while (originalIds.some((id) => id.startsWith(prefix)))
+    prefix = `copy-${prefix}`;
+  const ids = new Map<string, string>();
+  for (const node of [right, ...right.querySelectorAll("[id]")]) {
+    ids.set(node.id, `${prefix}${node.id}`);
+    node.id = ids.get(node.id)!;
+  }
+  for (const node of [right, ...right.querySelectorAll("*")]) {
+    for (const attr of [...node.attributes]) {
+      if (/href$/i.test(attr.name) && attr.value.startsWith("#")) {
+        const id = ids.get(attr.value.slice(1));
+        if (id) node.setAttribute(attr.name, `#${id}`);
+      } else if (/url\s*\(/i.test(attr.value)) {
+        node.setAttribute(
+          attr.name,
+          attr.value.replace(/url\(\s*#([\w.-]+)\s*\)/g, (value, id: string) =>
+            ids.has(id) ? `url(#${ids.get(id)})` : value,
+          ),
+        );
+      }
+    }
+  }
+  left.setAttribute("x", String(x));
+  right.setAttribute("x", String(x + width + gap));
+  for (const panel of [left, right]) {
+    panel.setAttribute("width", String(width));
+    panel.setAttribute("height", String(height));
+    panel.setAttribute("y", String(y));
+    svg.append(panel);
+  }
+  svg.querySelectorAll("[data-for],[data-label]").forEach((el) => {
     el.removeAttribute("data-for");
     el.removeAttribute("data-label");
   });
-  svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
   return `<?xml version="1.0" encoding="UTF-8"?>\n${serialize(svg)}`;
 }
 
-export function downloadFile(content: string, name: string, type: string) {
+export function downloadFile(content: BlobPart, name: string, type: string) {
   const url = URL.createObjectURL(new Blob([content], { type }));
   const link = document.createElement("a");
   link.href = url;
