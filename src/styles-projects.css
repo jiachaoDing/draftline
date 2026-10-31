@@ -389,14 +389,6 @@
   font-size: 9px;
   background: white;
 }
-.chat-composer .example-button {
-  padding: 0 0 9px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  font-size: 10px;
-}
 .message-reference {
   margin: 0 0 8px;
 }

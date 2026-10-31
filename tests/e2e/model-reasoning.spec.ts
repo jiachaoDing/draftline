@@ -82,6 +82,7 @@ test("reasoning defaults, explicit choices, persistence and provider payload sta
   await page
     .getByRole("button", { name: "Save settings", exact: true })
     .click();
+  await page.getByRole("button", { name: "AI assistant", exact: true }).click();
   await page
     .getByLabel("Drawing instructions", { exact: true })
     .fill("Reply with a short message.");

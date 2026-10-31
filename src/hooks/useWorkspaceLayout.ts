@@ -20,10 +20,12 @@ export function useWorkspaceLayout() {
   });
   const [width, setWidth] = useState(window.innerWidth);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileView, setMobileView] = useState<"drawing" | "assistant">(
+    "drawing",
+  );
   useEffect(() => {
     const resize = () => {
       setWidth(window.innerWidth);
-      setMobileOpen(false);
     };
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
@@ -35,20 +37,25 @@ export function useWorkspaceLayout() {
       // Layout remains usable when browser storage is unavailable.
     }
   }, [layout]);
-  const left = Math.min(layout.left, Math.max(200, width - 360));
+  const left = Math.min(layout.left, Math.max(200, width - 640));
+  const leftOpen = width <= 1050 ? false : layout.leftOpen;
   const right = Math.min(
     layout.right,
-    Math.max(280, width - (layout.leftOpen ? left : 0) - 360),
+    Math.max(280, width - (leftOpen ? left : 48) - 360),
   );
   const setSidebarOpen = useCallback((open: boolean) => {
-    if (window.innerWidth <= 700) setMobileOpen(open);
+    if (window.innerWidth <= 1050) setMobileOpen(open);
     else setLayout((value) => ({ ...value, leftOpen: open }));
   }, []);
   return {
     layout,
     left,
     right,
-    sidebarOpen: width <= 700 ? mobileOpen : layout.leftOpen,
+    mobile: width <= 700,
+    mobileView,
+    setMobileView,
+    rightOpen: width <= 700 ? mobileView === "assistant" : layout.rightOpen,
+    sidebarOpen: width <= 1050 ? mobileOpen : layout.leftOpen,
     setSidebarOpen,
     setRightOpen: (open: boolean) =>
       setLayout((value) => ({ ...value, rightOpen: open })),

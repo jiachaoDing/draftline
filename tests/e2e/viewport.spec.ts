@@ -89,6 +89,83 @@ test("drawing fills the work plane and supports pan and zoom at its edges", asyn
   }
 });
 
+test("dragging selected and unselected elements pans without changing selection or geometry", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const frame = page.frameLocator('iframe[title="Technical drawing preview"]');
+  const selected = frame.locator("#hole-top-left");
+  await selected.click();
+  await expect(selected).toHaveAttribute("data-selected", "true");
+  const geometry = await selected.evaluate((element) => [
+    element.getAttribute("cx"),
+    element.getAttribute("cy"),
+    element.getAttribute("r"),
+  ]);
+  for (const id of ["hole-top-left", "hole-top-right"]) {
+    const before = (await selected.boundingBox())!;
+    const origin = (await frame.locator(`#${id}`).boundingBox())!;
+    await page.mouse.move(
+      origin.x + origin.width / 2,
+      origin.y + origin.height / 2,
+    );
+    await page.mouse.down();
+    await page.mouse.move(
+      origin.x + origin.width / 2 + 40,
+      origin.y + origin.height / 2 + 30,
+      { steps: 8 },
+    );
+    await page.mouse.up();
+    await expect
+      .poll(async () =>
+        Math.round((await selected.boundingBox())!.x - before.x),
+      )
+      .toBe(40);
+    await expect
+      .poll(async () =>
+        Math.round((await selected.boundingBox())!.y - before.y),
+      )
+      .toBe(30);
+    await expect(selected).toHaveAttribute("data-selected", "true");
+    await expect(frame.locator("#hole-top-right")).not.toHaveAttribute(
+      "data-selected",
+      "true",
+    );
+  }
+  expect(
+    await selected.evaluate((element) => [
+      element.getAttribute("cx"),
+      element.getAttribute("cy"),
+      element.getAttribute("r"),
+    ]),
+  ).toEqual(geometry);
+  await frame.locator("#hole-top-right").click();
+  await expect(frame.locator("#hole-top-right")).toHaveAttribute(
+    "data-selected",
+    "true",
+  );
+  await expect(selected).not.toHaveAttribute("data-selected", "true");
+  const clickTarget = (await frame.locator("#hole-top-right").boundingBox())!;
+  await page.mouse.move(
+    clickTarget.x + clickTarget.width / 2,
+    clickTarget.y + clickTarget.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    clickTarget.x + clickTarget.width / 2 + 2,
+    clickTarget.y + clickTarget.height / 2 + 2,
+  );
+  await page.mouse.up();
+  await expect(frame.locator("#hole-top-right")).toHaveAttribute(
+    "data-selected",
+    "true",
+  );
+  expect((await frame.locator("#hole-top-right").boundingBox())!.x).toBeCloseTo(
+    clickTarget.x,
+    1,
+  );
+});
+
 async function expectViewportLayout(page: Page) {
   await expect
     .poll(() =>
@@ -96,7 +173,6 @@ async function expectViewportLayout(page: Page) {
         const { innerWidth: width, innerHeight: height } = window;
         const app = document.querySelector(".app")!.getBoundingClientRect();
         const panels = [
-          ".header-actions",
           ".canvas-toolbar",
           ".canvas-footer",
           ".canvas-status",
@@ -120,9 +196,9 @@ async function expectViewportLayout(page: Page) {
               element.scrollWidth <= width && element.scrollHeight <= height,
           ),
           panelsOutsideViewport: panels.flatMap((selector) => {
-            const bounds = document
-              .querySelector(selector)!
-              .getBoundingClientRect();
+            const element = document.querySelector(selector)!;
+            if (getComputedStyle(element).visibility === "hidden") return [];
+            const bounds = element.getBoundingClientRect();
             const fits =
               bounds.width > 0 &&
               bounds.height > 0 &&
@@ -177,6 +253,8 @@ test("workspace remains inside the viewport across desktop, tablet, mobile and s
     [1920, 1080],
   ]) {
     await page.setViewportSize({ width, height });
+    if (width <= 700)
+      await page.getByRole("button", { name: "Canvas", exact: true }).click();
     await expectViewportLayout(page);
     await expectViewportLayout(page);
     await expect(
@@ -184,18 +262,17 @@ test("workspace remains inside the viewport across desktop, tablet, mobile and s
         .frameLocator('iframe[title="Technical drawing preview"]')
         .locator("#plate-outline"),
     ).toBeVisible();
+    if (width <= 700)
+      await page
+        .getByRole("button", { name: "AI assistant", exact: true })
+        .click();
     const send = page.getByRole("button", {
       name: "Send drawing instruction",
       exact: true,
     });
     await send.scrollIntoViewIfNeeded();
     await expect(send).toBeInViewport();
-    if (height <= 400)
-      expect(
-        await page
-          .locator(".assistant-controls")
-          .evaluate((element) => element.scrollTop),
-      ).toBeGreaterThan(0);
+
     await page.evaluate(() => window.scrollTo(1000, 1000));
     await expectViewportLayout(page);
   }
@@ -249,6 +326,10 @@ test("long drawing lists and chat history scroll internally without moving the p
     [390, 700],
   ]) {
     await page.setViewportSize({ width, height });
+    if (width <= 700)
+      await page
+        .getByRole("button", { name: "AI assistant", exact: true })
+        .click();
     const history = page.locator(".assistant-content");
     await expect
       .poll(() =>
@@ -268,7 +349,7 @@ test("long drawing lists and chat history scroll internally without moving the p
       .poll(() => history.evaluate((element) => element.scrollTop))
       .toBeGreaterThan(0);
     await expectViewportLayout(page);
-    if (width <= 700)
+    if (width <= 1050)
       await page.getByRole("button", { name: "Expand sidebar" }).click();
     const last = page.getByRole("button", {
       name: "Open drawing Viewport drawing 39",
@@ -283,12 +364,14 @@ test("long drawing lists and chat history scroll internally without moving the p
           .evaluate((element) => element.scrollTop),
       )
       .toBeGreaterThan(0);
-    if (width <= 700)
+    if (width <= 1050)
       await page
         .getByRole("button", { name: "Close sidebar", exact: true })
         .click();
     await expectViewportLayout(page);
   }
+  if (page.viewportSize()!.width <= 700)
+    await page.getByRole("button", { name: "Canvas", exact: true }).click();
   await page.getByRole("button", { name: "Zoom in", exact: true }).click();
   await expect(page.locator(".zoom-controls")).not.toContainText("100%");
   const zoom = await page.locator(".zoom-controls").innerText();

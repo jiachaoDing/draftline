@@ -17,6 +17,7 @@ export function installSVGSelection(
   let pointerId: number | null = null;
   let panStart: { x: number; y: number } | null = null;
   let panMoved = false;
+  let touchGesture = false;
   svg.addEventListener("pointerdown", (event) => {
     pointerId = event.pointerId;
   });
@@ -133,11 +134,11 @@ export function installSVGSelection(
   svg.addEventListener(
     "pointerdown",
     (event) => {
-      const pan = !event.shiftKey && !target(event);
-      setPanEnabled(pan);
+      if (touchGesture) return;
+      const pan = !event.shiftKey;
+      setPanEnabled(false);
       panMoved = false;
       panStart = pan ? { x: event.clientX, y: event.clientY } : null;
-      if (pan) svg.setPointerCapture(event.pointerId);
     },
     true,
   );
@@ -147,10 +148,15 @@ export function installSVGSelection(
       Math.hypot(event.clientX - panStart.x, event.clientY - panStart.y) > 5
     ) {
       panMoved = true;
+      setPanEnabled(true);
+      // Capture only after a drag starts so ordinary clicks retain their
+      // original object target instead of being retargeted to the SVG root.
+      svg.setPointerCapture(event.pointerId);
       document.body.dataset.panning = "true";
     }
   });
   const endPan = () => {
+    setPanEnabled(false);
     panStart = null;
     delete document.body.dataset.panning;
   };
@@ -212,7 +218,7 @@ export function installSVGSelection(
     publish(ids, node ? scopeFor(node)?.id || null : state.rootId);
   });
   svg.addEventListener("dblclick", (event) => {
-    if (locked) return;
+    if (locked || panMoved || dragging) return;
     const node = target(event);
     if (node?.localName === "g" && node.closest("#geometry")) {
       publish([], node.id);
@@ -257,6 +263,16 @@ export function installSVGSelection(
     }
   });
   return {
+    setTouchGesture: (active: boolean) => {
+      touchGesture = active;
+      panStart = null;
+      panMoved = true;
+      setPanEnabled(false);
+      if (active) {
+        marquee.cancel();
+        dragging = false;
+      }
+    },
     visibilityChanged: () => {
       const ids = state.ids.filter((id) => {
         const node = byId.get(id);

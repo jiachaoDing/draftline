@@ -192,7 +192,14 @@ test("sketch → clarification → generated code → targeted edit → undo/red
 
   await page.getByRole("button", { name: "New Drawing", exact: true }).click();
   await expect(frame.locator("#plate-outline")).toHaveCount(0);
-  await page.getByRole("button", { name: "Try an example" }).click();
+  await attachFiles(page, {
+    name: "reference.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jWZkAAAAASUVORK5CYII=",
+      "base64",
+    ),
+  });
   await expect(page.locator(".composer-attachment img")).toBeVisible();
   await page
     .getByLabel("Drawing instructions")
@@ -216,7 +223,7 @@ test("sketch → clarification → generated code → targeted edit → undo/red
   await expect(frame.locator("#presentation")).toHaveCount(0);
   await expect(
     page
-      .locator(".canvas-document-heading")
+      .locator(".canvas-title")
       .getByText("Generated test plate", { exact: true }),
   ).toBeVisible();
   expect(
@@ -380,6 +387,7 @@ test("generated drawing executes synchronous SVG JavaScript and isolates parent 
 test("mobile layout keeps core controls within viewport", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
+  await page.getByRole("button", { name: "AI assistant", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Send drawing instruction", exact: true }),
   ).toBeVisible();
@@ -392,11 +400,15 @@ test("mobile layout keeps core controls within viewport", async ({ page }) => {
         .locator(".studio")
         .evaluate((node) => getComputedStyle(node).display),
     )
-    .toBe("flex");
+    .toBe("block");
   expect(
     (await page.locator(".drawing-workspace").boundingBox())?.width,
   ).toBeLessThanOrEqual(390);
+  await page.getByRole("button", { name: "Expand sidebar" }).click();
   await page.getByRole("button", { name: "Model settings" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Drawing navigation", exact: true }),
+  ).toBeHidden();
   await expect(page.getByRole("dialog")).toBeVisible();
 });
 
@@ -457,7 +469,14 @@ test("projects retain drawings, conversations, references and isolated AI contex
     .click();
   await page.getByLabel("Project name", { exact: true }).fill("Bracket A");
   await page.getByRole("button", { name: "Save project name" }).click();
-  await page.getByRole("button", { name: "Try an example" }).click();
+  await attachFiles(page, {
+    name: "reference.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jWZkAAAAASUVORK5CYII=",
+      "base64",
+    ),
+  });
   await expect(page.locator(".composer-attachment img")).toBeVisible();
   await page
     .getByLabel("Drawing instructions")

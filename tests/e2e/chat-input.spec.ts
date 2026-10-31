@@ -34,7 +34,7 @@ test("native IME composition and caret survive frequent autosaves and restore pe
   await page.goto("/");
   const input = page.getByLabel("Drawing instructions");
   await waitForProjectSave(page);
-  await expect(page.locator(".header-actions")).not.toContainText(
+  await expect(page.locator(".canvas-toolbar")).not.toContainText(
     /Saved locally|Saving locally/,
   );
   await input.fill("Plate:  mm");
@@ -123,71 +123,22 @@ test("native IME composition and caret survive frequent autosaves and restore pe
   await expect(input).toHaveValue("会话 B 草稿");
 });
 
-test("a late example preserves newer typing and explicit suggestions still persist", async ({
+test("suggestions update the draft without a composer example button", async ({
   page,
 }) => {
-  let release = () => {};
-  let requested = () => {};
-  const started = new Promise<void>((resolve) => {
-    requested = resolve;
-  });
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  await page.route("**/example-sketch.svg", async (route) => {
-    requested();
-    await gate;
-    await route.continue();
-  });
   await page.goto("/");
-  const input = page.getByLabel("Drawing instructions");
-  await page.getByRole("button", { name: "Try an example" }).click();
-  await started;
-  await input.fill("Newer draft while the image loads");
-  release();
-  await expect(page.locator(".composer-attachment")).toHaveCount(1);
-  await expect(input).toHaveValue("Newer draft while the image loads");
+  await expect(
+    page.getByRole("button", { name: "Try an example", exact: true }),
+  ).toHaveCount(0);
   await page
-    .getByRole("button", { name: "Make the plate 140 mm wide" })
+    .getByRole("button", { name: "Make the plate 140 mm wide", exact: true })
     .click();
-  await expect(input).toHaveValue("Make the plate 140 mm wide");
+  await expect(page.getByLabel("Drawing instructions")).toHaveValue(
+    "Make the plate 140 mm wide",
+  );
   await waitForProjectSave(page);
   await page.reload();
-  await expect(input).toHaveValue("Make the plate 140 mm wide");
-  await expect(page.locator(".composer-attachment")).toHaveCount(1);
-});
-
-test("an example finishing after switching away and back cannot mutate the reopened composer", async ({
-  page,
-}) => {
-  let release = () => {};
-  let requested = () => {};
-  const started = new Promise<void>((resolve) => {
-    requested = resolve;
-  });
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  await page.route("**/example-sketch.svg", async (route) => {
-    requested();
-    await gate;
-    await route.continue();
-  });
-  await page.goto("/");
-  const input = page.getByLabel("Drawing instructions");
-  await input.fill("Original draft");
-  await page.getByRole("button", { name: "Try an example" }).click();
-  await started;
-  await page.getByRole("button", { name: "New Drawing", exact: true }).click();
-  await input.fill("Other project draft");
-  await page
-    .getByRole("button", { name: "Open drawing Mounting plate", exact: true })
-    .click();
-  release();
-  await expect(input).toHaveValue("Original draft");
-  await expect(page.locator(".composer-attachment")).toHaveCount(0);
-  await waitForProjectSave(page);
-  await page.reload();
-  await expect(input).toHaveValue("Original draft");
-  await expect(page.locator(".composer-attachment")).toHaveCount(0);
+  await expect(page.getByLabel("Drawing instructions")).toHaveValue(
+    "Make the plate 140 mm wide",
+  );
 });

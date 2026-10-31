@@ -157,9 +157,10 @@ async function setup(
   if ((page.viewportSize()?.width || 0) <= 700)
     await page.getByRole("button", { name: "Expand sidebar" }).click();
   await page.getByRole("button", { name: "New Drawing", exact: true }).click();
-  await expect(
-    page.getByRole("heading", { name: "A fresh page for your next idea." }),
-  ).toBeVisible();
+  if (page.viewportSize()!.width > 700)
+    await expect(
+      page.getByRole("heading", { name: "A fresh page for your next idea." }),
+    ).toBeVisible();
   await page.getByLabel("Drawing instructions").fill(instruction);
   await page.getByRole("button", { name: "Send drawing instruction" }).click();
   await expect(

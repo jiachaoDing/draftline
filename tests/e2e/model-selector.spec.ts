@@ -16,6 +16,8 @@ async function openSettings(page: Page, discovered = models) {
     route.fulfill({ json: { models: discovered } }),
   );
   await page.goto("/");
+  if (page.viewportSize()!.width <= 1050)
+    await page.getByRole("button", { name: "Expand sidebar" }).click();
   await page.getByRole("button", { name: "Model settings" }).click();
   await page
     .getByLabel("Base URL", { exact: true })

@@ -1,5 +1,6 @@
 import DOMPurify from "dompurify";
 import panZoomSource from "svg-pan-zoom/dist/svg-pan-zoom.min.js?raw";
+import hammerSource from "hammerjs/hammer.min.js?raw";
 // The self-contained UMD distribution runs locally inside the opaque frame.
 import selectionSource from "../../node_modules/@viselect/vanilla/dist/viselect.umd.cjs?raw";
 import { installSVGSelection } from "./sandbox-selection";
@@ -87,6 +88,16 @@ export function buildSandbox(
       if (size.width < 1 || size.height < 1) { requestAnimationFrame(initialize); return; }
       controller = svgPanZoom(svg, {zoomEnabled:true, panEnabled:false, controlIconsEnabled:false, fit:true, center:true, minZoom:0.1, maxZoom:30, dblClickZoomEnabled:false, zoomScaleSensitivity:0.22, onZoom:z=>{send('zoom',Math.round(z*100)); editor?.refresh();},onUpdatedCTM:()=>editor?.refresh()});
       editor = (${installSVGSelection.toString()})(svg, SelectionArea, send, enabled => enabled ? controller.enablePan() : controller.disablePan());
+      const gestures = new Hammer.Manager(svg, {inputClass: Hammer.TouchInput, touchAction: 'none', recognizers: [[Hammer.Pinch, {enable: true}]]});
+      let pinchZoom = 1;
+      svg.addEventListener('touchstart', event => { if (event.touches.length > 1) editor.setTouchGesture(true); }, {capture: true, passive: true});
+      svg.addEventListener('touchend', event => { if (!event.touches.length) editor.setTouchGesture(false); }, {passive: true});
+      svg.addEventListener('touchcancel', () => editor.setTouchGesture(false), {passive: true});
+      gestures.on('pinchstart', () => { pinchZoom = controller.getZoom(); });
+      gestures.on('pinchmove', event => {
+        const bounds = svg.getBoundingClientRect();
+        controller.zoomAtPoint(pinchZoom * event.scale, {x: event.center.x - bounds.left, y: event.center.y - bounds.top});
+      });
       document.body.dataset.interaction = 'select-pan';
         new ResizeObserver(() => { controller.resize(); editor?.refresh(); }).observe(document.body);
       send('ready', true);
@@ -94,5 +105,5 @@ export function buildSandbox(
       initialize();
     });
   })();`;
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'none'; font-src 'none'; media-src 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}body{display:flex;align-items:center;justify-content:center}svg#drawing{overflow:visible}body{user-select:none;touch-action:none}.svg-marquee{background:#2462f322;border:1px solid #2462f3}.svg-selection-overlay{position:fixed;inset:0;pointer-events:none;z-index:2}.svg-object-outline{position:fixed;border:1.5px solid #2462f3;box-sizing:border-box}.svg-object-outline.changed{border:2px dashed #c77a12}.svg-object-outline.editing{border:1px dashed #8a94a3}#geometry :is(path,circle,rect,ellipse,line,polygon,polyline,text,use){pointer-events:all;cursor:pointer}#dimensions>g{cursor:pointer;pointer-events:all}svg#drawing{cursor:grab}body[data-panning=true] svg,body[data-panning=true] svg *{cursor:grabbing!important}</style>${interactive ? `<script nonce="${nonce}">${scriptText(panZoomSource)}</script><script nonce="${nonce}">${scriptText(selectionSource)}</script>` : ""}<script nonce="${nonce}">${scriptText(bridge)}</script></head><body>${markup}${scripts.map((script) => `<script nonce="${nonce}">${scriptText(script)}</script>`).join("")}</body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'none'; font-src 'none'; media-src 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}body{display:flex;align-items:center;justify-content:center}svg#drawing{overflow:visible}body{user-select:none;touch-action:none}.svg-marquee{background:#2462f322;border:1px solid #2462f3}.svg-selection-overlay{position:fixed;inset:0;pointer-events:none;z-index:2}.svg-object-outline{position:fixed;border:1.5px solid #2462f3;box-sizing:border-box}.svg-object-outline.changed{border:2px dashed #c77a12}.svg-object-outline.editing{border:1px dashed #8a94a3}#geometry :is(path,circle,rect,ellipse,line,polygon,polyline,text,use){pointer-events:all;cursor:pointer}#dimensions>g{cursor:pointer;pointer-events:all}svg#drawing{cursor:grab}body[data-panning=true] svg,body[data-panning=true] svg *{cursor:grabbing!important}</style>${interactive ? `<script nonce="${nonce}">${scriptText(panZoomSource)}</script><script nonce="${nonce}">${scriptText(hammerSource)}</script><script nonce="${nonce}">${scriptText(selectionSource)}</script>` : ""}<script nonce="${nonce}">${scriptText(bridge)}</script></head><body>${markup}${scripts.map((script) => `<script nonce="${nonce}">${scriptText(script)}</script>`).join("")}</body></html>`;
 }

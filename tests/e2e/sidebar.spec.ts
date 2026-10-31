@@ -178,7 +178,7 @@ test("drawing navigation supports search, long lists, collapse and keyboard acti
       async () =>
         (await page.locator(".drawing-workspace").boundingBox())!.width,
     )
-    .toBeGreaterThan(before!.width + 200);
+    .toBe(before!.width + 244 - 48);
   await page.getByRole("button", { name: "Expand sidebar" }).click();
   await expect(last).toHaveAttribute("aria-current", "page");
 });
@@ -218,6 +218,7 @@ test("mobile drawer closes on navigation and dimensions retain per-drawing visib
   await page.getByRole("button", { name: "Expand sidebar" }).click();
   await page.getByRole("button", { name: "New Drawing", exact: true }).click();
   await expect(drawer).toBeHidden();
+  await page.getByRole("button", { name: "Canvas", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Dimensions", exact: true }),
   ).toBeDisabled();

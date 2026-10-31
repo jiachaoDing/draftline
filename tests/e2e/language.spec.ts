@@ -157,42 +157,32 @@ test.describe("saved Chinese preference", () => {
     workspaceLanguage: "zh-CN",
     viewport: { width: 390, height: 844 },
   });
-  test("restores Chinese and keeps the mobile language control in view", async ({
+  test("restores language through mobile drawing navigation", async ({
     page,
   }) => {
     await page.goto("/");
-    await expect(
-      page.getByRole("combobox", { name: "语言", exact: true }),
-    ).toHaveValue("zh-CN");
-    await expect(
-      page.getByRole("button", { name: "模型设置", exact: true }),
-    ).toBeInViewport();
-    await expect(
-      page.getByRole("button", { name: "导出", exact: true }),
-    ).toBeInViewport();
-    const bounds = await page.locator(".app-header").evaluate((header) => ({
-      scroll: header.scrollWidth,
-      width: header.clientWidth,
-    }));
-    expect(bounds.scroll).toBeLessThanOrEqual(bounds.width);
-    await page.setViewportSize({ width: 320, height: 568 });
-    await expect(
-      page.getByRole("combobox", { name: "语言", exact: true }),
-    ).toBeInViewport();
-    await expect(
-      page.getByRole("button", { name: "导出", exact: true }),
-    ).toBeInViewport();
-    const narrowBounds = await page
-      .locator(".app-header")
-      .evaluate((header) => ({
-        scroll: header.scrollWidth,
-        width: header.clientWidth,
-      }));
-    expect(narrowBounds.scroll).toBeLessThanOrEqual(narrowBounds.width);
+    for (const width of [390, 320]) {
+      await page.setViewportSize({ width, height: 844 });
+      await expect(
+        page.getByRole("button", { name: "导出", exact: true }),
+      ).toBeInViewport();
+      await page.getByRole("button", { name: "展开侧栏", exact: true }).click();
+      await expect(
+        page.getByRole("combobox", { name: "语言", exact: true }),
+      ).toHaveValue("zh-CN");
+      await expect(
+        page.getByRole("button", { name: "模型设置", exact: true }),
+      ).toBeInViewport();
+      await page.getByRole("button", { name: "关闭侧栏", exact: true }).click();
+    }
+    await page.getByRole("button", { name: "展开侧栏", exact: true }).click();
     await page
       .getByRole("combobox", { name: "语言", exact: true })
       .selectOption("en");
     await page.reload();
+    await page
+      .getByRole("button", { name: "Expand sidebar", exact: true })
+      .click();
     await expect(
       page.getByRole("combobox", { name: "Language", exact: true }),
     ).toHaveValue("en");

@@ -1153,41 +1153,6 @@ export default function App() {
       base,
     );
   };
-  const useExample = async () => {
-    const projectId = activeIdRef.current;
-    const target = composer.current;
-    if (!target) return;
-    const revision = target.getDraftRevision();
-    try {
-      const image = new Image();
-      image.src = "/example-sketch.svg";
-      await image.decode();
-      if (activeIdRef.current !== projectId || composer.current !== target)
-        return;
-      const canvas = document.createElement("canvas");
-      canvas.width = image.width;
-      canvas.height = image.height;
-      canvas.getContext("2d")!.drawImage(image, 0, 0);
-      target.addAttachment({
-        id: crypto.randomUUID(),
-        type: "image",
-        size: 0,
-        name: "mounting-plate-sketch.png",
-        image: canvas.toDataURL("image/png"),
-      });
-      target.setDraft(
-        t(
-          "120 × 80 mm plate, R8 corners. Four Ø10 holes; centers 20 mm from each edge.",
-        ),
-        revision,
-      );
-      tell(
-        "Example sketch loaded. Connect your model and generate your own drawing.",
-      );
-    } catch {
-      tell("The example image could not be loaded.", true);
-    }
-  };
   const navigate = (delta: number) => {
     setHistory((h) => ({ ...h, index: h.index + delta }));
     setSelection(EMPTY_SELECTION);
@@ -1204,7 +1169,15 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="app-header">
+      <main
+        className={`studio mobile-${workspace.mobileView} ${sidebarOpen ? "sidebar-open" : "sidebar-closed"} ${workspace.rightOpen ? "chat-open" : "chat-closed"}`}
+        style={
+          {
+            "--sidebar-width": `${sidebarOpen ? workspace.left : 48}px`,
+            "--chat-width": `${workspace.rightOpen ? workspace.right : 48}px`,
+          } as React.CSSProperties
+        }
+      >
         <button
           className="icon-button sidebar-toggle"
           aria-label={sidebarOpen ? t("Collapse sidebar") : t("Expand sidebar")}
@@ -1219,74 +1192,23 @@ export default function App() {
             <PanelLeftOpen size={19} />
           )}
         </button>
-        <a className="brand" href="#" aria-label={t("Draftline home")}>
-          <span className="brand-mark">
-            <svg viewBox="0 0 30 30" fill="none">
-              <path
-                d="M7 23V7h8c7 0 11 7 7 13-2 3-5 3-8 3"
-                stroke="currentColor"
-                strokeWidth="2.5"
-              />
-              <path d="m7 23 12-12" stroke="currentColor" strokeWidth="1.7" />
-            </svg>
-          </span>
-          <span>
-            draftline<span className="brand-dot">.</span>
-          </span>
-        </a>
-        <span className="header-divider" />
-        <div className="project-name">
-          <span className="project-title" title={activeProject?.name}>
-            {activeProject?.name}
-          </span>{" "}
-          <span className="beta">{t("BETA")}</span>
-        </div>
-        <div className="header-actions">
-          <LanguageSelect />
-          <button
-            className="button settings-button"
-            aria-label={t("Model settings")}
-            onClick={() => setSettings(true)}
-          >
-            <Settings2 size={16} /> <span>{t("Model settings")}</span>
-            <span
-              className={`connection-dot ${config.apiKey && config.model ? "connected" : ""}`}
-            />
-          </button>
-          <DrawingExport
-            drawing={drawing}
-            disabled={busy || !!review}
-            onNotice={tell}
-          />
-        </div>
-      </header>
-      <main
-        className={`studio ${sidebarOpen ? "sidebar-open" : "sidebar-closed"} ${workspace.layout.rightOpen ? "chat-open" : "chat-closed"}`}
-        style={
-          {
-            "--sidebar-width": `${sidebarOpen ? workspace.left : 0}px`,
-            "--chat-anchor-width": `${workspace.right}px`,
-            "--chat-width": `${workspace.layout.rightOpen ? workspace.right : 0}px`,
-          } as React.CSSProperties
-        }
-      >
         <button
           className="icon-button conversation-toggle"
           aria-label={t(
-            workspace.layout.rightOpen
+            workspace.rightOpen
               ? "Collapse conversation"
               : "Expand conversation",
           )}
           title={t(
-            workspace.layout.rightOpen
+            workspace.rightOpen
               ? "Collapse conversation"
               : "Expand conversation",
           )}
-          aria-expanded={workspace.layout.rightOpen}
+          aria-expanded={workspace.rightOpen}
           aria-controls="conversation-panel"
-          onClick={() => workspace.setRightOpen(!workspace.layout.rightOpen)}
+          onClick={() => workspace.setRightOpen(!workspace.rightOpen)}
         >
-          {workspace.layout.rightOpen ? (
+          {workspace.rightOpen ? (
             <PanelRightClose size={17} />
           ) : (
             <PanelRightOpen size={17} />
@@ -1305,20 +1227,41 @@ export default function App() {
             activeId={activeId}
             disabled={projectBusy}
             projectBusy={projectBusy}
-            onOpen={(id) => void changeProject(id)}
+            onOpen={(id) => {
+              if (workspace.mobile && !id) workspace.setMobileView("assistant");
+              void changeProject(id);
+            }}
             onRename={renameProject}
             onDelete={removeProject}
+            utilities={
+              <div className="sidebar-utilities">
+                <LanguageSelect />
+                <button
+                  className="button settings-button"
+                  aria-label={t("Model settings")}
+                  onClick={() => {
+                    if (window.innerWidth <= 1050) setSidebarOpen(false);
+                    setSettings(true);
+                  }}
+                >
+                  <Settings2 size={16} />
+                  <span>{t("Model settings")}</span>
+                </button>
+              </div>
+            }
             onHelp={() => setHelp(true)}
           />
         </WorkspacePanel>
         <section
           className="drawing-workspace"
           aria-label={t("Drawing workspace")}
+          inert={workspace.mobile && workspace.mobileView !== "drawing"}
         >
           <div className="canvas-toolbar">
             <div className="canvas-title">
-              <Layers2 size={14} />
-              {t("Drawing")}
+              <span className="project-title" title={activeProject?.name}>
+                {activeProject?.name}
+              </span>
             </div>
             <div className="canvas-tools">
               <button
@@ -1372,6 +1315,11 @@ export default function App() {
               >
                 <Maximize size={16} />
               </button>
+              <DrawingExport
+                drawing={drawing}
+                disabled={busy || !!review}
+                onNotice={tell}
+              />
             </div>
           </div>
           <div className="canvas-document-heading">
@@ -1481,7 +1429,7 @@ export default function App() {
                     ? t("{{name}} selected", { name: selected.label })
                     : drawing
                       ? t(
-                          "Click to select · drag empty space to pan · Shift-drag to box select",
+                          "Click to select · drag to pan · Shift-drag to box select",
                         )
                       : t("Your drawing starts in the assistant")}
               </span>
@@ -1531,7 +1479,7 @@ export default function App() {
         <WorkspacePanel
           side="right"
           size={workspace.right}
-          open={workspace.layout.rightOpen}
+          open={workspace.rightOpen}
           onResize={(size) => workspace.resize("right", size)}
         >
           <AssistantChat
@@ -1555,10 +1503,11 @@ export default function App() {
             <aside
               id="conversation-panel"
               className="assistant-panel"
-              inert={!workspace.layout.rightOpen}
+              inert={!workspace.rightOpen}
               aria-label={t("Drawing assistant")}
             >
               <div className="assistant-heading">
+                <span className="assistant-title">{t("AI assistant")}</span>
                 <ConversationHistory
                   conversation={activeProject!.conversation}
                   disabled={busy || !!review || projectBusy}
@@ -1631,17 +1580,6 @@ export default function App() {
                                     )
                           }
                         >
-                          {messages.length === 1 && (
-                            <button
-                              type="button"
-                              className="example-button"
-                              onClick={useExample}
-                              disabled={busy || projectBusy}
-                            >
-                              {t("Try an example")}
-                              <ArrowRight size={12} />
-                            </button>
-                          )}{" "}
                           <div className="assistant-model">
                             <span
                               className={`connection-dot ${config.apiKey && config.model ? "connected" : ""}`}
@@ -1664,6 +1602,30 @@ export default function App() {
           </AssistantChat>
         </WorkspacePanel>
       </main>
+      <nav className="mobile-navigation" aria-label={t("Workspace navigation")}>
+        <button
+          aria-label={t("Expand sidebar")}
+          aria-expanded={sidebarOpen}
+          onClick={() => setSidebarOpen(true)}
+        >
+          <PanelLeftOpen size={20} />
+          {t("Drawings")}
+        </button>
+        <button
+          aria-pressed={workspace.mobileView === "drawing"}
+          onClick={() => workspace.setMobileView("drawing")}
+        >
+          <Layers2 size={20} />
+          {t("Canvas")}
+        </button>
+        <button
+          aria-pressed={workspace.mobileView === "assistant"}
+          onClick={() => workspace.setMobileView("assistant")}
+        >
+          <PanelRightOpen size={20} />
+          {t("AI assistant")}
+        </button>
+      </nav>
       {notice && (
         <div
           className={`toast ${notice.error ? "error" : ""}`}
@@ -1748,7 +1710,7 @@ export default function App() {
             </p>
             <p>
               {t(
-                "3. Click objects to select, drag empty space to pan, Shift-drag to select multiple objects, and double-click to enter groups. Describe your edit; review broader AI changes before applying. Scroll to zoom.",
+                "3. Click objects to select, drag to pan, Shift-drag to select multiple objects, and double-click to enter groups. Describe your edit; review broader AI changes before applying. Scroll to zoom.",
               )}
             </p>
             <p>

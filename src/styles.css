@@ -370,21 +370,6 @@ kbd {
 .generate-button svg:first-child {
   margin-right: auto;
 }
-.example-button {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  gap: 4px;
-  font-size: 9px;
-  color: #9ba3b0;
-  padding: 14px 0 0;
-}
-.example-button > span {
-  display: flex;
-  align-items: center;
-  color: #768ba9;
-  gap: 3px;
-}
 .text-button {
   display: inline-flex;
   align-items: center;

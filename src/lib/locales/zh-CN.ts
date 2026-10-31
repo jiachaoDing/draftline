@@ -1,4 +1,7 @@
 export const zhCN: Record<string, string> = {
+  "AI assistant": "AI 助手",
+  Canvas: "画布",
+  "Workspace navigation": "工作区导航",
   "Resize drawing panel": "调整图纸面板宽度",
   "Resize conversation panel": "调整对话面板宽度",
   "Expand conversation": "展开对话",
@@ -143,8 +146,8 @@ export const zhCN: Record<string, string> = {
   "Checking your drawing…": "正在检查图纸…",
   Cancel: "取消",
   "Your drawing starts in the assistant": "从绘图助手开始创建图纸",
-  "Click to select · drag empty space to pan · Shift-drag to box select":
-    "点击选择 · 拖动空白处平移 · Shift 拖动框选",
+  "Click to select · drag to pan · Shift-drag to box select":
+    "点击选择 · 拖动平移 · Shift 拖动框选",
   "Zoom out": "缩小",
   "Zoom in": "放大",
   "Reset view": "重置视图",
@@ -188,8 +191,8 @@ export const zhCN: Record<string, string> = {
     "1. 在模型设置中连接兼容 OpenAI 的视觉模型。",
   "2. Start a New Drawing. Attach or paste a sketch in the assistant, add essential dimensions, and send. Reply there to clarify measurements.":
     "2. 新建图纸，在助手中添加或粘贴草图，填写必要尺寸后发送，并回答尺寸追问。",
-  "3. Click objects to select, drag empty space to pan, Shift-drag to select multiple objects, and double-click to enter groups. Describe your edit; review broader AI changes before applying. Scroll to zoom.":
-    "3. 点击元素进行选择，拖动空白处平移，按住 Shift 拖动进行框选，双击进入分组。描述修改需求，审阅范围较大的 AI 修改后再应用。滚轮可缩放。",
+  "3. Click objects to select, drag to pan, Shift-drag to select multiple objects, and double-click to enter groups. Describe your edit; review broader AI changes before applying. Scroll to zoom.":
+    "3. 点击元素进行选择，拖动平移，按住 Shift 拖动进行框选，双击进入分组。描述修改需求，审阅范围较大的 AI 修改后再应用。滚轮可缩放。",
   "4. Export SVG or PDF with geometry on the left and dimensions on the right, at true millimeter scale.":
     "4. 导出 SVG 或 PDF：左侧为纯几何图形，右侧包含尺寸标注，保持真实毫米比例。",
   "Projects, conversations, sketches and model settings are saved in this browser. Sending a request shares its sketch and drawing with your selected provider.":

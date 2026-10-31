@@ -1,5 +1,45 @@
 import { test, expect } from "../helpers/workspace-test";
 
+test("mobile work areas preserve canvas, draft and desktop preferences", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  const frame = page.frameLocator('iframe[title="Technical drawing preview"]');
+  await expect(frame.locator("#plate-outline")).toBeVisible();
+  await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+  await expect(page.locator(".zoom-controls")).not.toContainText("100%");
+  const zoom = await page.locator(".zoom-controls").innerText();
+  const settings = await page.evaluate(() =>
+    localStorage.getItem("draftline-workspace-layout"),
+  );
+  await page.screenshot({ path: ".generated/layout-mobile-canvas.png" });
+  await page.getByRole("button", { name: "AI assistant", exact: true }).click();
+  const input = page.getByLabel("Drawing instructions", { exact: true });
+  await input.fill("Keep this mobile draft");
+  await expect(
+    page.getByRole("button", { name: "Fit drawing", exact: true }),
+  ).toBeHidden();
+  await page.screenshot({ path: ".generated/layout-mobile-assistant.png" });
+  await page.getByRole("button", { name: "Canvas", exact: true }).click();
+  await expect(page.locator(".zoom-controls")).toHaveText(zoom);
+  await expect(frame.locator("#plate-outline")).toBeVisible();
+  await page.getByRole("button", { name: "AI assistant", exact: true }).click();
+  await expect(input).toHaveValue("Keep this mobile draft");
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem("draftline-workspace-layout"),
+    ),
+  ).toBe(settings);
+  await page
+    .getByRole("button", { name: "Expand sidebar", exact: true })
+    .click();
+  await page.setViewportSize({ width: 390, height: 500 });
+  await expect(
+    page.getByRole("dialog", { name: "Drawing navigation" }),
+  ).toBeVisible();
+});
+
 test("panel resizing, independent collapse and refresh preserve workspace preferences and view", async ({
   page,
 }) => {
@@ -53,7 +93,9 @@ test("panel resizing, independent collapse and refresh preserve workspace prefer
   const toggleBefore = (await page
     .locator(".conversation-toggle")
     .boundingBox())!;
-  expect(toggleBefore.x - panelAfter.x).toBeLessThan(16);
+  expect(
+    panelAfter.x + panelAfter.width - toggleBefore.x - toggleBefore.width,
+  ).toBe(8);
   await page
     .getByRole("button", { name: "Collapse conversation", exact: true })
     .click();
@@ -65,6 +107,10 @@ test("panel resizing, independent collapse and refresh preserve workspace prefer
     toggleBefore,
   );
   await expect(page.locator(".assistant-panel")).toBeHidden();
+  await expect(frame.locator(".svg-pan-zoom_viewport")).toHaveAttribute(
+    "transform",
+    transform!,
+  );
   await page
     .getByRole("button", { name: "Collapse sidebar", exact: true })
     .click();

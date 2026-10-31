@@ -1,5 +1,5 @@
 import { t, useLocale } from "../lib/i18n";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Dialog,
   DialogBackdrop,
@@ -21,6 +21,7 @@ type Props = {
   onRename: (id: string, name: string) => void;
   onDelete: (id: string) => Promise<boolean>;
   onHelp: () => void;
+  utilities: ReactNode;
 };
 
 export default function DrawingSidebar({
@@ -34,15 +35,16 @@ export default function DrawingSidebar({
   onRename,
   onDelete,
   onHelp,
+  utilities,
 }: Props) {
   useLocale();
   const [mobile, setMobile] = useState(
-    () => window.matchMedia("(max-width: 700px)").matches,
+    () => window.matchMedia("(max-width: 1050px)").matches,
   );
   const [query, setQuery] = useState("");
   const pendingNavigation = useRef<{ id?: string } | null>(null);
   useEffect(() => {
-    const media = window.matchMedia("(max-width: 700px)");
+    const media = window.matchMedia("(max-width: 1050px)");
     const update = () => {
       setMobile(media.matches);
     };
@@ -65,6 +67,9 @@ export default function DrawingSidebar({
   };
   const content = (
     <>
+      <div className="sidebar-brand">
+        draftline<span>.</span>
+      </div>
       <div className="sidebar-navigation">
         <div className="sidebar-top-row">
           <button
@@ -122,6 +127,7 @@ export default function DrawingSidebar({
         )}
       </nav>
       <div className="sidebar-footer">
+        {utilities}
         <button
           className="sidebar-link"
           onClick={() => {

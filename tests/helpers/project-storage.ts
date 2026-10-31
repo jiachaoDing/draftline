@@ -36,12 +36,12 @@ export async function installDrawingFixture(page: Page, source: string) {
     { html: source, svg },
   );
   await page.goto("/");
-  await expect(page.locator(".app-header")).toBeVisible();
+  await expect(page.locator(".studio")).toBeVisible();
 }
 
 /** Wait for startup and drain queued project writes before a reload or fixture edit. */
 export async function waitForProjectSave(page: Page) {
-  await expect(page.locator(".app-header")).toBeVisible();
+  await expect(page.locator(".studio")).toBeVisible();
   await expect
     .poll(() =>
       page.evaluate(async () => {
