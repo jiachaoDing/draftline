@@ -131,7 +131,7 @@ async function open(page: Page) {
     page
       .frameLocator('iframe[title="Technical drawing preview"]')
       .locator("body"),
-  ).toHaveAttribute("data-mode", "select");
+  ).toHaveAttribute("data-interaction", "select-pan");
   await expect(
     page
       .frameLocator('iframe[title="Technical drawing preview"]')
@@ -190,9 +190,11 @@ test("background validation commits to its original drawing while another drawin
   ).toBeVisible();
   await page.getByRole("button", { name: "Zoom in", exact: true }).click();
   await expect(page.locator(".zoom-controls")).not.toContainText("100%");
-  await page.getByRole("button", { name: "Pan tool", exact: true }).click();
   const frame = page.frameLocator('iframe[title="Technical drawing preview"]');
-  await expect(frame.locator("body")).toHaveAttribute("data-mode", "pan");
+  await expect(frame.locator("body")).toHaveAttribute(
+    "data-interaction",
+    "select-pan",
+  );
   await expect(
     page.getByRole("button", { name: "Undo", exact: true }),
   ).toBeDisabled();

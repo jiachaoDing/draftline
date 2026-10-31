@@ -47,6 +47,7 @@
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.4.299",
     "prettier": "3.9.10",
+    "re-resizable": "^6.11.2",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-i18next": "^17.0.18",

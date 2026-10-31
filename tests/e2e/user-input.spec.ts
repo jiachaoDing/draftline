@@ -470,7 +470,10 @@ test("failed and stopped continuation restores questions and can retry; selected
   );
   await page.goto("/");
   const frame = page.frameLocator('iframe[title="Technical drawing preview"]');
-  await expect(frame.locator("body")).toHaveAttribute("data-mode", "select");
+  await expect(frame.locator("body")).toHaveAttribute(
+    "data-interaction",
+    "select-pan",
+  );
   await expect(frame.locator("body")).toHaveAttribute("data-locked", "false");
   await frame.locator("#hole-top-left").click();
   await page

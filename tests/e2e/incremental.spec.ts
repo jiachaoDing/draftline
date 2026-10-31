@@ -317,7 +317,10 @@ async function open(page: Page) {
   const frame = page.frameLocator('iframe[title="Technical drawing preview"]');
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "5");
   await expect(frame.locator(".svg-pan-zoom_viewport")).toHaveCount(1);
-  await expect(frame.locator("body")).toHaveAttribute("data-mode", "select");
+  await expect(frame.locator("body")).toHaveAttribute(
+    "data-interaction",
+    "select-pan",
+  );
   await expect(frame.locator("body")).toHaveAttribute("data-locked", "false");
   await frame.locator("#hole-top-left").click();
   await expect(

@@ -1,6 +1,8 @@
 import { currentLocale, t, useLocale } from "./lib/i18n";
 import { useProjectField } from "./hooks/useProjectField";
 import { useProjectSession } from "./hooks/useProjectSession";
+import { useWorkspaceLayout } from "./hooks/useWorkspaceLayout";
+import WorkspacePanel from "./components/WorkspacePanel";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
@@ -8,14 +10,14 @@ import {
   ChevronDown,
   CircleHelp,
   Focus,
-  Hand,
   Layers2,
   Loader2,
   Maximize,
   Minus,
-  MousePointer2,
   PanelLeftClose,
   PanelLeftOpen,
+  PanelRightOpen,
+  PanelRightClose,
   Plus,
   Redo2,
   Settings2,
@@ -102,9 +104,8 @@ export default function App() {
   const [activeId, setActiveId] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [projectBusy, setProjectBusy] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(
-    () => !window.matchMedia("(max-width: 700px)").matches,
-  );
+  const workspace = useWorkspaceLayout();
+  const { sidebarOpen, setSidebarOpen } = workspace;
   // Event/effect writes own these refs. A concurrent render may still contain
   // older React state, so it must not overwrite an in-flight workspace update.
   const projectsRef = useRef(projects);
@@ -180,7 +181,6 @@ export default function App() {
     const shown = review?.drawing || drawing;
     return shown ? svgToHTML(shown.svg) : "";
   }, [drawing, review]);
-  const [mode, setMode] = useState<"select" | "pan">("select");
   const [zoom, setZoom] = useState(100);
   const [messages, setMessages] = useProjectField(
     activeProject,
@@ -238,7 +238,6 @@ export default function App() {
     activeIdRef.current = project.id;
     setActiveId(project.id);
     setSelection(EMPTY_SELECTION);
-    setMode("select");
     setZoom(100);
     setNotice(null);
   }, []);
@@ -612,8 +611,6 @@ export default function App() {
         event.preventDefault();
         preview.current?.send("command", "select-all");
       }
-      if (event.key.toLowerCase() === "v") setMode("select");
-      if (event.key.toLowerCase() === "h") setMode("pan");
     };
     document.addEventListener("keydown", keyboard);
     return () => document.removeEventListener("keydown", keyboard);
@@ -1264,20 +1261,56 @@ export default function App() {
         </div>
       </header>
       <main
-        className={`studio ${sidebarOpen ? "sidebar-open" : "sidebar-closed"}`}
+        className={`studio ${sidebarOpen ? "sidebar-open" : "sidebar-closed"} ${workspace.layout.rightOpen ? "chat-open" : "chat-closed"}`}
+        style={
+          {
+            "--sidebar-width": `${sidebarOpen ? workspace.left : 0}px`,
+            "--chat-anchor-width": `${workspace.right}px`,
+            "--chat-width": `${workspace.layout.rightOpen ? workspace.right : 0}px`,
+          } as React.CSSProperties
+        }
       >
-        <DrawingSidebar
+        <button
+          className="icon-button conversation-toggle"
+          aria-label={t(
+            workspace.layout.rightOpen
+              ? "Collapse conversation"
+              : "Expand conversation",
+          )}
+          title={t(
+            workspace.layout.rightOpen
+              ? "Collapse conversation"
+              : "Expand conversation",
+          )}
+          aria-expanded={workspace.layout.rightOpen}
+          aria-controls="conversation-panel"
+          onClick={() => workspace.setRightOpen(!workspace.layout.rightOpen)}
+        >
+          {workspace.layout.rightOpen ? (
+            <PanelRightClose size={17} />
+          ) : (
+            <PanelRightOpen size={17} />
+          )}
+        </button>
+        <WorkspacePanel
+          side="left"
+          size={workspace.left}
           open={sidebarOpen}
-          onToggle={setSidebarOpen}
-          projects={projects}
-          activeId={activeId}
-          disabled={projectBusy}
-          projectBusy={projectBusy}
-          onOpen={(id) => void changeProject(id)}
-          onRename={renameProject}
-          onDelete={removeProject}
-          onHelp={() => setHelp(true)}
-        />
+          onResize={(size) => workspace.resize("left", size)}
+        >
+          <DrawingSidebar
+            open={sidebarOpen}
+            onToggle={setSidebarOpen}
+            projects={projects}
+            activeId={activeId}
+            disabled={projectBusy}
+            projectBusy={projectBusy}
+            onOpen={(id) => void changeProject(id)}
+            onRename={renameProject}
+            onDelete={removeProject}
+            onHelp={() => setHelp(true)}
+          />
+        </WorkspacePanel>
         <section
           className="drawing-workspace"
           aria-label={t("Drawing workspace")}
@@ -1304,23 +1337,6 @@ export default function App() {
                 onChange={(dimensions) => setLayers({ dimensions })}
                 disabled={!drawing}
               />
-              <span className="tool-separator" />
-              <button
-                className={`icon-button ${mode === "select" ? "active" : ""}`}
-                aria-label={t("Select tool")}
-                title={t("Select (V)")}
-                onClick={() => setMode("select")}
-              >
-                <MousePointer2 size={17} />
-              </button>
-              <button
-                className={`icon-button ${mode === "pan" ? "active" : ""}`}
-                aria-label={t("Pan tool")}
-                title={t("Pan (H)")}
-                onClick={() => setMode("pan")}
-              >
-                <Hand size={17} />
-              </button>
               <span className="tool-separator" />
               <button
                 className="icon-button"
@@ -1398,8 +1414,6 @@ export default function App() {
                     history.index < history.items.length - 1
                   )
                     navigate(1);
-                  if (command === "pan" || command === "select")
-                    setMode(command);
                 }}
                 onError={(text) => tell(text, true)}
                 onZoom={setZoom}
@@ -1407,7 +1421,6 @@ export default function App() {
                 locked={!!review || !!userInput || projectBusy}
                 changedIds={review?.changes.ids}
                 layers={layers}
-                mode={mode}
               />
             ) : (
               <div className="empty-canvas">
@@ -1459,7 +1472,6 @@ export default function App() {
           </div>
           <footer className="canvas-footer">
             <div className="canvas-hint">
-              <MousePointer2 size={13} />
               <span>
                 {selection.ids.length > 1
                   ? t("{{count}} objects selected", {
@@ -1468,7 +1480,9 @@ export default function App() {
                   : selected
                     ? t("{{name}} selected", { name: selected.label })
                     : drawing
-                      ? t("Click any element to refine it with AI")
+                      ? t(
+                          "Click to select · drag empty space to pan · Shift-drag to box select",
+                        )
                       : t("Your drawing starts in the assistant")}
               </span>
             </div>
@@ -1514,139 +1528,141 @@ export default function App() {
             </div>
           </footer>
         </section>
-        <AssistantChat
-          key={activeId}
-          ref={composer}
-          messages={messages}
-          conversation={activeProject!.conversation}
-          busy={busy}
-          disabled={projectBusy || !!review || (!!userInput && !busy)}
-          initialDraft={chatInput}
-          initialAttachments={attachments}
-          onDraft={setChatInput}
-          onAttachments={setAttachments}
-          onSend={sendChat}
-          onCancel={cancelGeneration}
-          onRetry={retryResponse}
-          onEdit={editMessage}
-          onBranch={switchConversation}
-          onAttachmentError={(message) => tell(message, true)}
+        <WorkspacePanel
+          side="right"
+          size={workspace.right}
+          open={workspace.layout.rightOpen}
+          onResize={(size) => workspace.resize("right", size)}
         >
-          <aside className="assistant-panel">
-            <div className="assistant-heading">
-              <div className="assistant-mark">
-                <Sparkles size={19} />
-              </div>
-              <div>
-                <h2>{t("Drawing assistant")}</h2>
-                <p>
-                  <span />{" "}
-                  {busy
-                    ? t("Working on your drawing")
-                    : t("A little help, a lot of precision")}
-                </p>
-              </div>
-            </div>
-            <ConversationHistory
-              conversation={activeProject!.conversation}
-              disabled={busy || !!review || projectBusy}
-              onRestore={switchConversation}
-            />
-            <ChatTranscript
-              messages={messages}
-              hasDrawing={!!drawing}
-              onSuggest={(text) => composer.current?.setDraft(text)}
-              onRestore={switchConversation}
-            />
-            <div className="assistant-controls">
-              {review ? (
-                <ReviewChanges
-                  changes={review.changes}
-                  summary={review.drawing.summary}
-                  onApply={() => {
-                    commit(review.drawing);
-                    finishReply("complete");
-                    tell("Drawing updated.");
-                  }}
-                  onDiscard={() => {
-                    setReview(null);
-                    editContext.current = null;
-                    finishReply("cancelled");
-                    tell("Proposal discarded. Your drawing is unchanged.");
-                  }}
+          <AssistantChat
+            key={activeId}
+            ref={composer}
+            messages={messages}
+            conversation={activeProject!.conversation}
+            busy={busy}
+            disabled={projectBusy || !!review || (!!userInput && !busy)}
+            initialDraft={chatInput}
+            initialAttachments={attachments}
+            onDraft={setChatInput}
+            onAttachments={setAttachments}
+            onSend={sendChat}
+            onCancel={cancelGeneration}
+            onRetry={retryResponse}
+            onEdit={editMessage}
+            onBranch={switchConversation}
+            onAttachmentError={(message) => tell(message, true)}
+          >
+            <aside
+              id="conversation-panel"
+              className="assistant-panel"
+              inert={!workspace.layout.rightOpen}
+              aria-label={t("Drawing assistant")}
+            >
+              <div className="assistant-heading">
+                <ConversationHistory
+                  conversation={activeProject!.conversation}
+                  disabled={busy || !!review || projectBusy}
+                  onRestore={switchConversation}
                 />
-              ) : (
-                <>
-                  {userInput && !busy ? (
-                    <RequestUserInput
-                      key={`${activeId}:${userInput.request.calls[userInput.callIndex].id}`}
-                      args={questionArgs(
-                        userInput.request,
-                        userInput.callIndex,
-                      )}
-                      state={userInput.state}
-                      disabled={busy || projectBusy}
-                      onChange={(state) =>
-                        updateUserInput({ ...userInput, state })
-                      }
-                      onSubmit={submitUserInput}
-                      onCancel={cancelUserInput}
-                    />
-                  ) : (
-                    <>
-                      {clarification && (
-                        <div className="clarification-banner">
-                          <CircleHelp size={15} />
-                          {t(
-                            "A measurement is needed. Reply below to continue.",
-                          )}
-                        </div>
-                      )}
-                      <ChatComposer
-                        busy={busy}
-                        selectionCount={selection.ids.length}
-                        onClearSelection={() => setSelection(EMPTY_SELECTION)}
-                        placeholder={
-                          clarification
-                            ? t("Add the missing dimensions…")
-                            : selection.ids.length
-                              ? t("Describe changes to the selected objects…")
-                              : drawing
-                                ? t("Describe a change to your drawing…")
-                                : t("Describe your part and dimensions in mm…")
+              </div>
+              <ChatTranscript
+                messages={messages}
+                hasDrawing={!!drawing}
+                onSuggest={(text) => composer.current?.setDraft(text)}
+                onRestore={switchConversation}
+              />
+              <div className="assistant-controls">
+                {review ? (
+                  <ReviewChanges
+                    changes={review.changes}
+                    summary={review.drawing.summary}
+                    onApply={() => {
+                      commit(review.drawing);
+                      finishReply("complete");
+                      tell("Drawing updated.");
+                    }}
+                    onDiscard={() => {
+                      setReview(null);
+                      editContext.current = null;
+                      finishReply("cancelled");
+                      tell("Proposal discarded. Your drawing is unchanged.");
+                    }}
+                  />
+                ) : (
+                  <>
+                    {userInput && !busy ? (
+                      <RequestUserInput
+                        key={`${activeId}:${userInput.request.calls[userInput.callIndex].id}`}
+                        args={questionArgs(
+                          userInput.request,
+                          userInput.callIndex,
+                        )}
+                        state={userInput.state}
+                        disabled={busy || projectBusy}
+                        onChange={(state) =>
+                          updateUserInput({ ...userInput, state })
                         }
-                      >
-                        {messages.length === 1 && (
-                          <button
-                            type="button"
-                            className="example-button"
-                            onClick={useExample}
-                            disabled={busy || projectBusy}
-                          >
-                            {t("Try an example")}
-                            <ArrowRight size={12} />
-                          </button>
-                        )}{" "}
-                        <div className="assistant-model">
-                          <span
-                            className={`connection-dot ${config.apiKey && config.model ? "connected" : ""}`}
-                          />
-                          <button onClick={() => setSettings(true)}>
-                            {config.apiKey && config.model
-                              ? config.model
-                              : t("Connect your AI model")}
-                            <ChevronDown size={11} />
-                          </button>
-                          <span>{t("↵ to send")}</span>
-                        </div>
-                      </ChatComposer>
-                    </>
-                  )}
-                </>
-              )}
-            </div>
-          </aside>
-        </AssistantChat>
+                        onSubmit={submitUserInput}
+                        onCancel={cancelUserInput}
+                      />
+                    ) : (
+                      <>
+                        {clarification && (
+                          <div className="clarification-banner">
+                            <CircleHelp size={15} />
+                            {t(
+                              "A measurement is needed. Reply below to continue.",
+                            )}
+                          </div>
+                        )}
+                        <ChatComposer
+                          busy={busy}
+                          selectionCount={selection.ids.length}
+                          onClearSelection={() => setSelection(EMPTY_SELECTION)}
+                          placeholder={
+                            clarification
+                              ? t("Add the missing dimensions…")
+                              : selection.ids.length
+                                ? t("Describe changes to the selected objects…")
+                                : drawing
+                                  ? t("Describe a change to your drawing…")
+                                  : t(
+                                      "Describe your part and dimensions in mm…",
+                                    )
+                          }
+                        >
+                          {messages.length === 1 && (
+                            <button
+                              type="button"
+                              className="example-button"
+                              onClick={useExample}
+                              disabled={busy || projectBusy}
+                            >
+                              {t("Try an example")}
+                              <ArrowRight size={12} />
+                            </button>
+                          )}{" "}
+                          <div className="assistant-model">
+                            <span
+                              className={`connection-dot ${config.apiKey && config.model ? "connected" : ""}`}
+                            />
+                            <button onClick={() => setSettings(true)}>
+                              {config.apiKey && config.model
+                                ? config.model
+                                : t("Connect your AI model")}
+                              <ChevronDown size={11} />
+                            </button>
+                            <span>{t("↵ to send")}</span>
+                          </div>
+                        </ChatComposer>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            </aside>
+          </AssistantChat>
+        </WorkspacePanel>
       </main>
       {notice && (
         <div
@@ -1732,7 +1748,7 @@ export default function App() {
             </p>
             <p>
               {t(
-                "3. Click or drag to select objects, Shift-click to toggle, and double-click to enter groups. Describe your edit; review broader AI changes before applying. Use the hand tool to pan and scroll to zoom.",
+                "3. Click objects to select, drag empty space to pan, Shift-drag to select multiple objects, and double-click to enter groups. Describe your edit; review broader AI changes before applying. Scroll to zoom.",
               )}
             </p>
             <p>

@@ -30,7 +30,6 @@ type Props = {
   locked?: boolean;
   changedIds?: string[];
   layers: { dimensions: boolean };
-  mode: "select" | "pan";
 };
 export const Preview = forwardRef<PreviewHandle, Props>(
   function Preview(props, ref) {
@@ -110,7 +109,6 @@ export const Preview = forwardRef<PreviewHandle, Props>(
           clearTimeout(timer);
           const p = currentProps.current;
           send("layers", p.layers);
-          send("mode", p.mode);
           send("select", p.selection || EMPTY_SELECTION);
           send("locked", !!p.locked);
           send("changes", p.changedIds || []);
@@ -134,7 +132,6 @@ export const Preview = forwardRef<PreviewHandle, Props>(
       () => send("changes", props.changedIds || []),
       [props.changedIds, send],
     );
-    useEffect(() => send("mode", props.mode), [props.mode, send]);
     return (
       <iframe
         key={channel}

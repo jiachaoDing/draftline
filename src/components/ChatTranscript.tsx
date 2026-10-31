@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   Copy,
   RotateCcw,
-  Sparkles,
   Pencil,
   History,
   ChevronLeft,
@@ -60,11 +59,6 @@ function Message() {
     );
   return (
     <MessagePrimitive.Root className={`chat-message ${message.role}`}>
-      {message.role === "assistant" && (
-        <div className="chat-avatar">
-          <Sparkles size={12} />
-        </div>
-      )}
       <div className="message-content">
         {message.reference && (
           <figure className="message-reference">
@@ -155,6 +149,7 @@ function Message() {
                 <ActionBarPrimitive.Edit
                   disabled={running}
                   aria-label={t("Edit message")}
+                  title={t("Edit message")}
                 >
                   <Pencil size={13} />
                 </ActionBarPrimitive.Edit>
@@ -197,6 +192,7 @@ function Message() {
                 <BranchPickerPrimitive.Previous
                   disabled={running}
                   aria-label={t("Previous version")}
+                  title={t("Previous version")}
                 >
                   <ChevronLeft size={13} />
                 </BranchPickerPrimitive.Previous>
@@ -205,6 +201,7 @@ function Message() {
                 <BranchPickerPrimitive.Next
                   disabled={running}
                   aria-label={t("Next version")}
+                  title={t("Next version")}
                 >
                   <ChevronRight size={13} />
                 </BranchPickerPrimitive.Next>
@@ -232,22 +229,6 @@ export default function ChatTranscript({
   return (
     <RestoreContext.Provider value={onRestore}>
       <ThreadPrimitive.Viewport className="assistant-content" autoScroll>
-        {messages.length === 1 && (
-          <div className="assistant-intro">
-            <div className="intro-art">
-              <span />
-              <span />
-              <span />
-              <Sparkles size={18} />
-            </div>
-            <h3>{t("Your idea, engineered.")}</h3>
-            <p>
-              {t("Describe a part or a change in plain language.")}
-              <br />
-              {t("I’ll take care of the geometry.")}
-            </p>
-          </div>
-        )}
         <ThreadPrimitive.Messages
           components={{ Message, EditComposer: EditMessage }}
         />

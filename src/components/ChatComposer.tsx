@@ -3,15 +3,7 @@ import {
   ComposerPrimitive,
   useAuiState,
 } from "@assistant-ui/react";
-import {
-  FileText,
-  Loader2,
-  MousePointer2,
-  Paperclip,
-  Send,
-  Square,
-  X,
-} from "lucide-react";
+import { FileText, Loader2, Paperclip, Send, Square, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { t, useLocale } from "../lib/i18n";
 import { useComposerText } from "./AssistantChat";
@@ -82,7 +74,6 @@ export default function ChatComposer({
         </div>
         {selectionCount > 0 && (
           <span className="composer-selection">
-            <MousePointer2 size={12} />
             {t("{{count}} selected", { count: selectionCount })}
             <button
               type="button"

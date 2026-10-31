@@ -6,15 +6,17 @@ export function installSVGSelection(
   svg: SVGSVGElement,
   Selection: typeof SelectionArea,
   send: (type: string, payload: unknown) => void,
+  setPanEnabled: (enabled: boolean) => void = () => {},
 ) {
   let state: SelectionState = { ids: [], rootId: null };
-  let mode = "select",
-    locked = false,
+  let locked = false,
     dragging = false,
     additive = false;
   let previous: string[] = [],
     changedIds: string[] = [];
   let pointerId: number | null = null;
+  let panStart: { x: number; y: number } | null = null;
+  let panMoved = false;
   svg.addEventListener("pointerdown", (event) => {
     pointerId = event.pointerId;
   });
@@ -105,15 +107,20 @@ export function installSVGSelection(
         : node.parentElement?.id === "geometry" ||
             node.parentElement?.id === "dimensions";
     });
+  const scopeFor = (node: Element) => {
+    let scope = root();
+    while (scope && !scope.contains(node))
+      scope = byId.get(scope.parentElement?.id || "") || null;
+    return scope;
+  };
   const target = (event: MouseEvent) => {
     const origin = event.target instanceof Element ? event.target : null;
     let node =
       origin?.closest(`#dimensions > g[id]`) ||
       origin?.closest(`#geometry :is(${selector})[id]`);
     if (!node || !byId.has(node.id) || !visible(node)) return null;
-    const currentRoot = root();
-    if (currentRoot && (!currentRoot.contains(node) || currentRoot === node))
-      return null;
+    if (root() === node) return null;
+    const currentRoot = scopeFor(node);
     if (event.ctrlKey || event.metaKey) return node;
     while (
       node.parentElement &&
@@ -123,6 +130,32 @@ export function installSVGSelection(
       node = node.parentElement;
     return node;
   };
+  svg.addEventListener(
+    "pointerdown",
+    (event) => {
+      const pan = !event.shiftKey && !target(event);
+      setPanEnabled(pan);
+      panMoved = false;
+      panStart = pan ? { x: event.clientX, y: event.clientY } : null;
+      if (pan) svg.setPointerCapture(event.pointerId);
+    },
+    true,
+  );
+  svg.addEventListener("pointermove", (event) => {
+    if (
+      panStart &&
+      Math.hypot(event.clientX - panStart.x, event.clientY - panStart.y) > 5
+    ) {
+      panMoved = true;
+      document.body.dataset.panning = "true";
+    }
+  });
+  const endPan = () => {
+    panStart = null;
+    delete document.body.dataset.panning;
+  };
+  svg.addEventListener("pointerup", endPan);
+  svg.addEventListener("pointercancel", endPan);
   const marquee = new Selection({
     selectables: ["[data-marquee-target]"],
     startAreas: [document.body],
@@ -133,7 +166,7 @@ export function installSVGSelection(
   });
   marquee.on("beforestart", ({ event }) => {
     if (
-      mode !== "select" ||
+      !event?.shiftKey ||
       locked ||
       (event instanceof MouseEvent && (event.ctrlKey || event.metaKey))
     )
@@ -165,7 +198,7 @@ export function installSVGSelection(
     }
   });
   svg.addEventListener("click", (event) => {
-    if (locked || mode !== "select" || dragging) return;
+    if (locked || dragging || panMoved) return;
     const node = target(event);
     const ids = node
       ? event.shiftKey
@@ -176,10 +209,10 @@ export function installSVGSelection(
       : event.shiftKey
         ? state.ids
         : [];
-    publish(ids);
+    publish(ids, node ? scopeFor(node)?.id || null : state.rootId);
   });
   svg.addEventListener("dblclick", (event) => {
-    if (locked || mode !== "select") return;
+    if (locked) return;
     const node = target(event);
     if (node?.localName === "g" && node.closest("#geometry")) {
       publish([], node.id);
@@ -221,8 +254,7 @@ export function installSVGSelection(
     ) {
       event.preventDefault();
       publish([], state.ids[0]);
-    } else if (!mod && ["v", "h"].includes(event.key.toLowerCase()))
-      send("command", event.key.toLowerCase() === "h" ? "pan" : "select");
+    }
   });
   return {
     visibilityChanged: () => {
@@ -248,9 +280,6 @@ export function installSVGSelection(
     refresh: () => {
       if (refreshFrame === undefined)
         refreshFrame = requestAnimationFrame(draw);
-    },
-    setMode: (value: string) => {
-      mode = value;
     },
     setLocked: (value: boolean) => {
       locked = value;

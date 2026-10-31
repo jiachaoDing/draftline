@@ -247,8 +247,10 @@ test("sketch → clarification → generated code → targeted edit → undo/red
   await expect(page.getByLabel("Show presentation")).toHaveCount(0);
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Zoom in", exact: true }).click();
-  await page.getByRole("button", { name: "Pan tool", exact: true }).click();
-  await expect(frame.locator("body")).toHaveAttribute("data-mode", "pan");
+  await expect(frame.locator("body")).toHaveAttribute(
+    "data-interaction",
+    "select-pan",
+  );
 
   await page.getByRole("button", { name: "Export", exact: true }).click();
   const downloadEvent = page.waitForEvent("download");

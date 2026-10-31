@@ -1,4 +1,8 @@
 export const zhCN: Record<string, string> = {
+  "Resize drawing panel": "调整图纸面板宽度",
+  "Resize conversation panel": "调整对话面板宽度",
+  "Expand conversation": "展开对话",
+  "Collapse conversation": "收起对话",
   "Edit message": "编辑消息",
   "Save and regenerate": "保存并重新生成",
   "Continue from here": "从此处继续",
@@ -120,10 +124,6 @@ export const zhCN: Record<string, string> = {
   "The drawing could not be exported. Please try again.":
     "图纸导出失败，请重试。",
   Drawing: "图纸",
-  "Select tool": "选择工具",
-  "Select (V)": "选择 (V)",
-  "Pan tool": "平移工具",
-  "Pan (H)": "平移 (H)",
   Undo: "撤销",
   "Undo (Ctrl Z)": "撤销 (Ctrl Z)",
   Redo: "重做",
@@ -143,7 +143,8 @@ export const zhCN: Record<string, string> = {
   "Checking your drawing…": "正在检查图纸…",
   Cancel: "取消",
   "Your drawing starts in the assistant": "从绘图助手开始创建图纸",
-  "Click any element to refine it with AI": "点击任意元素，让 AI 帮你修改",
+  "Click to select · drag empty space to pan · Shift-drag to box select":
+    "点击选择 · 拖动空白处平移 · Shift 拖动框选",
   "Zoom out": "缩小",
   "Zoom in": "放大",
   "Reset view": "重置视图",
@@ -187,8 +188,8 @@ export const zhCN: Record<string, string> = {
     "1. 在模型设置中连接兼容 OpenAI 的视觉模型。",
   "2. Start a New Drawing. Attach or paste a sketch in the assistant, add essential dimensions, and send. Reply there to clarify measurements.":
     "2. 新建图纸，在助手中添加或粘贴草图，填写必要尺寸后发送，并回答尺寸追问。",
-  "3. Click or drag to select objects, Shift-click to toggle, and double-click to enter groups. Describe your edit; review broader AI changes before applying. Use the hand tool to pan and scroll to zoom.":
-    "3. 点击或拖动框选对象，Shift 点击多选，双击进入编组。描述修改要求，涉及更大范围时请先审阅方案再应用。使用平移工具移动画布，滚轮缩放。",
+  "3. Click objects to select, drag empty space to pan, Shift-drag to select multiple objects, and double-click to enter groups. Describe your edit; review broader AI changes before applying. Scroll to zoom.":
+    "3. 点击元素进行选择，拖动空白处平移，按住 Shift 拖动进行框选，双击进入分组。描述修改需求，审阅范围较大的 AI 修改后再应用。滚轮可缩放。",
   "4. Export SVG or PDF with geometry on the left and dimensions on the right, at true millimeter scale.":
     "4. 导出 SVG 或 PDF：左侧为纯几何图形，右侧包含尺寸标注，保持真实毫米比例。",
   "Projects, conversations, sketches and model settings are saved in this browser. Sending a request shares its sketch and drawing with your selected provider.":

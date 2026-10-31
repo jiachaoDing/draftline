@@ -1,13 +1,19 @@
 :root {
   font-family: Inter, "Segoe UI", sans-serif;
-  color: #263246;
-  background: #f7f8fa;
+  color: #242c3a;
+  background: #fbfcfd;
   font-synthesis: none;
   font-size: 13px;
   font-weight: 400;
-  --blue: #245ef0;
-  --line: #e6e9ef;
-  --muted: #87909f;
+  --blue: #3265e8;
+  --line: #e5e8ed;
+  --muted: #7a8595;
+  --panel: #f5f6f8;
+  --surface: #fbfcfd;
+  --text: #242c3a;
+  --hover: #eceef2;
+  --selected: #e8effd;
+  --radius: 8px;
 }
 * {
   box-sizing: border-box;
@@ -81,14 +87,14 @@ p {
   overflow: hidden;
 }
 .app-header {
-  height: 72px;
-  padding: 0 26px;
+  height: 60px;
+  padding: 0 20px;
   display: flex;
   align-items: center;
   background: #fff;
   border-bottom: 1px solid var(--line);
   flex-shrink: 0;
-  gap: 24px;
+  gap: 18px;
 }
 .brand {
   display: flex;
@@ -117,9 +123,7 @@ p {
   color: var(--blue);
 }
 .header-divider {
-  height: 22px;
-  width: 1px;
-  background: var(--line);
+  width: 0;
 }
 .project-name {
   font-weight: 500;
@@ -208,8 +212,11 @@ p {
   background: #f7f8fb;
 }
 .settings-button {
-  border: 1px solid #e2e6ec;
+  border: 1px solid transparent;
   background: white;
+}
+.settings-button:hover {
+  background: var(--panel);
 }
 .connection-dot {
   width: 5px;
@@ -231,8 +238,7 @@ p {
 .studio {
   --sidebar-width: 244px;
   display: grid;
-  grid-template-columns: var(--sidebar-width) minmax(360px, 1fr) 316px;
-  transition: grid-template-columns 200ms ease;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--chat-width);
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -240,7 +246,7 @@ p {
   overflow: hidden;
 }
 .left-panel {
-  background: #f8f9fc;
+  background: var(--panel);
   border-right: 1px solid var(--line);
   display: flex;
   flex-direction: column;
@@ -405,7 +411,7 @@ kbd {
   color: var(--blue);
 }
 .drawing-workspace {
-  --workspace-surface: #f3f5f9;
+  --workspace-surface: var(--surface);
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -425,7 +431,7 @@ kbd {
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: #435c8c;
+  color: var(--muted);
   font-weight: 550;
 }
 .canvas-tools {
@@ -446,8 +452,6 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-image: radial-gradient(#ccd3df 1px, transparent 1px);
-  background-size: 18px 18px;
   overflow: hidden;
 }
 .canvas-document-heading {

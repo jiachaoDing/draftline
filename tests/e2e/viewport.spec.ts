@@ -11,7 +11,16 @@ test("drawing fills the work plane and supports pan and zoom at its edges", asyn
   const frame = page.frameLocator('iframe[title="Technical drawing preview"]');
   const plate = frame.locator("#plate-outline");
   await expect(plate).toBeVisible();
-  await expect(frame.locator("body")).toHaveAttribute("data-mode", "select");
+  await expect(
+    page.getByRole("button", { name: "Pan tool", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Select tool", exact: true }),
+  ).toHaveCount(0);
+  await expect(frame.locator("body")).toHaveAttribute(
+    "data-interaction",
+    "select-pan",
+  );
   for (const [width, height] of [
     [1440, 900],
     [390, 844],
@@ -33,14 +42,31 @@ test("drawing fills the work plane and supports pan and zoom at its edges", asyn
     await page
       .getByRole("button", { name: "Fit drawing", exact: true })
       .click();
+    // Wait for the posted fit command and svg-pan-zoom's scheduled CTM paint
+    // before using the visible geometry as the pan baseline.
+    await frame
+      .locator("svg")
+      .evaluate(
+        () =>
+          new Promise<void>((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+          ),
+      );
     const before = (await plate.boundingBox())!;
+    await frame.locator("#hole-top-left").click();
     const canvas = (await preview.boundingBox())!;
-    await page.getByRole("button", { name: "Pan tool", exact: true }).click();
-    await expect(frame.locator("body")).toHaveAttribute("data-mode", "pan");
+    await expect(frame.locator("body")).toHaveAttribute(
+      "data-interaction",
+      "select-pan",
+    );
     await page.mouse.move(canvas.x + 8, canvas.y + 8);
     await page.mouse.down();
     await page.mouse.move(canvas.x + 48, canvas.y + 38, { steps: 8 });
     await page.mouse.up();
+    await expect(frame.locator("#hole-top-left")).toHaveAttribute(
+      "data-selected",
+      "true",
+    );
     await expect
       .poll(async () => Math.round((await plate.boundingBox())!.x - before.x))
       .toBe(40);
@@ -51,9 +77,6 @@ test("drawing fills the work plane and supports pan and zoom at its edges", asyn
     await page.mouse.wheel(0, -100);
     await expect(page.locator(".zoom-controls")).not.toHaveText(zoom);
     await page.getByRole("button", { name: "Reset view", exact: true }).click();
-    await page
-      .getByRole("button", { name: "Select tool", exact: true })
-      .click();
     await frame.locator("#hole-top-left").click();
     await expect(frame.locator("#hole-top-left")).toHaveAttribute(
       "data-selected",
@@ -275,12 +298,11 @@ test("long drawing lists and chat history scroll internally without moving the p
     .hover();
   await page.mouse.wheel(0, -200);
   await expect(page.locator(".zoom-controls")).not.toHaveText(zoom);
-  await page.getByRole("button", { name: "Pan tool", exact: true }).click();
   await expect(
     page
       .frameLocator('iframe[title="Technical drawing preview"]')
       .locator("body"),
-  ).toHaveAttribute("data-mode", "pan");
+  ).toHaveAttribute("data-interaction", "select-pan");
   await expectViewportLayout(page);
   await page.screenshot({ path: ".generated/viewport-mobile.png" });
 });

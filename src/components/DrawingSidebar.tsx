@@ -45,7 +45,6 @@ export default function DrawingSidebar({
     const media = window.matchMedia("(max-width: 700px)");
     const update = () => {
       setMobile(media.matches);
-      onToggle(!media.matches);
     };
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);

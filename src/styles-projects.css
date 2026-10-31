@@ -32,7 +32,7 @@
 .drawings-label,
 .drawings-scroll,
 .sidebar-footer {
-  min-width: 244px;
+  min-width: 0;
 }
 .sidebar-navigation {
   padding: 12px 10px 4px;
@@ -212,8 +212,8 @@
   transition: background 120ms ease;
 }
 .project-row.active {
-  background: #e8eef9;
-  color: #264f96;
+  background: var(--selected);
+  color: var(--blue);
 }
 .project-row:hover,
 .project-row:focus-within {

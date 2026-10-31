@@ -63,7 +63,7 @@ test.afterAll(
   () => new Promise<void>((resolve) => provider.close(() => resolve())),
 );
 
-async function openObjects(page: Page) {
+async function openObjects(page: Page, svg = OBJECT_SVG) {
   requests = [];
   await page.addInitScript((url) => {
     if (window !== window.top) return;
@@ -77,13 +77,16 @@ async function openObjects(page: Page) {
     );
   }, baseURL);
   await page.goto("/");
-  await installDrawingFixture(page, OBJECT_SVG);
+  await installDrawingFixture(page, svg);
   const frame = page.frameLocator('iframe[title="Technical drawing preview"]');
   await expect(frame.locator("#logo")).toHaveAttribute(
     "transform",
     "translate(15 20)",
   );
-  await expect(frame.locator("body")).toHaveAttribute("data-mode", "select");
+  await expect(frame.locator("body")).toHaveAttribute(
+    "data-interaction",
+    "select-pan",
+  );
   await expect(frame.locator("body")).toHaveAttribute("data-locked", "false");
   return frame;
 }
@@ -139,6 +142,53 @@ test("selects groups, enters nested groups, toggles multi-selection and groups w
   await expect(frame.locator("#wordmark")).toHaveText("DraftLine");
 });
 
+test("selecting outside an entered group switches to the nearest shared scope", async ({
+  page,
+}) => {
+  const svg = OBJECT_SVG.replace(
+    '<rect id="nearby"',
+    '<g id="other" data-label="Other group"><rect id="nearby"',
+  ).replace('height="40" />', 'height="40" /></g>');
+  const frame = await openObjects(page, svg);
+  await frame.locator("#logo-left").dblclick();
+  await frame.locator("#logo-left").dblclick();
+  await expect(page.getByLabel("Editing hierarchy")).toContainText(
+    "Logo symbol",
+  );
+  await frame.locator("#wordmark").click();
+  await expect(frame.locator("#nameplate")).toHaveAttribute(
+    "data-selected",
+    "true",
+  );
+  await expect(page.getByLabel("Editing hierarchy")).toContainText(
+    "DraftLine logo",
+  );
+  await expect(page.getByLabel("Editing hierarchy")).not.toContainText(
+    "Logo symbol",
+  );
+  await frame.locator("#nearby").click();
+  await expect(frame.locator("#other")).toHaveAttribute(
+    "data-selected",
+    "true",
+  );
+  await expect(page.getByLabel("Editing hierarchy")).toHaveText(
+    "Entire drawing",
+  );
+  await frame.locator("#nearby").dblclick();
+  await expect(page.getByLabel("Editing hierarchy")).toContainText(
+    "Other group",
+  );
+  await frame.locator("#logo-left").click();
+  await expect(frame.locator("#logo")).toHaveAttribute("data-selected", "true");
+  await expect(frame.locator("#other")).not.toHaveAttribute(
+    "data-selected",
+    "true",
+  );
+  await expect(page.getByLabel("Editing hierarchy")).toHaveText(
+    "Entire drawing",
+  );
+});
+
 test("marquee selection uses visible groups after zoom, adds with Shift and keeps overlays out of SVG exports", async ({
   page,
 }) => {
@@ -150,12 +200,14 @@ test("marquee selection uses visible groups after zoom, adds with Shift and keep
     .toBeLessThan(initialWidth);
   const logo = (await frame.locator("#logo").boundingBox())!;
   const separate = (await frame.locator("#nearby").boundingBox())!;
+  await page.keyboard.down("Shift");
   await page.mouse.move(logo.x - 8, logo.y - 8);
   await page.mouse.down();
   await page.mouse.move(logo.x + logo.width + 8, logo.y + logo.height + 8, {
     steps: 12,
   });
   await page.mouse.up();
+  await page.keyboard.up("Shift");
   await expect(frame.locator("#logo")).toHaveAttribute("data-selected", "true");
   await expect(frame.locator("#nearby")).not.toHaveAttribute(
     "data-selected",
@@ -194,7 +246,10 @@ test("AI can move a whole logo from a selected path; broader changes require rev
 }) => {
   const frame = await openObjects(page);
   const send = async () => {
-    await expect(frame.locator("body")).toHaveAttribute("data-mode", "select");
+    await expect(frame.locator("body")).toHaveAttribute(
+      "data-interaction",
+      "select-pan",
+    );
     await expect(frame.locator("body")).toHaveAttribute("data-locked", "false");
     await frame.locator("#logo-left").click({ modifiers: ["Control"] });
     await expect(page.locator(".selection-card strong")).toHaveText(

@@ -41,7 +41,7 @@ export function buildSandbox(
   const bridge = `(() => {
     const channel = ${JSON.stringify(channel)};
     const send = (type, payload) => parent.postMessage({channel, type, payload}, '*');
-    let svg, controller, editor, mode = 'select';
+    let svg, controller, editor;
     const rawSnapshot = () => {
       if (!svg) return;
       const clone = svg.cloneNode(true);
@@ -62,7 +62,6 @@ export function buildSandbox(
       if (!controller) return;
       if (type === 'zoom') payload > 0 ? controller.zoomIn() : controller.zoomOut();
         if (type === 'fit') fitDrawing();
-      if (type === 'mode') { mode = payload; mode === 'pan' ? controller.enablePan() : controller.disablePan(); editor.setMode(mode); document.body.dataset.mode = mode; }
       if (type === 'layers') { const n = svg.querySelector('#dimensions'); if(n) n.setAttribute('display', payload.dimensions ? 'inline' : 'none'); editor.visibilityChanged(); }
       if (type === 'select') editor.setSelection(payload);
       if (type === 'locked') { editor.setLocked(!!payload); document.body.dataset.locked = String(!!payload); }
@@ -87,12 +86,13 @@ export function buildSandbox(
       const size = svg.getBoundingClientRect();
       if (size.width < 1 || size.height < 1) { requestAnimationFrame(initialize); return; }
       controller = svgPanZoom(svg, {zoomEnabled:true, panEnabled:false, controlIconsEnabled:false, fit:true, center:true, minZoom:0.1, maxZoom:30, dblClickZoomEnabled:false, zoomScaleSensitivity:0.22, onZoom:z=>{send('zoom',Math.round(z*100)); editor?.refresh();},onUpdatedCTM:()=>editor?.refresh()});
-      editor = (${installSVGSelection.toString()})(svg, SelectionArea, send);
-        new ResizeObserver(fitDrawing).observe(document.body);
+      editor = (${installSVGSelection.toString()})(svg, SelectionArea, send, enabled => enabled ? controller.enablePan() : controller.disablePan());
+      document.body.dataset.interaction = 'select-pan';
+        new ResizeObserver(() => { controller.resize(); editor?.refresh(); }).observe(document.body);
       send('ready', true);
       };
       initialize();
     });
   })();`;
-  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'none'; font-src 'none'; media-src 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}body{display:flex;align-items:center;justify-content:center}svg#drawing{overflow:visible}body{user-select:none;touch-action:none}.svg-marquee{background:#2462f322;border:1px solid #2462f3}.svg-selection-overlay{position:fixed;inset:0;pointer-events:none;z-index:2}.svg-object-outline{position:fixed;border:1.5px solid #2462f3;box-sizing:border-box}.svg-object-outline.changed{border:2px dashed #c77a12}.svg-object-outline.editing{border:1px dashed #8a94a3}#geometry :is(path,circle,rect,ellipse,line,polygon,polyline,text,use){pointer-events:all;cursor:pointer}#dimensions>g{cursor:pointer;pointer-events:all}body[data-mode=pan] svg,body[data-mode=pan] svg *{cursor:grab!important}</style>${interactive ? `<script nonce="${nonce}">${scriptText(panZoomSource)}</script><script nonce="${nonce}">${scriptText(selectionSource)}</script>` : ""}<script nonce="${nonce}">${scriptText(bridge)}</script></head><body>${markup}${scripts.map((script) => `<script nonce="${nonce}">${scriptText(script)}</script>`).join("")}</body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'none'; font-src 'none'; media-src 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}body{display:flex;align-items:center;justify-content:center}svg#drawing{overflow:visible}body{user-select:none;touch-action:none}.svg-marquee{background:#2462f322;border:1px solid #2462f3}.svg-selection-overlay{position:fixed;inset:0;pointer-events:none;z-index:2}.svg-object-outline{position:fixed;border:1.5px solid #2462f3;box-sizing:border-box}.svg-object-outline.changed{border:2px dashed #c77a12}.svg-object-outline.editing{border:1px dashed #8a94a3}#geometry :is(path,circle,rect,ellipse,line,polygon,polyline,text,use){pointer-events:all;cursor:pointer}#dimensions>g{cursor:pointer;pointer-events:all}svg#drawing{cursor:grab}body[data-panning=true] svg,body[data-panning=true] svg *{cursor:grabbing!important}</style>${interactive ? `<script nonce="${nonce}">${scriptText(panZoomSource)}</script><script nonce="${nonce}">${scriptText(selectionSource)}</script>` : ""}<script nonce="${nonce}">${scriptText(bridge)}</script></head><body>${markup}${scripts.map((script) => `<script nonce="${nonce}">${scriptText(script)}</script>`).join("")}</body></html>`;
 }
