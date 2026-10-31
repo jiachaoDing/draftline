@@ -147,21 +147,19 @@ describe("display-only partial response decoding", () => {
       previewStream('{"kind":"clarification","question":"需要多少毫米').text,
     ).toBe("需要多少毫米");
   });
-  it("decodes escaped drawing code and partial patches as plain text", () => {
+  it("shows summaries without exposing drawing source", () => {
     const source =
       '{"kind":"drawing","summary":"Creating the plate","html":"<svg id=\\"drawing\\">\\n<script>unsafe()';
     expect(previewStream(source)).toEqual({
       text: "Creating the plate",
-      code: '<svg id="drawing">\n<script>unsafe()',
     });
     expect(
       previewStream(
         '{"kind":"patch","summary":"Updating radius","patches":[{"id":"hole","svg":"<circle r=\\"7',
-      ).code,
-    ).toContain('<circle r="7');
+      ).text,
+    ).toBe("Updating radius");
     expect(previewStream("invalid provider data")).toEqual({
       text: "",
-      code: "",
     });
   });
 });

@@ -303,9 +303,6 @@ test("mobile drawer closes on navigation and dimensions retain per-drawing visib
     .getByRole("button", { name: "Close sidebar", exact: true })
     .click();
   await expect(frame.locator("#plate-outline")).toBeVisible();
-  await page.getByRole("button", { name: "Code", exact: true }).click();
-  await expect(page.getByLabel("Drawing source code")).toBeVisible();
-  await page.getByRole("button", { name: "Drawing", exact: true }).click();
   await expect(frame.locator("#plate-outline")).toBeVisible();
 });
 

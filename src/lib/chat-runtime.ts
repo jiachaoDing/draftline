@@ -63,6 +63,7 @@ export function runtimeMessage(
 ): ThreadMessageLike {
   return {
     id: message.id || `message-${index}`,
+    createdAt: new Date(),
     role: message.role,
     content: [{ type: "text", text: message.text }],
     attachments: message.attachments?.map(runtimeAttachment),

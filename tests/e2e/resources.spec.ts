@@ -1,3 +1,4 @@
+import { installDrawingFixture } from "../helpers/project-storage";
 import { createServer, type Server, type ServerResponse } from "node:http";
 import type { Page } from "@playwright/test";
 import { test, expect } from "../helpers/workspace-test";
@@ -176,22 +177,18 @@ test.afterAll(
 test("large SVG previews and intact placement stay staged, survive undo/reload and remain scoped to the project", async ({
   page,
 }) => {
-  await page.getByRole("button", { name: "Code", exact: true }).click();
-  await page
-    .getByLabel("Drawing source code")
-    .fill(
-      EXAMPLE_SVG.replace(
-        'id="geometry"',
-        'id="geometry" transform="translate(20 15) scale(2)"',
-      ),
-    );
-  await page.getByRole("button", { name: "Apply code", exact: true }).click();
+  await installDrawingFixture(
+    page,
+    EXAMPLE_SVG.replace(
+      'id="geometry"',
+      'id="geometry" transform="translate(20 15) scale(2)"',
+    ),
+  );
   await expect(
     page
       .frameLocator('iframe[title="Technical drawing preview"]')
       .locator("#geometry"),
   ).toHaveAttribute("transform", "translate(20 15) scale(2)");
-  await page.getByRole("button", { name: "Drawing", exact: true }).click();
   const paths = Array.from(
     { length: 700 },
     (_, i) => `<path id="part-${i}" class="mark" d="M0 0L100 0L50 50Z"/>`,
@@ -286,16 +283,12 @@ test("large SVG previews and intact placement stay staged, survive undo/reload a
 });
 
 async function prepareMeasuredLogo(page: Page) {
-  await page.getByRole("button", { name: "Code", exact: true }).click();
-  await page
-    .getByLabel("Drawing source code")
-    .fill(
-      '<svg xmlns="http://www.w3.org/2000/svg" id="drawing" width="120mm" height="80mm" viewBox="-10 -10 120 80"><g id="geometry" data-layer="geometry"><rect id="plate" width="100" height="60" rx="5" fill="white" stroke="black"/></g><g id="dimensions" data-layer="dimensions"><g id="dim" data-for="plate"><text x="50" y="-3">100 × 60 R5</text></g></g></svg>',
-    );
-  await page.getByRole("button", { name: "Apply code", exact: true }).click();
+  await installDrawingFixture(
+    page,
+    '<svg xmlns="http://www.w3.org/2000/svg" id="drawing" width="120mm" height="80mm" viewBox="-10 -10 120 80"><g id="geometry" data-layer="geometry"><rect id="plate" width="100" height="60" rx="5" fill="white" stroke="black"/></g><g id="dimensions" data-layer="dimensions"><g id="dim" data-for="plate"><text x="50" y="-3">100 × 60 R5</text></g></g></svg>',
+  );
   const frame = page.frameLocator('iframe[title="Technical drawing preview"]');
   await expect(frame.locator("#plate")).toHaveAttribute("rx", "5");
-  await page.getByRole("button", { name: "Drawing", exact: true }).click();
   await attachFiles(page, {
     name: "offset-logo.svg",
     mimeType: "image/svg+xml",

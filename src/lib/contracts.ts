@@ -163,8 +163,6 @@ export type ChatMessage = {
     | "complete"
     | "cancelled"
     | "error";
-  code?: string;
-  received?: number;
   activities?: AgentActivity[];
   resumable?: boolean;
   reference?: { data: string; name: string };

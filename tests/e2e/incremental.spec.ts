@@ -1,3 +1,4 @@
+import { installDrawingFixture } from "../helpers/project-storage";
 import { waitForProjectSave } from "../helpers/project-storage";
 import { test, expect } from "../helpers/workspace-test";
 import type { Page } from "@playwright/test";
@@ -316,6 +317,8 @@ async function open(page: Page) {
   const frame = page.frameLocator('iframe[title="Technical drawing preview"]');
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "5");
   await expect(frame.locator(".svg-pan-zoom_viewport")).toHaveCount(1);
+  await expect(frame.locator("body")).toHaveAttribute("data-mode", "select");
+  await expect(frame.locator("body")).toHaveAttribute("data-locked", "false");
   await frame.locator("#hole-top-left").click();
   await expect(
     page.getByText("SELECTED ELEMENT", { exact: true }),
@@ -414,13 +417,10 @@ test("manual continuation rejects a changed base drawing before requesting the p
     }),
   ).toBeVisible();
   const count = requests.length;
-  await page.getByRole("button", { name: "Code", exact: true }).click();
-  await page
-    .getByLabel("Drawing source code")
-    .fill(
-      `${EXAMPLE_SVG}<script>document.getElementById('hole-top-left').setAttribute('r','6')</script>`,
-    );
-  await page.getByRole("button", { name: "Apply code" }).click();
+  await installDrawingFixture(
+    page,
+    `${EXAMPLE_SVG}<script>document.getElementById('hole-top-left').setAttribute('r','6')</script>`,
+  );
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "6");
   await page
     .getByRole("button", { name: "Continue from failed step", exact: true })
@@ -663,7 +663,7 @@ test("stopping while tool arguments stream marks queued activities stopped, incl
   expect(requests).toHaveLength(1);
 });
 
-test("real provider loop retries patch/validation/identity/revision errors, then synchronizes history, storage, code and export", async ({
+test("real provider loop retries patch/validation/identity/revision errors, then synchronizes history, storage and export", async ({
   page,
 }) => {
   const frame = await open(page);
@@ -730,12 +730,6 @@ test("real provider loop retries patch/validation/identity/revision errors, then
   await expect(frame.locator("#dim-hole text")).toHaveText("4 × Ø10");
   await page.getByRole("button", { name: "Redo", exact: true }).click();
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "7");
-  await page.getByRole("button", { name: "Code", exact: true }).click();
-  await page.locator(".cm-scroller").evaluate((element) => {
-    element.scrollTop = 1000;
-  });
-  await expect(page.locator(".cm-content")).toContainText('r="7"');
-  await page.getByRole("button", { name: "Drawing", exact: true }).click();
   await waitForProjectSave(page);
   await page.reload();
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "7");
@@ -747,17 +741,14 @@ test("real provider loop retries patch/validation/identity/revision errors, then
   const exported = await readFile((await (await download).path())!, "utf8");
   expect(exported).toContain('r="7"');
   expect(exported).toContain('id="annotated-dimensions"');
-  await page.getByRole("button", { name: "Code", exact: true }).click();
-  await page
-    .getByLabel("Drawing source code")
-    .fill(
-      `${EXAMPLE_SVG}<script>document.getElementById('hole-top-left').setAttribute('r','6');document.getElementById('plate-outline').setAttribute('width','125')</script>`,
-    );
-  await page.getByRole("button", { name: "Apply code" }).click();
+  await installDrawingFixture(
+    page,
+    `${EXAMPLE_SVG}<script>document.getElementById('hole-top-left').setAttribute('r','6');document.getElementById('plate-outline').setAttribute('width','125')</script>`,
+  );
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "6");
   await expect(frame.locator(".svg-pan-zoom_viewport")).toHaveCount(1);
   await frame.locator("#hole-top-left").click();
-  await send(page, "Resize the manually edited selected hole to Ø14.");
+  await send(page, "Resize the selected hole to Ø14.");
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "7");
   await expect(frame.locator("#plate-outline")).toHaveAttribute("width", "125");
   await page.getByRole("button", { name: "Undo", exact: true }).click();

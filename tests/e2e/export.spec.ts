@@ -1,3 +1,4 @@
+import { installDrawingFixture } from "../helpers/project-storage";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import {
   PDFDocument,
@@ -84,17 +85,13 @@ test("dimension toggle persists and PDF exports both views at actual size with U
   await page.goto("/");
   const frame = page.frameLocator('iframe[title="Technical drawing preview"]');
   await expect(frame.locator("#plate-outline")).toBeVisible();
-  await page.getByRole("button", { name: "Code", exact: true }).click();
-  await page
-    .getByLabel("Drawing source code")
-    .fill(
-      EXAMPLE_SVG.replace(
-        '</g>\n<g id="dimensions"',
-        '<text id="unicode-label" x="40" y="40" font-size="4" fill="#26364a" stroke="none">中文 Ø10 ±0.1</text></g>\n<g id="dimensions"',
-      ),
-    );
-  await page.getByRole("button", { name: "Apply code" }).click();
-  await page.getByRole("button", { name: "Drawing", exact: true }).click();
+  await installDrawingFixture(
+    page,
+    EXAMPLE_SVG.replace(
+      '</g>\n<g id="dimensions"',
+      '<text id="unicode-label" x="40" y="40" font-size="4" fill="#26364a" stroke="none">中文 Ø10 ±0.1</text></g>\n<g id="dimensions"',
+    ),
+  );
   await expect(frame.locator("#unicode-label")).toBeVisible();
   const toggle = page.getByRole("button", { name: "Dimensions", exact: true });
   await expect(toggle).toHaveAttribute("aria-pressed", "true");

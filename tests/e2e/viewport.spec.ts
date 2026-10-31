@@ -155,10 +155,7 @@ test("workspace remains inside the viewport across desktop, tablet, mobile and s
   ]) {
     await page.setViewportSize({ width, height });
     await expectViewportLayout(page);
-    await page.getByRole("button", { name: "Code", exact: true }).click();
-    await expect(page.getByLabel("Drawing source code")).toBeVisible();
     await expectViewportLayout(page);
-    await page.getByRole("button", { name: "Drawing", exact: true }).click();
     await expect(
       page
         .frameLocator('iframe[title="Technical drawing preview"]')

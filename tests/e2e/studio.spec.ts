@@ -38,6 +38,24 @@ test.beforeAll(async () => {
     requests.push(input);
     const content = input.messages.at(-1).content;
     const instruction = typeof content === "string" ? content : content[0].text;
+    if (
+      instruction.includes("sandbox isolation test") ||
+      instruction.includes("sandbox navigation test")
+    ) {
+      completeResponse(
+        res,
+        JSON.stringify({
+          kind: "drawing",
+          title: "Sandbox test",
+          summary: "Sandbox result",
+          notes: [],
+          html: instruction.includes("sandbox navigation test")
+            ? `${EXAMPLE_SVG}<script>location.href='https://example.com/navigation-probe';document.querySelector('#hole-top-left').setAttribute('r','8')</script>`
+            : `${EXAMPLE_SVG}<script>document.querySelector('#plate-outline').setAttribute('width','125');try{parent.document.body.innerHTML='breach'}catch{document.querySelector('#plate-outline').setAttribute('data-sandbox','isolated')}</script>`,
+        }),
+      );
+      return;
+    }
     if (instruction.includes("streaming conversation test")) {
       openCompletion(res);
       contentChunk(res, '{"kind":"message","message":"This plate');
@@ -205,11 +223,6 @@ test("sketch → clarification → generated code → targeted edit → undo/red
     await page.evaluate(() => localStorage.getItem("sandbox-leak")),
   ).toBeNull();
   expect(leakedRequests).toEqual([]);
-  await page.getByRole("button", { name: "Code", exact: true }).click();
-  await expect(page.locator(".cm-line").first()).toHaveText("<!doctype html>");
-  await expect(page.locator(".cm-line").nth(1)).toHaveText("<html>");
-  await expect(page.locator(".cm-line").nth(2)).toHaveText("  <body>");
-  await page.getByRole("button", { name: "Drawing", exact: true }).click();
   expect(requests.some((r) => JSON.stringify(r).includes("image_url"))).toBe(
     false,
   );
@@ -341,17 +354,12 @@ test("upload and clipboard paste accept images; invalid files fail safely", asyn
   await expect(page.getByText("pasted.png")).toBeVisible();
 });
 
-test("code editor executes synchronous SVG JavaScript and isolates parent access", async ({
+test("generated drawing executes synchronous SVG JavaScript and isolates parent access", async ({
   page,
 }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "Code", exact: true }).click();
-  await page
-    .getByLabel("Drawing source code")
-    .fill(
-      `${EXAMPLE_SVG}<script>document.querySelector('#plate-outline').setAttribute('width','125');try{parent.document.body.innerHTML='breach'}catch{document.querySelector('#plate-outline').setAttribute('data-sandbox','isolated')}</script>`,
-    );
-  await page.getByRole("button", { name: "Apply code" }).click();
+  await connectModel(page);
+  await page.getByLabel("Drawing instructions").fill("sandbox isolation test");
+  await page.getByRole("button", { name: "Send drawing instruction" }).click();
   const frame = page.frameLocator('iframe[title="Technical drawing preview"]');
   await expect(frame.locator("#plate-outline")).toHaveAttribute("width", "125");
   await expect(
@@ -365,51 +373,6 @@ test("code editor executes synchronous SVG JavaScript and isolates parent access
   await expect(frame.locator("#plate-outline")).toHaveAttribute("width", "120");
   await page.getByRole("button", { name: "Redo", exact: true }).click();
   await expect(frame.locator("#plate-outline")).toHaveAttribute("width", "125");
-});
-
-test("source editor highlights, wraps and formats drafts with its own undo history", async ({
-  page,
-}) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "Code", exact: true }).click();
-  const editor = page.getByLabel("Drawing source code");
-  await expect(page.locator(".cm-lineNumbers")).toBeVisible();
-  await expect(page.locator(".cm-content")).toHaveCSS(
-    "white-space",
-    "break-spaces",
-  );
-  expect(await page.locator(".cm-line span").count()).toBeGreaterThan(0);
-  const source =
-    "<html><body><svg><text>Ø10 mm</text></svg><script>const n=1;console.log(n);</script></body></html>";
-  await editor.press("ControlOrMeta+a");
-  await page.keyboard.insertText(source);
-  await page.getByRole("button", { name: "Format", exact: true }).click();
-  await expect(editor).toContainText("const n = 1;");
-  await expect(page.locator(".cm-line").first()).toHaveText("<html>");
-  await editor.press("ControlOrMeta+z");
-  await expect(page.locator(".cm-line")).toHaveCount(1);
-  await expect(editor).toHaveText(source);
-  await editor.press("ControlOrMeta+Shift+Z");
-  await expect(editor).toContainText("const n = 1;");
-  await expect(
-    page.getByRole("button", { name: "Undo", exact: true }),
-  ).toBeDisabled();
-  await editor.press("ControlOrMeta+a");
-  await page.keyboard.insertText("<svg><g></svg>");
-  await page.getByRole("button", { name: "Format", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText(
-    "Could not format source",
-  );
-  await expect(editor).toHaveText("<svg><g></svg>");
-  await page.getByRole("button", { name: "Apply code" }).click();
-  await expect(page.getByRole("alert")).toContainText("SVG with id drawing");
-  await expect(
-    page
-      .frameLocator('iframe[title="Technical drawing preview"]')
-      .locator("#hole-top-left"),
-  ).toHaveAttribute("r", "5");
-  await page.getByRole("button", { name: "Code", exact: true }).click();
-  await expect(editor).toHaveText("<svg><g></svg>");
 });
 
 test("mobile layout keeps core controls within viewport", async ({ page }) => {
@@ -431,22 +394,6 @@ test("mobile layout keeps core controls within viewport", async ({ page }) => {
   expect(
     (await page.locator(".drawing-workspace").boundingBox())?.width,
   ).toBeLessThanOrEqual(390);
-  await page.getByRole("button", { name: "Code", exact: true }).click();
-  const editor = page.getByLabel("Drawing source code");
-  await editor.fill(`<svg><text>${"x".repeat(1500)}</text></svg>`);
-  await expect(
-    page.getByRole("button", { name: "Format", exact: true }),
-  ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Apply code" })).toBeVisible();
-  expect(
-    await page.evaluate(() => document.documentElement.scrollWidth),
-  ).toBeLessThanOrEqual(390);
-  expect(
-    await page
-      .locator(".cm-scroller")
-      .evaluate((node) => node.scrollWidth - node.clientWidth),
-  ).toBeLessThanOrEqual(1);
-  await page.getByRole("button", { name: "Drawing", exact: true }).click();
   await page.getByRole("button", { name: "Model settings" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
 });
@@ -459,14 +406,9 @@ test("sandbox blocks external navigation and retains the previous drawing", asyn
     if (request.url().includes("example.com/navigation-probe"))
       leaked.push(request.url());
   });
-  await page.goto("/");
-  await page.getByRole("button", { name: "Code", exact: true }).click();
-  await page
-    .getByLabel("Drawing source code")
-    .fill(
-      `${EXAMPLE_SVG}<script>location.href='https://example.com/navigation-probe';document.querySelector('#hole-top-left').setAttribute('r','8')</script>`,
-    );
-  await page.getByRole("button", { name: "Apply code" }).click();
+  await connectModel(page);
+  await page.getByLabel("Drawing instructions").fill("sandbox navigation test");
+  await page.getByRole("button", { name: "Send drawing instruction" }).click();
   await expect(page.getByRole("alert")).toContainText(
     "Drawing validation did not finish",
     { timeout: 8000 },
@@ -685,7 +627,7 @@ test("ordinary chat is visible before the provider completes its stream", async 
   ).toBeDisabled();
 });
 
-test("received HTML remains plain text until completion and sandbox validation", async ({
+test("received HTML stays hidden until completion and sandbox validation", async ({
   page,
 }) => {
   await connectModel(page);
@@ -694,10 +636,8 @@ test("received HTML remains plain text until completion and sandbox validation",
   await expect(
     page.getByText("Preparing a revised plate.", { exact: true }),
   ).toBeVisible();
-  await expect(page.locator(".stream-code pre")).toContainText(
-    "setAttribute('r','9')",
-  );
   const frame = page.frameLocator('iframe[title="Technical drawing preview"]');
+  await expect(page.locator(".stream-code")).toHaveCount(0);
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "5");
   await expect(
     page.locator('iframe[title="Drawing validation sandbox"]'),

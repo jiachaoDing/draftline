@@ -13,9 +13,13 @@ describe("preview startup bridge", () => {
     const onSnapshot = vi.fn();
     const onError = vi.fn();
     const onSelection = vi.fn();
+    const frameMessages = vi.fn();
     function FrameStartup() {
       useLayoutEffect(() => {
         const frame = container.querySelector("iframe")!;
+        vi.spyOn(frame.contentWindow!, "postMessage").mockImplementation(
+          frameMessages,
+        );
         const channel = JSON.parse(
           frame.srcdoc.match(/const channel = ("[^"]+");/)![1],
         );
@@ -81,6 +85,9 @@ describe("preview startup bridge", () => {
         ids: ["hole-top-left", "hole-top-right"],
         rootId: null,
       });
+      expect(
+        frameMessages.mock.calls.some(([message]) => message.type === "select"),
+      ).toBe(false);
     } finally {
       await act(async () => root.unmount());
       container.remove();

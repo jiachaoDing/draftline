@@ -3,7 +3,6 @@ import { createContext, useContext } from "react";
 import {
   ArrowDown,
   ArrowLeft,
-  Code2,
   Copy,
   RotateCcw,
   Sparkles,
@@ -110,19 +109,6 @@ function Message() {
         )}
         {message.status === "streaming" && message.text && (
           <span className="stream-cursor" aria-hidden="true" />
-        )}
-        {message.code && (
-          <details
-            className="stream-code"
-            open={message.status === "streaming"}
-          >
-            <summary>
-              <Code2 size={12} />
-              {t("Receiving drawing code ·")}{" "}
-              {message.received?.toLocaleString()} {t("characters")}
-            </summary>
-            <pre>{message.code}</pre>
-          </details>
         )}
         {message.status && message.status !== "complete" && (
           <small className={`reply-status ${message.status}`}>

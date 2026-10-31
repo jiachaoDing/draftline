@@ -1,6 +1,35 @@
 import { test, expect } from "../helpers/workspace-test";
 import { EXAMPLE_SVG } from "../../src/lib/example";
 
+test("opening drawings and typing drafts keeps formatter and editor unloaded", async ({
+  page,
+}) => {
+  const tooling: string[] = [];
+  page.on("request", (request) => {
+    if (/prettier|codemirror/i.test(request.url())) tooling.push(request.url());
+  });
+  await page.goto("/");
+  await expect(
+    page.frameLocator("iframe").locator("#plate-outline"),
+  ).toBeVisible();
+  await page.getByLabel("Drawing instructions").fill("Keep this draft");
+  await page.getByRole("button", { name: "New Drawing", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Open drawing Mounting plate", exact: true })
+    .click();
+  await expect(
+    page.frameLocator("iframe").locator("#plate-outline"),
+  ).toBeVisible();
+  await expect(page.getByLabel("Drawing instructions")).toHaveValue(
+    "Keep this draft",
+  );
+  await expect(
+    page.getByRole("button", { name: "Code", exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByLabel("Drawing source code")).toHaveCount(0);
+  expect(tooling).toEqual([]);
+});
+
 test("repeated sandbox validation releases frames and listeners beyond 94 iterations", async ({
   page,
 }) => {

@@ -172,35 +172,6 @@
 .reply-status.cancelled {
   color: #a0a8b5;
 }
-.stream-code {
-  margin-top: 9px;
-  white-space: normal;
-  border: 1px solid #e2e9f5;
-  border-radius: 5px;
-  background: #f8faff;
-}
-.stream-code summary {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  cursor: pointer;
-  padding: 7px 8px;
-  font-size: 8px;
-  color: #8196b7;
-}
-.stream-code pre {
-  font-family: "Cascadia Code", Consolas, monospace;
-  font-size: 9px;
-  line-height: 1.55;
-  margin: 0;
-  padding: 9px;
-  border-top: 1px solid #e5ebf6;
-  max-height: 150px;
-  overflow: auto;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  color: #6b82a7;
-}
 .validation-preview {
   position: fixed;
   left: 0;
@@ -909,10 +880,7 @@
   .canvas-toolbar {
     height: 49px;
   }
-  .canvas-tabs {
-    gap: 14px;
-  }
-  .canvas-tabs button {
+  .canvas-title {
     font-size: 10px;
   }
   .canvas-tools .icon-button {

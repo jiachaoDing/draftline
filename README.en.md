@@ -30,7 +30,6 @@ Draftline is an open-source AI drawing workspace. Supply a sketch and dimensions
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Sketch to drawing    | Describe a part or attach images, SVG, PDF, DXF or text; AI asks for essential missing measurements                     |
 | Targeted edits       | Select objects, draw a marquee or enter groups; changes beyond the selection require review                             |
-| Source editing       | Inspect, edit and format HTML / SVG / JavaScript in CodeMirror, then validate changes in the sandbox                    |
 | SVG / PDF export     | One SVG unit equals 1 mm; export SVG or vector PDF with geometry on the left and dimensioned geometry on the right      |
 | Separate projects    | Autosave drawings, conversations, attachments and drafts; undo / redo and switch projects during generation             |
 | Your choice of model | Bring an OpenAI-compatible endpoint or NewAPI instance and your own API key; replies and activity stream as they arrive |
@@ -96,14 +95,14 @@ Preview production routing with `npm run build` followed by `npm run dev:worker`
 
 ## Stack and documentation
 
-| Layer                      | Main libraries                                                |
-| -------------------------- | ------------------------------------------------------------- |
-| UI and conversation        | React, TypeScript, Vite, assistant-ui                         |
-| Drawing and source editing | SVG, CodeMirror 6, Prettier, DOMPurify, svg-pan-zoom          |
-| Incremental edits          | OpenAI Codex Rust apply-patch engine compiled to browser WASM |
-| API and streaming          | Hono, Vercel AI SDK, OpenAI-compatible provider, SSE, Zod     |
-| Storage and deployment     | IndexedDB / idb, Cloudflare Workers / Static Assets           |
-| Verification               | Vitest, Playwright, Biome                                     |
+| Layer                  | Main libraries                                                |
+| ---------------------- | ------------------------------------------------------------- |
+| UI and conversation    | React, TypeScript, Vite, assistant-ui                         |
+| Drawing and editing    | SVG, DOMPurify, svg-pan-zoom                                  |
+| Incremental edits      | OpenAI Codex Rust apply-patch engine compiled to browser WASM |
+| API and streaming      | Hono, Vercel AI SDK, OpenAI-compatible provider, SSE, Zod     |
+| Storage and deployment | IndexedDB / idb, Cloudflare Workers / Static Assets           |
+| Verification           | Vitest, Playwright, Biome                                     |
 
 - [User guide](docs/user-guide.md): attachments, shortcuts, groups, clarification, export and security boundaries.
 - [Architecture](docs/architecture.md): module responsibilities, data contracts and request lifecycle.

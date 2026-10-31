@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   conversationPath,
   recordConversation,
@@ -21,8 +21,16 @@ describe("persistent conversation branches and canvases", () => {
     expect(updated.nodes[0].message).toBe(initial.nodes[0].message);
     expect(updated.nodes[1].message.text).toBe("AB");
     expect(initial.nodes[1].message.text).toBe("A");
-    const before = runtimeRepository(initial);
-    const after = runtimeRepository(updated);
+    vi.useFakeTimers();
+    let before: ReturnType<typeof runtimeRepository>;
+    let after: ReturnType<typeof runtimeRepository>;
+    try {
+      before = runtimeRepository(initial);
+      vi.advanceTimersByTime(1000);
+      after = runtimeRepository(updated);
+    } finally {
+      vi.useRealTimers();
+    }
     expect(after.messages[0].message).toEqual(before.messages[0].message);
     expect(after.messages[1].message.content).toEqual([
       { type: "text", text: "AB" },

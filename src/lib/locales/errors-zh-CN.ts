@@ -123,6 +123,4 @@ export const errorsZhCN: Record<string, string> = {
     "已达到追问轮数上限，请取消追问并发送新指令。",
   "Text layout is unavailable in this browser.": "此浏览器无法进行文本排版。",
   "The sheet has invalid source bounds.": "图纸的原始边界无效。",
-  "Source could not be formatted. You can still edit and apply it.":
-    "源代码无法格式化，你仍可以编辑和应用代码。",
 };

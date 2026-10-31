@@ -50,6 +50,17 @@ test.beforeAll(async () => {
         res.once("close", resolve);
       });
       if (!res.destroyed) finishCompletion(res);
+    } else if (instruction.includes("create B")) {
+      completeResponse(
+        res,
+        JSON.stringify({
+          kind: "drawing",
+          title: "Untitled drawing",
+          summary: "Created B",
+          notes: [],
+          html: EXAMPLE_SVG.replaceAll('r="5"', 'r="8"'),
+        }),
+      );
     } else {
       completeResponse(
         res,
@@ -71,6 +82,9 @@ test("retry uses the original instruction and attachments without adding a secon
     .frameLocator('iframe[title="Technical drawing preview"]')
     .locator("#hole-top-left")
     .click();
+  await expect(
+    page.getByText("SELECTED ELEMENT", { exact: true }),
+  ).toBeVisible();
   await attach(page, {
     name: "retry.txt",
     mimeType: "text/plain",
@@ -113,6 +127,16 @@ async function open(page: Page) {
     );
   }, baseURL);
   await page.goto("/");
+  await expect(
+    page
+      .frameLocator('iframe[title="Technical drawing preview"]')
+      .locator("body"),
+  ).toHaveAttribute("data-mode", "select");
+  await expect(
+    page
+      .frameLocator('iframe[title="Technical drawing preview"]')
+      .locator("body"),
+  ).toHaveAttribute("data-locked", "false");
   await expect(page.locator(".canvas-status")).not.toContainText(
     "0 geometry elements",
   );
@@ -169,9 +193,8 @@ test("background validation commits to its original drawing while another drawin
   await page.getByRole("button", { name: "Pan tool", exact: true }).click();
   const frame = page.frameLocator('iframe[title="Technical drawing preview"]');
   await expect(frame.locator("body")).toHaveAttribute("data-mode", "pan");
-  await page.getByRole("button", { name: "Code", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Apply code", exact: true }),
+    page.getByRole("button", { name: "Undo", exact: true }),
   ).toBeDisabled();
   await page.getByRole("button", { name: "New Drawing", exact: true }).click();
   await page.evaluate(() => {
@@ -201,11 +224,8 @@ test("background validation commits to its original drawing while another drawin
       true,
     );
   });
-  await page.getByRole("button", { name: "Code", exact: true }).click();
-  await page
-    .getByLabel("Drawing source code")
-    .fill(EXAMPLE_SVG.replaceAll('r="5"', 'r="8"'));
-  await page.getByRole("button", { name: "Apply code", exact: true }).click();
+  await page.getByLabel("Drawing instructions").fill("create B");
+  await page.getByRole("button", { name: "Send drawing instruction" }).click();
   await expect(
     page.getByRole("button", { name: "Stop generation" }),
   ).toHaveCount(0, { timeout: 10000 });
@@ -349,13 +369,6 @@ test("floating objects panel toggles, resizes, scrolls and follows canvas select
   page,
 }) => {
   await open(page);
-  for (let unchangedApply = 0; unchangedApply < 2; unchangedApply++) {
-    await page.getByRole("button", { name: "Code", exact: true }).click();
-    await page.getByRole("button", { name: "Apply code", exact: true }).click();
-    await expect(
-      page.getByRole("button", { name: "Stop generation" }),
-    ).toHaveCount(0);
-  }
   const panel = page.getByRole("region", {
     name: "Drawing objects",
     exact: true,

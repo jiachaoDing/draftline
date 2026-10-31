@@ -123,7 +123,9 @@ export const Preview = forwardRef<PreviewHandle, Props>(
       };
     }, [channel, send]);
     useEffect(() => send("layers", props.layers), [props.layers, send]);
-    useEffect(
+    // Synchronize selection before the frame can report a user's first click.
+    // A delayed passive effect could otherwise restore the initial empty selection.
+    useLayoutEffect(
       () => send("select", props.selection || EMPTY_SELECTION),
       [props.selection, send],
     );

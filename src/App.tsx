@@ -1,21 +1,12 @@
 import { currentLocale, t, useLocale } from "./lib/i18n";
 import { useProjectField } from "./hooks/useProjectField";
 import { useProjectSession } from "./hooks/useProjectSession";
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   Check,
   ChevronDown,
   CircleHelp,
-  Code2,
   Focus,
   Hand,
   Layers2,
@@ -28,7 +19,6 @@ import {
   Plus,
   Redo2,
   Settings2,
-  ShieldCheck,
   Sparkles,
   Undo2,
   X,
@@ -87,7 +77,6 @@ import {
   type ActivityHandler,
 } from "./lib/agent-activity";
 import { previewStream } from "./lib/stream-preview";
-import { useDrawingSource } from "./hooks/useDrawingSource";
 import {
   drawingContext,
   drawingChange,
@@ -105,8 +94,6 @@ import {
 } from "./lib/projects";
 import { readConfig, defaultConfig } from "./lib/model-settings";
 import type { ChatMessage, Drawing } from "./lib/contracts";
-
-const CodeEditor = lazy(() => import("./components/CodeEditor"));
 
 export default function App() {
   useLocale();
@@ -232,7 +219,6 @@ export default function App() {
     null,
     updateProject,
   );
-  const [tab, setTab] = useState<"drawing" | "code">("drawing");
   const [objectsOpen, setObjectsOpen] = useState(false);
   const [help, setHelp] = useState(false);
   const preview = useRef<PreviewHandle>(null);
@@ -248,18 +234,12 @@ export default function App() {
       error ? 10000 : 4500,
     );
   }, []);
-  const { code, setCode, formattingCode, formatCode } = useDrawingSource(
-    drawing,
-    tell,
-  );
-
   const openProject = useCallback((project: Project) => {
     activeIdRef.current = project.id;
     setActiveId(project.id);
     setSelection(EMPTY_SELECTION);
     setMode("select");
     setZoom(100);
-    setTab("drawing");
     setNotice(null);
   }, []);
   const persist = useCallback(
@@ -484,7 +464,6 @@ export default function App() {
                 : message,
             ),
           );
-          if (activeIdRef.current === activeProject?.id) setTab("drawing");
           return false;
         }
       }
@@ -527,7 +506,7 @@ export default function App() {
     }
   }
   const finishReply = useCallback(
-    (status: ChatMessage["status"], text?: string, keepCode = false) => {
+    (status: ChatMessage["status"], text?: string, keepRecovery = false) => {
       const id = activeReply.current;
       if (id)
         setMessages((messages) =>
@@ -538,14 +517,13 @@ export default function App() {
                   status,
                   resumable:
                     status === "complete" ||
-                    (status === "cancelled" && !keepCode)
+                    (status === "cancelled" && !keepRecovery)
                       ? false
                       : message.resumable,
                   text: text ?? message.text,
-                  code: keepCode ? message.code : undefined,
                   recovery:
                     status === "complete" ||
-                    (status === "cancelled" && !keepCode)
+                    (status === "cancelled" && !keepRecovery)
                       ? undefined
                       : message.recovery,
                   proposal:
@@ -708,6 +686,7 @@ export default function App() {
       );
     };
     let source = "";
+    let displayedText = "";
     let updateFrame: number | undefined;
     const flush = (retainReceivedText = false) => {
       updateFrame = undefined;
@@ -717,14 +696,14 @@ export default function App() {
       )
         return;
       const partial = previewStream(source);
+      if (!partial.text || partial.text === displayedText) return;
+      displayedText = partial.text;
       setMessages((messages) =>
         messages.map((message) =>
           message.id === replyId
             ? {
                 ...message,
                 text: partial.text || message.text,
-                code: partial.code ? partial.code.slice(-8000) : message.code,
-                received: source.length,
               }
             : message,
         ),
@@ -1304,22 +1283,9 @@ export default function App() {
           aria-label={t("Drawing workspace")}
         >
           <div className="canvas-toolbar">
-            <div className="canvas-tabs">
-              <button
-                className={tab === "drawing" ? "active" : ""}
-                onClick={() => setTab("drawing")}
-              >
-                <Layers2 size={14} />
-                {t("Drawing")}
-              </button>
-              <button
-                className={tab === "code" ? "active" : ""}
-                disabled={!!review}
-                onClick={() => setTab("code")}
-              >
-                <Code2 size={15} />
-                {t("Code")}
-              </button>
+            <div className="canvas-title">
+              <Layers2 size={14} />
+              {t("Drawing")}
             </div>
             <div className="canvas-tools">
               <button
@@ -1328,7 +1294,7 @@ export default function App() {
                 title={t("Objects and groups")}
                 aria-expanded={objectsOpen}
                 aria-controls="canvas-objects"
-                disabled={!drawing || tab !== "drawing"}
+                disabled={!drawing}
                 onClick={() => setObjectsOpen(!objectsOpen)}
               >
                 <Layers2 size={17} />
@@ -1336,7 +1302,7 @@ export default function App() {
               <DimensionToggle
                 visible={layers.dimensions}
                 onChange={(dimensions) => setLayers({ dimensions })}
-                disabled={!drawing || tab !== "drawing"}
+                disabled={!drawing}
               />
               <span className="tool-separator" />
               <button
@@ -1402,7 +1368,7 @@ export default function App() {
                   : t("VECTOR DRAWING")}
             </span>
           </div>
-          <div className={`canvas ${tab === "code" ? "show-code" : ""}`}>
+          <div className="canvas">
             {drawing ? (
               <Preview
                 key={activeId}
@@ -1457,85 +1423,7 @@ export default function App() {
                 <span>{t("Precise vectors · millimeter scale")}</span>
               </div>
             )}
-            {tab === "code" && (
-              <div className="code-panel">
-                <div className="code-heading">
-                  <span>
-                    <Code2 size={16} />
-                    {t("Drawing source")}
-                  </span>
-                  <div className="code-actions">
-                    <button
-                      className="button small"
-                      disabled={busy || formattingCode || !!userInput}
-                      onClick={formatCode}
-                    >
-                      {formattingCode ? t("Formatting…") : t("Format")}
-                    </button>
-                    <button
-                      className="button small primary"
-                      disabled={busy || formattingCode || !!userInput}
-                      onClick={async () => {
-                        editContext.current = null;
-                        const candidate = {
-                          title:
-                            drawing?.title ||
-                            activeProject?.name ||
-                            t("Untitled drawing"),
-                          html: code,
-                          summary: t("Source code updated."),
-                          notes: drawing?.notes,
-                        };
-                        setPending(candidate);
-                        setBusy(true);
-                        setTab("drawing");
-                        const controller = new AbortController();
-                        abort.current = controller;
-                        try {
-                          const svg = await validateDrawingSource(
-                            candidate.html,
-                            controller.signal,
-                          );
-                          controller.signal.throwIfAborted();
-                          commit({ ...candidate, svg, html: svgToHTML(svg) });
-                        } catch (error) {
-                          if ((error as Error).name !== "AbortError")
-                            tell((error as Error).message, true);
-                        } finally {
-                          if (abort.current === controller)
-                            abort.current = null;
-                          setPending(null);
-                          setBusy(false);
-                        }
-                      }}
-                    >
-                      {t("Apply code")}
-                      <Check size={13} />
-                    </button>
-                  </div>
-                </div>
-                <Suspense
-                  fallback={
-                    <div className="code-editor" role="status">
-                      {t("Loading editor…")}
-                    </div>
-                  }
-                >
-                  <CodeEditor
-                    value={code}
-                    onChange={setCode}
-                    disabled={busy || formattingCode || !!userInput}
-                  />
-                </Suspense>
-                <div className="code-note">
-                  <ShieldCheck size={13} />
-                  {t(
-                    "HTML, SVG & synchronous JavaScript run inside the drawing sandbox.",
-                  )}
-                </div>
-              </div>
-            )}
-            {tab === "drawing" && drawing && objectsOpen && (
+            {drawing && objectsOpen && (
               <ObjectTree
                 elements={elements}
                 selection={selection}
@@ -1543,20 +1431,18 @@ export default function App() {
                 onClose={() => setObjectsOpen(false)}
               />
             )}
-            {tab === "drawing" &&
-              drawing &&
-              (selection.ids.length > 0 || selection.rootId) && (
-                <div className="canvas-selection">
-                  <SelectionPanel
-                    elements={elements}
-                    selection={selection}
-                    disabled={busy || !!review || !!userInput || projectBusy}
-                    onChange={setSelection}
-                    onGroup={() => changeGrouping("group")}
-                    onUngroup={() => changeGrouping("ungroup")}
-                  />
-                </div>
-              )}
+            {drawing && (selection.ids.length > 0 || selection.rootId) && (
+              <div className="canvas-selection">
+                <SelectionPanel
+                  elements={elements}
+                  selection={selection}
+                  disabled={busy || !!review || !!userInput || projectBusy}
+                  onChange={setSelection}
+                  onGroup={() => changeGrouping("group")}
+                  onUngroup={() => changeGrouping("ungroup")}
+                />
+              </div>
+            )}
             {busy && (
               <div className="canvas-loading">
                 <Loader2 className="spin" size={20} />

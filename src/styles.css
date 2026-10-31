@@ -420,24 +420,11 @@ kbd {
   padding: 0 17px;
   flex-shrink: 0;
 }
-.canvas-tabs {
-  height: 100%;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.canvas-tabs button {
-  height: 100%;
+.canvas-title {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  border-bottom: 2px solid transparent;
-  color: #98a1b0;
-  padding: 0 2px;
-}
-.canvas-tabs button.active {
-  border-bottom-color: var(--blue);
   color: #435c8c;
   font-weight: 550;
 }
@@ -593,54 +580,10 @@ kbd {
   color: #72839d;
   text-decoration: underline;
 }
-.code-panel {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  background: #f8fafe;
-  display: flex;
-  flex-direction: column;
-}
-.code-heading {
-  height: 62px;
-  padding: 16px 21px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--line);
-}
-.code-heading > span {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  color: #7687a3;
-  font-size: 11px;
-}
 .button.small {
   height: 29px;
   font-size: 10px;
   padding: 0 10px;
-}
-.code-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.code-editor {
-  flex: 1;
-  min-height: 0;
-  min-width: 0;
-  width: 100%;
-  overflow: hidden;
-}
-.code-note {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  padding: 12px 19px;
-  color: #8c99ae;
-  font-size: 9px;
-  border-top: 1px solid var(--line);
 }
 .spin {
   animation: spin 1s linear infinite;

@@ -1,3 +1,4 @@
+import { installDrawingFixture } from "../helpers/project-storage";
 import { waitForProjectSave } from "../helpers/project-storage";
 import { test, expect } from "../helpers/workspace-test";
 import type { Page } from "@playwright/test";
@@ -76,15 +77,14 @@ async function openObjects(page: Page) {
     );
   }, baseURL);
   await page.goto("/");
-  await page.getByRole("button", { name: "Code", exact: true }).click();
-  await page.getByLabel("Drawing source code").fill(OBJECT_SVG);
-  await page.getByRole("button", { name: "Apply code", exact: true }).click();
+  await installDrawingFixture(page, OBJECT_SVG);
   const frame = page.frameLocator('iframe[title="Technical drawing preview"]');
   await expect(frame.locator("#logo")).toHaveAttribute(
     "transform",
     "translate(15 20)",
   );
   await expect(frame.locator("body")).toHaveAttribute("data-mode", "select");
+  await expect(frame.locator("body")).toHaveAttribute("data-locked", "false");
   return frame;
 }
 
@@ -194,6 +194,8 @@ test("AI can move a whole logo from a selected path; broader changes require rev
 }) => {
   const frame = await openObjects(page);
   const send = async () => {
+    await expect(frame.locator("body")).toHaveAttribute("data-mode", "select");
+    await expect(frame.locator("body")).toHaveAttribute("data-locked", "false");
     await frame.locator("#logo-left").click({ modifiers: ["Control"] });
     await expect(page.locator(".selection-card strong")).toHaveText(
       "logo left",

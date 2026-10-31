@@ -50,8 +50,6 @@ const messageSchema = z
         "error",
       ])
       .optional(),
-    code: z.string().optional(),
-    received: z.number().optional(),
     activities: z.array(agentActivitySchema).max(256).default([]),
     reference: referenceSchema.optional(),
     attachments: attachmentsSchema.optional(),

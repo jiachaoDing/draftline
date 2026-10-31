@@ -33,7 +33,6 @@ describe("drawing request and commit boundaries", () => {
       role: "assistant",
       text: "x".repeat(9000),
       status: "complete",
-      code: "private display",
       reference: { name: "ref", data: "image" },
     });
     const history = conversationHistory(messages);

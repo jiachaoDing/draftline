@@ -30,7 +30,6 @@ Draftline 是一个开源的 AI 绘图工作台。你提供草图与尺寸，AI 
 | -------------- | ------------------------------------------------------------------------------------- |
 | 草图 → 图纸    | 输入文字或附上图片、SVG、PDF、DXF、文本；缺少关键尺寸时，AI 会先提问                  |
 | 局部修改       | 点选、框选或进入分组，让 AI 调整相关对象；超出选区的修改先交由你审阅                  |
-| 可编辑源代码   | 在 Code 编辑器中查看、修改、格式化 HTML / SVG / JavaScript，并在沙箱验证后应用        |
 | SVG / PDF 导出 | 1 个 SVG 单位对应 1 mm；支持 SVG 和矢量 PDF；左侧为纯几何图形，右侧为带尺寸标注的图形 |
 | 独立项目       | 自动保存图纸、对话、附件与草稿；支持撤销 / 重做，生成时也可切换项目                   |
 | 对话分支       | 编辑历史消息、重新生成和切换回复版本；从任意消息继续，对话历史可恢复分支及对应画布    |
@@ -100,7 +99,7 @@ npm run deploy
 | 层次           | 主要实现                                              |
 | -------------- | ----------------------------------------------------- |
 | 界面与对话     | React、TypeScript、Vite、assistant-ui                 |
-| 图纸与编辑     | SVG、CodeMirror 6、Prettier、DOMPurify、svg-pan-zoom  |
+| 图纸与编辑     | SVG、DOMPurify、svg-pan-zoom                          |
 | 增量修改       | OpenAI Codex Rust apply-patch 引擎，编译为浏览器 WASM |
 | API 与流式传输 | Hono、Vercel AI SDK、OpenAI 兼容 Provider、SSE、Zod   |
 | 存储与部署     | IndexedDB / idb、Cloudflare Workers / Static Assets   |

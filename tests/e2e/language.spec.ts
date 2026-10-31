@@ -57,7 +57,7 @@ test.beforeEach(() => {
   requests = [];
 });
 
-test("language switching preserves drafts, drawing content, editor state and saved preference", async ({
+test("language switching preserves drafts, drawing content and saved preference", async ({
   page,
 }) => {
   await page.goto("/");
@@ -65,18 +65,13 @@ test("language switching preserves drafts, drawing content, editor state and sav
   await page
     .getByLabel("Drawing instructions")
     .fill("保留这个草稿 Keep this draft");
-  await page.getByRole("button", { name: "Code", exact: true }).click();
-  const source = await page
-    .getByRole("textbox", { name: "Drawing source code" })
-    .innerText();
+  const plate = page.frameLocator("iframe").locator("#plate-outline");
+  await expect(plate).toHaveAttribute("width", "120");
   await page
     .getByRole("combobox", { name: "Language", exact: true })
     .selectOption("zh-CN");
   await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
-  await expect(page.getByRole("textbox", { name: "图纸源代码" })).toHaveText(
-    source,
-    { useInnerText: true },
-  );
+  await expect(plate).toHaveAttribute("width", "120");
   await expect(
     page.getByRole("button", { name: "模型设置", exact: true }),
   ).toBeVisible();

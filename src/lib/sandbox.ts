@@ -65,7 +65,7 @@ export function buildSandbox(
       if (type === 'mode') { mode = payload; mode === 'pan' ? controller.enablePan() : controller.disablePan(); editor.setMode(mode); document.body.dataset.mode = mode; }
       if (type === 'layers') { const n = svg.querySelector('#dimensions'); if(n) n.setAttribute('display', payload.dimensions ? 'inline' : 'none'); editor.visibilityChanged(); }
       if (type === 'select') editor.setSelection(payload);
-      if (type === 'locked') editor.setLocked(!!payload);
+      if (type === 'locked') { editor.setLocked(!!payload); document.body.dataset.locked = String(!!payload); }
       if (type === 'changes') editor.setChanges(payload);
       if (type === 'command') editor.command(payload);
       if (type === 'snapshot') rawSnapshot();
