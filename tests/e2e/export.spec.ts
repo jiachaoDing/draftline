@@ -28,7 +28,10 @@ test("bundled fonts keep Unicode labels as text with named PDF layers", async ({
         <text id="unicode" x="45" y="12" text-anchor="middle">中文口 Ø10 ±0.1</text>
         <text id="bold-label" x="10" y="25" font-weight="bold" transform="rotate(12 10 25)"><tspan fill="#c02020">红色</tspan><tspan fill="#2020c0" dy="7">蓝色</tspan></text>
       </g><g id="dimensions" data-layer="dimensions"/></svg>`;
-    const bytes = await exportPDF(source);
+    const stages: string[] = [];
+    const bytes = await exportPDF(source, (stage: string) =>
+      stages.push(stage),
+    );
     const file = `data:application/pdf;base64,${btoa(String.fromCharCode(...bytes))}`;
     const text = await inspectPdf(
       file,
@@ -37,6 +40,7 @@ test("bundled fonts keep Unicode labels as text with named PDF layers", async ({
       new AbortController().signal,
     );
     return {
+      stages,
       text: text.text,
       bytes: [...bytes],
       temporaryHosts: document.querySelectorAll('[aria-hidden="true"] > svg')
@@ -46,6 +50,7 @@ test("bundled fonts keep Unicode labels as text with named PDF layers", async ({
   expect(result.text?.replace(/\s/g, "")).toContain("中文口Ø10±0.1");
   expect(result.text?.replace(/\s/g, "")).toContain("红色蓝色");
   expect(result.temporaryHosts).toBe(0);
+  expect(result.stages).toEqual(["Preparing fonts…", "Generating PDF…"]);
   expect(
     requests.every((url) => new URL(url).origin === new URL(page.url()).origin),
   ).toBe(true);

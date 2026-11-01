@@ -19,7 +19,7 @@ npm ci
 npm run dev
 ```
 
-Open http://127.0.0.1:3000. The API runs on loopback port 3001. In **Model settings**, enter your OpenAI-compatible Base URL and API key, then discover models. Click the Model field or its arrow to browse the full list, type to filter, and select with the mouse or keyboard. Custom model IDs can also be typed and saved directly. Test the connection before drawing. Use a model with streamed function calling and image support for sketches.
+Open http://127.0.0.1:3000. The API runs on loopback port 3001. In **Model settings**, enter your OpenAI-compatible Base URL and API key, then discover models. Click the Model field or its arrow to browse the full list, type to filter, and select with the mouse or keyboard. Custom model IDs can also be typed and saved directly. Advanced settings contains reasoning effort. Connection results belong to the tested configuration; changing credentials clears discovered models. Test the connection before drawing. Use a model with streamed function calling and image support for sketches.
 
 Use the language selector in the header to switch between **English** and **简体中文** immediately. A first visit defaults to Simplified Chinese; an explicit selection is remembered in this browser. Navigation, settings, drawing tools, assistant controls, clarification forms and common errors follow the selected language. New AI requests ask for replies, titles and measurement questions in that language. Existing drawing content, names, conversations and answer drafts retain their original text. Chinese input composition keeps its text and caret stable during background autosaves; each drawing restores its own unsent draft. SVG download filenames preserve Chinese titles.
 
@@ -148,3 +148,11 @@ Projects use IndexedDB through [idb](https://github.com/jakearchibald/idb), keep
 Generated code runs in an [iframe sandbox](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe) with only `allow-scripts`, giving it an opaque origin. Its CSP uses nonced inline scripts and blocks network connections, external images, fonts, workers, child frames, objects, forms and base URL changes. The parent CSP restricts frame navigation to the app origin. Frame messages are checked by source and an individual preview channel; the bridge provides drawing commands and sanitized SVG snapshots, never credentials. SVG sanitization also removes scripts, event attributes, foreign objects, CSS and external references from patches and exports.
 
 Inline scripts are required to finish synchronously. This browser sandbox isolates credentials and origin access; it does not provide a CPU quota for arbitrary JavaScript. The app shows provider errors and invalid drawing responses without replacing the current drawing. Live paid-provider behavior requires the user's model credentials; automated checks use a deterministic compatible test service.
+
+## Project backups and review
+
+Use **Back up project** in the drawing sidebar to download a `.draftline.json` file containing the active project's drawings, revision history, conversation branches, references and draft. Model settings are stored separately. **Restore project** accepts a valid backup under 100 MB, validates its drawings, and saves a new copy with a distinct ID and name. The current project stays open. Active streams restore as interrupted conversations. Browser storage must have space for the restored copy.
+
+The drawing list offers **Creation time** and **Recently modified** ordering and remembers the choice in this browser. Opening a drawing leaves its modification time intact; edits, drafts and conversation updates change it.
+
+During broader-change review, **Before changes** and **Proposed drawing** switch the canvas between the committed and proposed versions. Clicking a named change highlights and centers that object; removed objects appear in the original version. Apply commits the proposal as one undo step. PDF export displays font preparation and PDF generation stages in the export button.

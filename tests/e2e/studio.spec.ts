@@ -580,6 +580,7 @@ test("settings update and clear persist without credentials in requests URLs or 
   await expect(page.getByLabel("Model", { exact: true })).toHaveValue(
     "updated-model",
   );
+  await page.getByText("Data and saved settings", { exact: true }).click();
   await page.getByRole("button", { name: "Clear saved settings" }).click();
   expect(
     await page.evaluate(() => localStorage.getItem("draftline-model")),

@@ -306,10 +306,10 @@
 }
 .settings-dialog {
   max-height: calc(100dvh - 32px);
-  overflow: auto;
+  overflow: hidden;
   border: 1px solid #e5e9f0;
-  padding: 30px;
-  width: min(460px, calc(100vw - 32px));
+  padding: 0;
+  width: min(480px, calc(100vw - 32px));
   border-radius: 14px;
   color: #3a4962;
   box-shadow: 0 25px 100px #14233c3b;
@@ -323,17 +323,6 @@
   align-items: center;
   justify-content: space-between;
   margin-bottom: 17px;
-}
-.dialog-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #eef3ff;
-  color: #537edf;
-  border: 1px solid #e5ecfd;
 }
 .settings-dialog h2,
 .help-card h2 {
@@ -376,25 +365,6 @@
 }
 .settings-dialog input::placeholder {
   color: #abb5c4;
-}
-.provider-options {
-  display: flex;
-  border: 1px solid #e2e7f0;
-  border-radius: 6px;
-  padding: 3px;
-  background: #f7f9fc;
-}
-.provider-options button {
-  flex: 1;
-  padding: 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  color: #9aa6b9;
-}
-.provider-options button.active {
-  background: white;
-  color: #4978de;
-  box-shadow: 0 1px 5px #223a6312;
 }
 .input-with-action {
   position: relative;
@@ -523,36 +493,11 @@
   background: #fff5f0;
   color: #b27c64;
 }
-.privacy-note {
-  display: flex;
-  gap: 9px;
-  margin-top: 21px;
-  padding: 12px 13px;
-  border: 1px solid #e7edf5;
-  border-radius: 6px;
-  background: #f8fafd;
-  color: #8d9eb7;
-  font-size: 9px;
-  line-height: 1.7;
-}
-.privacy-note svg {
-  margin-top: 3px;
-  color: #97aac7;
-}
 .dialog-actions {
   display: flex;
   justify-content: space-between;
   gap: 10px;
   margin-top: 23px;
-}
-.settings-help {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  font-size: 9px;
-  color: #a4b0c2;
-  margin-top: 17px;
 }
 .help-backdrop {
   position: fixed;
@@ -796,7 +741,7 @@
     margin: 0 19px 10px;
   }
   .settings-dialog {
-    padding: 24px;
+    width: calc(100vw - 24px);
   }
   .toast {
     bottom: 18px;
@@ -850,4 +795,85 @@
 .suggestions button > svg {
   transform: rotate(180deg);
   color: #a4b1c7;
+}
+
+.settings-dialog form {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 34px);
+}
+.settings-dialog .dialog-heading {
+  padding: 20px 24px 14px;
+  margin: 0;
+  flex-shrink: 0;
+}
+.settings-dialog h2 {
+  font-size: 20px;
+  letter-spacing: 0;
+  margin: 0;
+  color: #253044;
+}
+.settings-body {
+  overflow-y: auto;
+  padding: 0 24px 20px;
+  min-height: 0;
+}
+.settings-dialog .muted {
+  font-size: 13px;
+  margin-bottom: 20px;
+  color: #647084;
+}
+.settings-dialog .field-label {
+  font-size: 13px;
+  color: #344054;
+}
+.settings-dialog input,
+.settings-dialog select {
+  height: 42px;
+  font-size: 14px;
+  color: #253044;
+}
+.settings-dialog .text-button,
+.settings-dialog .field-hint,
+.settings-dialog .connection-status {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.settings-dialog .field-hint {
+  color: #647084;
+}
+.settings-advanced {
+  border-top: 1px solid #e5e9f0;
+  margin-top: 20px;
+  padding-top: 16px;
+}
+.settings-advanced summary,
+.settings-data summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: #475467;
+}
+.settings-advanced summary span {
+  float: right;
+  font-size: 12px;
+  color: #647084;
+}
+.settings-data {
+  margin-top: 18px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #647084;
+}
+.settings-data p {
+  margin: 10px 0;
+}
+.settings-dialog .dialog-actions {
+  margin: 0;
+  padding: 16px 24px;
+  border-top: 1px solid #e5e9f0;
+  background: #fafbfc;
+  flex-shrink: 0;
+}
+.settings-dialog .dialog-actions .button {
+  font-size: 13px;
 }

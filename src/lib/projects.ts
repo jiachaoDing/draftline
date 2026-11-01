@@ -188,8 +188,10 @@ export function newProject(
   const names = new Set(existingNames.map((name) => name.toLocaleLowerCase()));
   let name = untitledName;
   let suffix = 2;
-  while (names.has(name.toLocaleLowerCase()))
-    name = `${untitledName} ${suffix++}`;
+  while (names.has(name.toLocaleLowerCase())) {
+    const ending = ` ${suffix++}`;
+    name = `${untitledName.slice(0, 120 - ending.length)}${ending}`;
+  }
   const createdAt = Date.now();
   const conversation = migrateConversation([welcome], [drawing], 0);
   return {

@@ -50,7 +50,10 @@ function normalizeMarkers(svg: SVGSVGElement) {
 }
 
 /** Export canonical geometry as PDF paths at its original millimeter scale. */
-export async function exportPDF(source: string): Promise<Uint8Array> {
+export async function exportPDF(
+  source: string,
+  onProgress?: (stage: "Preparing fonts…" | "Generating PDF…") => void,
+): Promise<Uint8Array> {
   const svg = document.importNode(
     new DOMParser().parseFromString(exportSVG(source), "image/svg+xml")
       .documentElement,
@@ -80,7 +83,9 @@ export async function exportPDF(source: string): Promise<Uint8Array> {
       floatPrecision: 16,
       putOnlyUsedFonts: true,
     });
+    onProgress?.("Preparing fonts…");
     await preparePdfFonts(svg, pdf);
+    onProgress?.("Generating PDF…");
     const layers = [
       ...svg.querySelectorAll<SVGGElement>(":scope > svg > g[data-layer]"),
     ];

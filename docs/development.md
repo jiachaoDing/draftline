@@ -97,3 +97,5 @@ To debug the UI, run a single browser case with `--headed` or `--debug`. Failure
 For persistence bugs, use browser storage tools to inspect `draftline-projects` (projects and active metadata) and reproduce refresh/project switching with the fixture service. Large-image and quota behavior require the browser tests. Do not clear a user's site storage as a debugging shortcut.
 
 For production issues, run `npm run build` then `npm start`; check `/api/health`, page CSP, static assets and `/licenses/codex/NOTICE.txt`. The build includes `.openai/hosting.json` metadata, but verification does not publish the site.
+
+- Settings/product regression: `e2e/product-settings.spec.ts` checks stale configuration feedback, model-list invalidation, short-window actions, project backup restoration and persisted sort choice. `project-backup.test.ts` checks credential-field exclusion, project round trips and invalid-backup rejection. Selection regressions include before/after review and named-object highlighting.

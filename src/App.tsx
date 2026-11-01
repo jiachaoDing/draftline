@@ -40,6 +40,8 @@ import { EMPTY_SELECTION, type SelectionState } from "./lib/contracts";
 import DrawingSidebar from "./components/DrawingSidebar";
 import DimensionToggle from "./components/DimensionToggle";
 import DrawingExport from "./components/DrawingExport";
+import ProjectBackup from "./components/ProjectBackup";
+import { importProjectBackup } from "./lib/project-backup";
 import ChatTranscript from "./components/ChatTranscript";
 import ConversationHistory from "./components/ConversationHistory";
 import AssistantChat, {
@@ -177,10 +179,19 @@ export default function App() {
     },
     updateProject,
   );
+  const [reviewView, setReviewView] = useState<{
+    drawing: Drawing;
+    before: boolean;
+    id?: string;
+  } | null>(null);
+  const reviewBefore =
+    reviewView?.drawing === review?.drawing && !!reviewView?.before;
+  const reviewId =
+    reviewView?.drawing === review?.drawing ? reviewView?.id : undefined;
   const previewHTML = useMemo(() => {
-    const shown = review?.drawing || drawing;
+    const shown = reviewBefore ? drawing : review?.drawing || drawing;
     return shown ? svgToHTML(shown.svg) : "";
-  }, [drawing, review]);
+  }, [drawing, review, reviewBefore]);
   const [zoom, setZoom] = useState(100);
   const [messages, setMessages] = useProjectField(
     activeProject,
@@ -400,6 +411,16 @@ export default function App() {
     } finally {
       setProjectBusy(false);
     }
+  }
+  async function restoreProject(text: string) {
+    const project = importProjectBackup(
+      text,
+      projectsRef.current.map((p) => p.name),
+    );
+    await saveProject(project);
+    const next = [project, ...projectsRef.current];
+    projectsRef.current = next;
+    setProjects(next);
   }
   function renameProject(id: string, projectName: string) {
     const name = projectName.trim().slice(0, 120);
@@ -1235,6 +1256,12 @@ export default function App() {
             onDelete={removeProject}
             utilities={
               <div className="sidebar-utilities">
+                <ProjectBackup
+                  project={activeProject}
+                  disabled={projectBusy || !loaded || busy || !!review}
+                  onImport={restoreProject}
+                  onNotice={tell}
+                />
                 <LanguageSelect />
                 <button
                   className="button settings-button"
@@ -1365,9 +1392,12 @@ export default function App() {
                 }}
                 onError={(text) => tell(text, true)}
                 onZoom={setZoom}
-                selection={selection}
+                selection={
+                  reviewId ? { ids: [reviewId], rootId: null } : selection
+                }
                 locked={!!review || !!userInput || projectBusy}
                 changedIds={review?.changes.ids}
+                focusId={reviewId}
                 layers={layers}
               />
             ) : (
@@ -1523,6 +1553,12 @@ export default function App() {
               <div className="assistant-controls">
                 {review ? (
                   <ReviewChanges
+                    before={reviewBefore}
+                    original={drawing!}
+                    proposed={review.drawing}
+                    onView={(before, id) =>
+                      setReviewView({ drawing: review.drawing, before, id })
+                    }
                     changes={review.changes}
                     summary={review.drawing.summary}
                     onApply={() => {

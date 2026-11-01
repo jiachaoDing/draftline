@@ -42,6 +42,15 @@ export default function DrawingSidebar({
     () => window.matchMedia("(max-width: 1050px)").matches,
   );
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<"createdAt" | "updatedAt">(() => {
+    try {
+      return localStorage.getItem("draftline-project-sort") === "updatedAt"
+        ? "updatedAt"
+        : "createdAt";
+    } catch {
+      return "createdAt";
+    }
+  });
   const pendingNavigation = useRef<{ id?: string } | null>(null);
   useEffect(() => {
     const media = window.matchMedia("(max-width: 1050px)");
@@ -52,7 +61,7 @@ export default function DrawingSidebar({
     return () => media.removeEventListener("change", update);
   }, [onToggle]);
   const matching = [...projects]
-    .sort((a, b) => b.createdAt - a.createdAt)
+    .sort((a, b) => b[sort] - a[sort] || b.createdAt - a.createdAt)
     .filter((project) =>
       project.name
         .toLocaleLowerCase()
@@ -110,7 +119,26 @@ export default function DrawingSidebar({
           )}
         </div>
       </div>
-      <h2 className="drawings-label">{t("Drawings")}</h2>
+      <div className="drawing-sort-row">
+        <h2 className="drawings-label">{t("Drawings")}</h2>
+        <select
+          aria-label={t("Sort drawings")}
+          value={sort}
+          onChange={(event) => {
+            const value =
+              event.target.value === "updatedAt" ? "updatedAt" : "createdAt";
+            setSort(value);
+            try {
+              localStorage.setItem("draftline-project-sort", value);
+            } catch {
+              /* Keep the session preference. */
+            }
+          }}
+        >
+          <option value="createdAt">{t("Creation time")}</option>
+          <option value="updatedAt">{t("Recently modified")}</option>
+        </select>
+      </div>
       <nav className="drawings-scroll" aria-label={t("Drawing projects")}>
         <ProjectList
           key={activeId}

@@ -49,14 +49,16 @@ test("reasoning defaults, explicit choices, persistence and provider payload sta
     .click();
   const effort = page.getByLabel("Reasoning effort", { exact: true });
   await expect(effort).toHaveValue("auto");
-  await expect(effort.locator("option:checked")).toHaveText(
-    "Automatic (High (high))",
-  );
+  await expect(effort.locator("option:checked")).toHaveText("Automatic · High");
   await page
     .getByRole("button", { name: "Test connection", exact: true })
     .click();
   await expect(page.getByRole("status")).toContainText("Connected.");
   expect(requests.at(-1)?.reasoning_effort).toBe("high");
+  await page
+    .locator("summary")
+    .filter({ hasText: "Advanced settings" })
+    .click();
   await effort.selectOption("low");
   await page
     .getByRole("button", { name: "Save settings", exact: true })
@@ -71,6 +73,10 @@ test("reasoning defaults, explicit choices, persistence and provider payload sta
     .click();
   await expect(page.getByRole("status")).toContainText("Connected.");
   expect(requests.at(-1)?.reasoning_effort).toBe("low");
+  await page
+    .locator("summary")
+    .filter({ hasText: "Advanced settings" })
+    .click();
   await effort.selectOption("provider");
   await page
     .getByRole("button", { name: "Test connection", exact: true })

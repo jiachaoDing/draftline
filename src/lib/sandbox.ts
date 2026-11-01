@@ -65,6 +65,14 @@ export function buildSandbox(
         if (type === 'fit') fitDrawing();
       if (type === 'layers') { const n = svg.querySelector('#dimensions'); if(n) n.setAttribute('display', payload.dimensions ? 'inline' : 'none'); editor.visibilityChanged(); }
       if (type === 'select') editor.setSelection(payload);
+      if (type === 'focus' && typeof payload === 'string') {
+        const target = svg.querySelector('[id="' + CSS.escape(payload) + '"]');
+        if (target) {
+          const box = target.getBoundingClientRect(), viewport = svg.getBoundingClientRect();
+          controller.panBy({x: viewport.x + viewport.width / 2 - box.x - box.width / 2, y: viewport.y + viewport.height / 2 - box.y - box.height / 2});
+          editor.refresh();
+        }
+      }
       if (type === 'locked') { editor.setLocked(!!payload); document.body.dataset.locked = String(!!payload); }
       if (type === 'changes') editor.setChanges(payload);
       if (type === 'command') editor.command(payload);

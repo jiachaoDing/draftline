@@ -13,10 +13,10 @@ type Props = {
 
 export default function DrawingExport({ drawing, disabled, onNotice }: Props) {
   useLocale();
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState("");
   const download = async (format: "svg" | "pdf") => {
     if (!drawing || exporting) return;
-    setExporting(true);
+    setExporting("Exporting…");
     try {
       const name = drawing.title
         .replace(/[^\p{L}\p{N}_-]+/gu, "-")
@@ -29,7 +29,7 @@ export default function DrawingExport({ drawing, disabled, onNotice }: Props) {
         );
       } else {
         const { exportPDF } = await import("../lib/pdf-export");
-        const bytes = await exportPDF(drawing.svg);
+        const bytes = await exportPDF(drawing.svg, setExporting);
         downloadFile(
           new Uint8Array(bytes).buffer,
           `${name}.pdf`,
@@ -44,28 +44,28 @@ export default function DrawingExport({ drawing, disabled, onNotice }: Props) {
     } catch {
       onNotice("The drawing could not be exported. Please try again.", true);
     } finally {
-      setExporting(false);
+      setExporting("");
     }
   };
   return (
     <Menu>
       <MenuButton
         className="button primary"
-        disabled={disabled || !drawing || exporting}
+        disabled={disabled || !drawing || !!exporting}
       >
         {exporting ? (
           <Loader2 className="spin" size={16} />
         ) : (
           <ArrowDownToLine size={16} />
         )}
-        {t(exporting ? "Exporting…" : "Export")}
+        <span aria-live="polite">{t(exporting || "Export")}</span>
         <ChevronDown size={14} />
       </MenuButton>
       <MenuItems anchor="bottom end" className="project-menu export-menu">
         {(["svg", "pdf"] as const).map((format) => (
           <MenuItem key={format}>
             <button
-              disabled={exporting || disabled || !drawing}
+              disabled={!!exporting || disabled || !drawing}
               onClick={() => void download(format)}
             >
               {t(format === "svg" ? "Export SVG" : "Export PDF")}

@@ -29,6 +29,7 @@ type Props = {
   selection?: SelectionState;
   locked?: boolean;
   changedIds?: string[];
+  focusId?: string;
   layers: { dimensions: boolean };
 };
 export const Preview = forwardRef<PreviewHandle, Props>(
@@ -112,6 +113,7 @@ export const Preview = forwardRef<PreviewHandle, Props>(
           send("select", p.selection || EMPTY_SELECTION);
           send("locked", !!p.locked);
           send("changes", p.changedIds || []);
+          if (p.focusId) send("focus", p.focusId);
         }
       };
       window.addEventListener("message", handle);
@@ -128,6 +130,9 @@ export const Preview = forwardRef<PreviewHandle, Props>(
       [props.selection, send],
     );
     useEffect(() => send("locked", !!props.locked), [props.locked, send]);
+    useEffect(() => {
+      if (props.focusId) send("focus", props.focusId);
+    }, [props.focusId, send]);
     useEffect(
       () => send("changes", props.changedIds || []),
       [props.changedIds, send],

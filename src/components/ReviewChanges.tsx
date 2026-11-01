@@ -1,18 +1,39 @@
 import { useLocale } from "../lib/i18n";
 import type { DrawingChanges } from "../lib/drawing-changes";
+import type { Drawing } from "../lib/contracts";
+import { listElements, sanitizeSVG } from "../lib/drawing";
+import { useMemo } from "react";
 
 export default function ReviewChanges({
   changes,
   summary,
   onApply,
   onDiscard,
+  before,
+  original,
+  proposed,
+  onView,
 }: {
   changes: DrawingChanges;
   summary: string;
   onApply: () => void;
   onDiscard: () => void;
+  before: boolean;
+  original: Drawing;
+  proposed: Drawing;
+  onView: (before: boolean, id?: string) => void;
 }) {
   const { t } = useLocale();
+  const labels = useMemo(
+    () =>
+      new Map(
+        [
+          ...listElements(sanitizeSVG(original.svg)),
+          ...listElements(sanitizeSVG(proposed.svg)),
+        ].map((element) => [element.id, element.label]),
+      ),
+    [original.svg, proposed.svg],
+  );
   return (
     <section
       className="scope-review"
@@ -20,6 +41,22 @@ export default function ReviewChanges({
       aria-label={t("Review AI changes")}
     >
       <h3>{t("Review broader AI changes")}</h3>
+      <div className="selection-actions" aria-label={t("Compare changes")}>
+        <button
+          className="button secondary"
+          aria-pressed={before}
+          onClick={() => onView(true)}
+        >
+          {t("Before changes")}
+        </button>
+        <button
+          className="button secondary"
+          aria-pressed={!before}
+          onClick={() => onView(false)}
+        >
+          {t("Proposed drawing")}
+        </button>
+      </div>
       <p>{t("Blue: selection · Amber: proposed changes")}</p>
       <p>
         {t(
@@ -42,7 +79,13 @@ export default function ReviewChanges({
         ))}
         {changes.ids.map((id) => (
           <li key={id}>
-            <code>{id}</code>{" "}
+            <button
+              className="text-button"
+              title={id}
+              onClick={() => onView(changes.removed.includes(id), id)}
+            >
+              {labels.get(id) || id}
+            </button>{" "}
             {changes.added.includes(id)
               ? t("Added")
               : changes.removed.includes(id)

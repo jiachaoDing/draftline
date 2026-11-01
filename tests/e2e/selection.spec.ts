@@ -245,6 +245,12 @@ test("AI can move a whole logo from a selected path; broader changes require rev
   page,
 }) => {
   const frame = await openObjects(page);
+  await page.evaluate(() => {
+    Object.assign(window, { selectionDebug: [] });
+    window.addEventListener("message", (event) => {
+      if (["selection", "ready"].includes(event.data?.type)) (window as any).selectionDebug.push(event.data);
+    });
+  });
   const send = async () => {
     await expect(frame.locator("body")).toHaveAttribute(
       "data-interaction",
@@ -254,7 +260,7 @@ test("AI can move a whole logo from a selected path; broader changes require rev
     await frame.locator("#logo-left").click({ modifiers: ["Control"] });
     await expect(page.locator(".selection-card strong")).toHaveText(
       "logo left",
-    );
+    ).catch(async (error) => { console.log("DEBUG_MESSAGES", await page.evaluate(() => (window as any).selectionDebug)); throw error; });
     await page
       .getByLabel("Drawing instructions", { exact: true })
       .fill(
@@ -275,6 +281,27 @@ test("AI can move a whole logo from a selected path; broader changes require rev
     ).toHaveCount(1);
   };
   await send();
+  await page
+    .getByRole("button", { name: "Before changes", exact: true })
+    .click();
+  await expect(frame.locator("#logo")).toHaveAttribute(
+    "transform",
+    "translate(15 20)",
+  );
+  await page
+    .getByRole("button", { name: "Proposed drawing", exact: true })
+    .click();
+  await expect(frame.locator("#logo")).toHaveAttribute(
+    "transform",
+    "translate(30 20)",
+  );
+  await page
+    .getByRole("region", { name: "Review AI changes" })
+    .getByRole("button", { name: "DraftLine logo", exact: true })
+    .click();
+  await expect(
+    frame.locator('.svg-object-outline[data-object-id="logo"]'),
+  ).not.toHaveCount(0);
   expect(requests[0].messages.at(-1).content[1].text).toContain(
     '"selected_ids":["logo-left"]',
   );
