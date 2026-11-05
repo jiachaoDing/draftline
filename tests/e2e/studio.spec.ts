@@ -217,7 +217,7 @@ test("sketch → clarification → generated code → targeted edit → undo/red
     .fill("120 mm wide, 80 mm high.");
   await page.getByRole("button", { name: "Send drawing instruction" }).click();
   await expect(
-    page.getByRole("button", { name: "New Drawing", exact: true }),
+    page.getByRole("button", { name: "Export", exact: true }),
   ).toBeEnabled({ timeout: 10_000 });
   await expect(frame.locator("#hole-top-left")).toHaveAttribute("r", "6");
   await expect(frame.locator("#presentation")).toHaveCount(0);
@@ -235,6 +235,10 @@ test("sketch → clarification → generated code → targeted edit → undo/red
   );
   expect(JSON.stringify(requests)).toContain("Project resource catalog");
 
+  await expect(frame.locator("body")).toHaveAttribute(
+    "data-interaction",
+    "select-pan",
+  );
   await frame.locator("#hole-top-left").click();
   await expect(
     page.getByText("SELECTED ELEMENT", { exact: true }),

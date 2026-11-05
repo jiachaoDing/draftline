@@ -15,13 +15,13 @@ Draftline turns sketches and measured instructions into editable millimeter SVG 
 - `src/lib/contracts.ts` and `user-input.ts` provide universal Zod contracts; keep their runtime dependencies usable in both browser and server.
 - `ai-workflow.ts` and `user-input-flow.ts` build credential-free request context and drawing/question transitions. They do not fetch or save.
 - `drawing.ts` owns sanitization, SVG validation, patch boundaries and exports; `sandbox.ts` and `components/Preview.tsx` own execution and the frame bridge.
-- `projects.ts` owns project validation and IndexedDB; `model-settings.ts` owns credential settings restoration. Credentials belong only in settings and provider requests.
+- `projects.ts` owns project validation and IndexedDB; `model-settings.ts` owns credential settings restoration and imports; `model-settings-share.ts` owns browser-only configuration links. Credentials stay within settings, explicit share fragments and provider requests.
 - `src/lib/api.ts` and `stream.ts` are browser transport. `server/` owns provider SDK access, messages, SSE, redaction and API policy. Biome forbids server/Node/provider imports from `src/`.
 
 ## Non-negotiable invariants
 
 - Partial streamed JSON is display-only. A successful terminal response is mandatory; full HTML also requires a sanitized, validated sandbox snapshot before committing. Cancellation and failures preserve the committed drawing.
-- Each frame uses `sandbox="allow-scripts"`, an opaque origin, CSP, and source/channel-checked messages. Keep credentials out of frame messages, prompts, projects, URLs, exports and logs.
+- Each frame uses `sandbox="allow-scripts"`, an opaque origin, CSP, and source/channel-checked messages. Credentials belong in model settings, provider requests and explicitly generated model-settings share fragments. Consume and clear shared fragments before frame startup; keep credentials out of frame messages, prompts, projects, HTTP URLs, exports and logs.
 - One SVG unit equals one millimeter. Keep stable object/group IDs and `geometry`/`dimensions` groups. Selection supplies intent context; AI chooses a coherent edit scope. Changes beyond selected objects and associated dimensions require review before commit. Presentation, viewport transforms and selection overlays are derived from the canonical SVG.
 - Keep pending question context and tool IDs through retries, refreshes and project switches. Highlighted options require explicit submission. Preserve schema defaults for saved records.
 - Project navigation stays available during generation/validation. Tasks, streaming, cancellation, validation and review belong to their originating project; only that drawing's mutations are locked. Every drawing commit goes through bounded revision history; new edits drop the redo branch.

@@ -27,6 +27,22 @@ export const zhCN: Record<string, string> = {
   "Automatic · {{effort}}": "自动 · {{effort}}",
   "Data and saved settings": "数据与已保存的设置",
   "Advanced settings": "高级设置",
+  "Share ready-to-use access": "分享即用链接",
+  "The link includes your API address, key, model and reasoning effort. Opening it applies these settings in that browser. Anyone with the link can use your API quota; share only with people you trust. Revoke the key with your provider to stop access.":
+    "链接包含 API 地址、密钥、模型和推理强度，对方打开后会自动应用到其浏览器。持有链接的人可使用你的 API 额度，请仅分享给可信的人。如需停止访问，请在服务商处撤销对应密钥。",
+  "Copy share link": "复制分享链接",
+  "Share link copied.": "分享链接已复制。",
+  "Clipboard unavailable. Select and copy the link below.":
+    "无法访问剪贴板，请选中并复制下方链接。",
+  "Model settings share link": "模型设置分享链接",
+  "Enter a valid API URL, API key and model before sharing.":
+    "请填写有效的 API 地址、密钥和模型后再分享。",
+  "This model settings link is invalid or incomplete. Ask the sender for a new link.":
+    "模型设置链接无效或不完整，请联系分享者获取新链接。",
+  "Shared model settings are ready for this session, but browser storage could not save them.":
+    "分享的模型设置已可在本次会话使用，但浏览器未能保存设置。",
+  "Shared model settings loaded. You can start drawing.":
+    "已载入分享的模型设置，可以直接开始绘图。",
   "Connect a model through an OpenAI-compatible API.":
     "连接支持 OpenAI 兼容接口的模型。",
   "AI assistant": "AI 助手",
@@ -323,8 +339,8 @@ export const zhCN: Record<string, string> = {
   Models: "模型列表",
   "Use a model with image input to interpret hand-drawn sketches.":
     "请选择支持图片输入的模型，以识别手绘草图。",
-  "Settings, including your key, are saved in this browser. Requests share them only with the app server and your provider. Drawing code cannot access them. Clear saved settings below to remove them.":
-    "设置和密钥保存在此浏览器中，仅在请求时发送给应用服务器和模型服务商。绘图代码无法访问这些信息。可通过下方按钮清除保存的设置。",
+  "Settings, including your key, are saved in this browser. Model requests send them to the app server and your provider. Share links include your key. Drawing code cannot access these settings. Clear saved settings below to remove them.":
+    "设置和密钥保存在此浏览器中，模型请求会将它们发送给应用服务器和模型服务商。分享链接中包含密钥。绘图代码无法访问这些设置。可通过下方按钮清除保存的设置。",
   "Test connection": "测试连接",
   "Cancel test": "取消测试",
   "Save settings": "保存设置",

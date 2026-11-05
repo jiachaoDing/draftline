@@ -13,6 +13,7 @@ import {
   ChevronDown,
   Eye,
   EyeOff,
+  Link,
   Loader2,
   PlugZap,
   RefreshCw,
@@ -25,6 +26,7 @@ import {
 } from "../lib/contracts";
 import { resolveReasoningEffort } from "../lib/model-reasoning";
 import { discoverModels, testConnection } from "../lib/api";
+import { createModelSettingsLink } from "../lib/model-settings-share";
 
 const reasoningLabels: Record<ReasoningEffort, string> = {
   auto: "Automatic",
@@ -61,6 +63,10 @@ export default function ModelSettings({
   );
   const [showKey, setShowKey] = useState(false);
   const [busy, setBusy] = useState("");
+  const [share, setShare] = useState<{ url: string; copied: boolean } | null>(
+    null,
+  );
+  const shareAttempt = useRef(0);
   const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(
     null,
   );
@@ -79,6 +85,7 @@ export default function ModelSettings({
   useEffect(() => {
     dialog.current?.showModal();
     return () => {
+      shareAttempt.current += 1;
       const controller = abort.current;
       abort.current = null;
       controller?.abort();
@@ -95,6 +102,29 @@ export default function ModelSettings({
     if (name === "baseURL" || name === "apiKey") setModels([]);
     setDraft({ ...draft, [name]: value });
     setStatus(null);
+    shareAttempt.current += 1;
+    setShare(null);
+  }
+  async function copyShareLink() {
+    let url: string;
+    try {
+      url = createModelSettingsLink(draft, window.location.href);
+    } catch {
+      setStatus({
+        ok: false,
+        text: "Enter a valid API URL, API key and model before sharing.",
+      });
+      return;
+    }
+    const attempt = ++shareAttempt.current;
+    let copied = false;
+    try {
+      await navigator.clipboard.writeText(url);
+      copied = true;
+    } catch {
+      // Keep a selectable link available when clipboard access is unavailable.
+    }
+    if (shareAttempt.current === attempt) setShare({ url, copied });
   }
   const connect = async (action: "discover" | "test") => {
     setBusy(action);
@@ -362,6 +392,52 @@ export default function ModelSettings({
               )}
             </p>
           </details>
+          <section
+            className="settings-share"
+            aria-labelledby="settings-share-title"
+          >
+            <h3 id="settings-share-title">{t("Share ready-to-use access")}</h3>
+            <p className="field-hint" id="settings-share-hint">
+              {t(
+                "The link includes your API address, key, model and reasoning effort. Opening it applies these settings in that browser. Anyone with the link can use your API quota; share only with people you trust. Revoke the key with your provider to stop access.",
+              )}
+            </p>
+            <button
+              type="button"
+              className="button secondary"
+              disabled={
+                !!busy ||
+                !draft.baseURL.trim() ||
+                !draft.apiKey.trim() ||
+                !draft.model.trim()
+              }
+              aria-describedby="settings-share-hint"
+              onClick={copyShareLink}
+            >
+              <Link size={15} />
+              {t("Copy share link")}
+            </button>
+            {share && (
+              <div className="settings-share-result">
+                <p className="field-hint" role="status">
+                  {t(
+                    share.copied
+                      ? "Share link copied."
+                      : "Clipboard unavailable. Select and copy the link below.",
+                  )}
+                </p>
+                {!share.copied && (
+                  <input
+                    aria-label={t("Model settings share link")}
+                    readOnly
+                    value={share.url}
+                    onFocus={(event) => event.currentTarget.select()}
+                    onClick={(event) => event.currentTarget.select()}
+                  />
+                )}
+              </div>
+            )}
+          </section>
           {status && (
             <div
               className={`connection-status ${busy === "test" ? "pending" : status.ok ? "success" : "error"}`}
@@ -379,7 +455,7 @@ export default function ModelSettings({
             <summary>{t("Data and saved settings")}</summary>
             <p>
               {t(
-                "Settings, including your key, are saved in this browser. Requests share them only with the app server and your provider. Drawing code cannot access them. Clear saved settings below to remove them.",
+                "Settings, including your key, are saved in this browser. Model requests send them to the app server and your provider. Share links include your key. Drawing code cannot access these settings. Clear saved settings below to remove them.",
               )}
             </p>
             <button

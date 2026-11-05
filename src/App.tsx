@@ -97,12 +97,20 @@ import {
   welcome,
   type Project,
 } from "./lib/projects";
-import { readConfig, defaultConfig } from "./lib/model-settings";
+import {
+  defaultConfig,
+  importModelSettingsLink,
+  type InitialModelSettings,
+} from "./lib/model-settings";
 import type { ChatMessage, Drawing } from "./lib/contracts";
 
-export default function App() {
+export default function App({
+  initialSettings,
+}: {
+  initialSettings: InitialModelSettings;
+}) {
   useLocale();
-  const [config, setConfig] = useState(readConfig);
+  const [config, setConfig] = useState(initialSettings.config);
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeId, setActiveId] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -300,6 +308,23 @@ export default function App() {
       mounted = false;
     };
   }, [openProject, tell]);
+  useEffect(() => {
+    if (loaded && initialSettings.notice)
+      tell(initialSettings.notice.text, initialSettings.notice.error);
+  }, [loaded, initialSettings.notice, tell]);
+  useEffect(() => {
+    const importLink = () => {
+      const shared = importModelSettingsLink();
+      if (!shared) return;
+      if (shared.config) {
+        setConfig(shared.config);
+        setSettings(false);
+      }
+      tell(shared.notice.text, shared.notice.error);
+    };
+    window.addEventListener("hashchange", importLink);
+    return () => window.removeEventListener("hashchange", importLink);
+  }, [tell]);
   const savedProjects = useRef(new Map<string, Project>());
   const saveTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   useEffect(() => {

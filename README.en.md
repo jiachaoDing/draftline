@@ -48,6 +48,8 @@ An example instruction:
 
 Choose a model with **streamed tool calling** and vision support to inspect image, SVG and PDF previews. Upload up to 10 files totaling 8 MB per message: SVG up to 4 MB, text up to 2 MB, and images/PDF/DXF up to 8 MB each. Files persist as project resources; AI receives a metadata catalog and requests previews, searches or bounded text segments as needed. SVG logos can be sized and centered by measured artwork bounds, or placed by their full canvas to preserve whitespace; unsupported measurements return explicit feedback. Your model provider charges for API usage.
 
+Choose **Model settings → Share ready-to-use access → Copy share link** to share the currently entered API address, key, model and reasoning effort. Opening the link applies and saves its configuration in the recipient's browser, ready to use. Each link retains the configuration captured when it was created. Links contain recoverable credentials; share only with people you trust and revoke the corresponding key with your provider to stop access.
+
 ## Quick start
 
 Requires **Node.js 24.11+** and npm.

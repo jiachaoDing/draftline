@@ -842,10 +842,27 @@
 .settings-dialog .field-hint {
   color: #647084;
 }
-.settings-advanced {
+.settings-advanced,
+.settings-share {
   border-top: 1px solid #e5e9f0;
   margin-top: 20px;
   padding-top: 16px;
+}
+.settings-share h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #344054;
+}
+.settings-share .button {
+  margin-top: 12px;
+  font-size: 13px;
+}
+.settings-share-result {
+  margin-top: 10px;
+}
+.settings-share-result input {
+  margin-top: 6px;
 }
 .settings-advanced summary,
 .settings-data summary {
