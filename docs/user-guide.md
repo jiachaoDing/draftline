@@ -10,6 +10,12 @@ Desktop uses three columns: drawing navigation, canvas and AI assistant. Drag ei
 
 Tablets keep canvas and assistant side by side and open drawing navigation in a drawer. Phones use bottom navigation: **Drawings** opens the drawer, **Canvas** shows the full canvas, and **AI assistant** shows conversation and input. Switching views preserves the mounted drawing and unsent draft. New drawings open the assistant for the first instruction. Mobile navigation is independent of desktop panel preferences.
 
+## Drawing examples handbook
+
+Choose **Drawing examples** at the upper right of the input area to open a centered handbook. A red **1** badge highlights the handbook until its first opening; this browser remembers the acknowledgement across project changes and refreshes. On desktop, use the left-hand contents to jump through the continuous text on the right. On phones, the contents appear above the text. The header and close button remain visible while you read; close with the button, Escape or the backdrop. Each opening starts at the top.
+
+The **Shape and size** chapter illustrates rectangles, overall width and height, rounded corners and radius, circular holes and diameter, triangular notches and rectangular notches. **Position and arrangement** covers edge offsets, centering, left-right symmetry, hole center spacing and equal spacing. **Common geometric structures** follows these chapters with beveled corners, trapezoids, semicircular and semi-elliptical arched tops, inward-curving edges, rounded slots and U-shaped notches. Arched-top illustrations distinguish span, rise and straight-side height; overall height includes the rise. Each topic has a labeled SVG, an explanation and a sample instruction. Measurements are examples in millimeters; supply the measurements for your own drawing. Handbook text and diagram labels follow the workspace language. The handbook is available while a reply is generating, and reading it preserves the instruction, attachments and drawing.
+
 ## Run locally
 
 Requires Node.js 24.11+ and npm. All project files use UTF-8. For code changes, start with [AGENTS.md](../AGENTS.md), the [architecture map](architecture.md), and the [development guide](development.md).

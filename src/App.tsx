@@ -48,6 +48,7 @@ import AssistantChat, {
   type AssistantChatHandle,
 } from "./components/AssistantChat";
 import ChatComposer from "./components/ChatComposer";
+import DrawingGuide from "./components/DrawingGuide";
 import type { ChatAttachment } from "./lib/contracts";
 import RequestUserInput from "./components/RequestUserInput";
 import type { UserInputResponse } from "./lib/user-input";
@@ -602,7 +603,7 @@ export default function App() {
     const keyboard = (event: KeyboardEvent) => {
       if (
         (event.target as HTMLElement).closest(
-          "input,textarea,dialog,[contenteditable]",
+          'input,textarea,dialog,[role="dialog"],[contenteditable]',
         ) ||
         busy ||
         review ||
@@ -1551,6 +1552,7 @@ export default function App() {
                 onRestore={switchConversation}
               />
               <div className="assistant-controls">
+                <DrawingGuide />
                 {review ? (
                   <ReviewChanges
                     before={reviewBefore}

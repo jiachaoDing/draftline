@@ -248,7 +248,8 @@ test("AI can move a whole logo from a selected path; broader changes require rev
   await page.evaluate(() => {
     Object.assign(window, { selectionDebug: [] });
     window.addEventListener("message", (event) => {
-      if (["selection", "ready"].includes(event.data?.type)) (window as any).selectionDebug.push(event.data);
+      if (["selection", "ready"].includes(event.data?.type))
+        (window as any).selectionDebug.push(event.data);
     });
   });
   const send = async () => {
@@ -258,9 +259,15 @@ test("AI can move a whole logo from a selected path; broader changes require rev
     );
     await expect(frame.locator("body")).toHaveAttribute("data-locked", "false");
     await frame.locator("#logo-left").click({ modifiers: ["Control"] });
-    await expect(page.locator(".selection-card strong")).toHaveText(
-      "logo left",
-    ).catch(async (error) => { console.log("DEBUG_MESSAGES", await page.evaluate(() => (window as any).selectionDebug)); throw error; });
+    await expect(page.locator(".selection-card strong"))
+      .toHaveText("logo left")
+      .catch(async (error) => {
+        console.log(
+          "DEBUG_MESSAGES",
+          await page.evaluate(() => (window as any).selectionDebug),
+        );
+        throw error;
+      });
     await page
       .getByLabel("Drawing instructions", { exact: true })
       .fill(

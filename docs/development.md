@@ -67,6 +67,8 @@ Get-Content -LiteralPath src/lib/drawing.ts -Encoding UTF8
 
 ## Test map and debugging
 
+- Drawing handbook: `e2e/drawing-guide.spec.ts` covers directory navigation, continuous reading, keyboard focus and dismissal, fresh-opening position, unread-badge acknowledgement and unavailable storage, draft/attachment/selection preservation, modal isolation from drawing shortcuts, common-geometry chapter order and arch proportions, English/Chinese content, SVG labels and desktop/mobile/short-window bounds. `e2e/chat-workspace.spec.ts` verifies that reading during a real streamed reply preserves the active generation and eventual drawing commit.
+
 - Resource lifetime and interaction cost: `validate-source.test.ts` repeats validation 100 times and checks construction-error/cancellation cleanup; `sandbox-selection.test.ts` checks refresh coalescing and ancestor selection. `e2e/performance.spec.ts` runs 100 real sandbox validations and checks that each releases its iframe and message listener. These resource-count checks are deterministic; they do not establish a browser-wide heap ceiling.
 
 - Reasoning settings: `model-reasoning.test.ts` checks automatic defaults, explicit overrides, unknown model IDs and old/invalid saved settings. `provider.test.ts` checks the actual SDK payload for test and drawing routes, parameter omission and rejected enum values. `e2e/model-reasoning.spec.ts` exercises the real browser/server/provider boundary, legacy defaults, persisted choices, model ID preservation and mobile saving.

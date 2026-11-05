@@ -3,6 +3,7 @@ import { initReactI18next, useTranslation } from "react-i18next";
 import { zhCN } from "./locales/zh-CN";
 import { errorsZhCN } from "./locales/errors-zh-CN";
 import { selectionZhCN } from "./locales/selection-zh-CN";
+import { drawingGuideZhCN } from "./locales/drawing-guide-zh-CN";
 
 export type Locale = "en" | "zh-CN";
 export const LANGUAGE_STORAGE_KEY = "draftline-language";
@@ -31,7 +32,14 @@ void i18n.use(initReactI18next).init({
   interpolation: { escapeValue: false },
   resources: {
     en: { translation: {} },
-    "zh-CN": { translation: { ...zhCN, ...errorsZhCN, ...selectionZhCN } },
+    "zh-CN": {
+      translation: {
+        ...zhCN,
+        ...errorsZhCN,
+        ...selectionZhCN,
+        ...drawingGuideZhCN,
+      },
+    },
   },
 });
 

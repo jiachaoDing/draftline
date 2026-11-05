@@ -1,0 +1,281 @@
+.drawing-guide-entry {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 14px 8px;
+}
+.drawing-guide-entry > button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px;
+  border-radius: 6px;
+  color: #65748a;
+  font-size: 11px;
+}
+.drawing-guide-badge {
+  position: absolute;
+  top: -4px;
+  right: -5px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: #e5484d;
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}
+.drawing-guide-entry > button:hover {
+  background: var(--panel);
+  color: var(--text);
+}
+.drawing-guide-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+}
+.drawing-guide-backdrop {
+  position: fixed;
+  inset: 0;
+  background: #1d2b4459;
+}
+.drawing-guide-position {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.drawing-guide-book {
+  display: flex;
+  flex-direction: column;
+  width: min(960px, 100%);
+  height: 85dvh;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #e2e7ef;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 24px 90px #15243b33;
+}
+.drawing-guide-header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 28px;
+  border-bottom: 1px solid var(--line);
+}
+.drawing-guide-header p {
+  margin: 0 0 5px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.drawing-guide-header h2 {
+  margin: 0;
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+}
+.drawing-guide-header button {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  color: #65748a;
+}
+.drawing-guide-header button:hover {
+  background: var(--panel);
+}
+.drawing-guide-reader {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+.drawing-guide-contents,
+.drawing-guide-pages {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.drawing-guide-contents {
+  padding: 25px 18px;
+  background: #f9fafc;
+  border-right: 1px solid var(--line);
+}
+.drawing-guide-contents h2 {
+  margin: 0 8px 22px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.drawing-guide-contents p {
+  display: flex;
+  gap: 8px;
+  margin: 22px 8px 7px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.drawing-guide-contents p span,
+.drawing-guide-chapter > h2 span {
+  color: #8997ab;
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+.drawing-guide-contents ul {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.drawing-guide-contents button {
+  width: 100%;
+  padding: 8px;
+  border-radius: 5px;
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #617089;
+}
+.drawing-guide-contents button:hover {
+  background: #edf1f7;
+  color: var(--text);
+}
+.drawing-guide-pages {
+  padding: 28px 38px;
+}
+.drawing-guide-intro {
+  margin: 0 0 32px;
+  color: #728097;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.drawing-guide-chapter > h2 {
+  margin: 0 0 28px;
+  font-size: 20px;
+  font-weight: 600;
+}
+.drawing-guide-chapter > h2 span {
+  margin-right: 8px;
+}
+.drawing-guide-section {
+  margin-bottom: 34px;
+  padding-bottom: 30px;
+  border-bottom: 1px solid var(--line);
+  scroll-margin-top: 28px;
+}
+.drawing-guide-section h3 {
+  margin: 0 0 10px;
+  font-size: 17px;
+  font-weight: 600;
+}
+.drawing-guide-section > p {
+  margin: 0;
+  color: #617089;
+  line-height: 1.85;
+}
+.drawing-guide-section figure {
+  margin: 18px 0;
+  text-align: center;
+}
+.drawing-guide-diagram {
+  display: block;
+  width: 100%;
+  max-width: 430px;
+  height: auto;
+  margin: 0 auto;
+  background: #fff;
+  color: #61748f;
+}
+.drawing-guide-diagram text {
+  fill: currentColor;
+  stroke: none;
+  font-family: inherit;
+  font-size: 10px;
+}
+.guide-outline {
+  fill: none;
+  stroke: #34465f;
+  stroke-width: 1.3;
+  stroke-linejoin: round;
+}
+.guide-accent {
+  stroke: #3265b8;
+  stroke-width: 1.7;
+}
+.guide-measure {
+  fill: none;
+  stroke: #7b8ba1;
+  stroke-width: 0.65;
+}
+.guide-centerline {
+  fill: none;
+  stroke: #9aa7b9;
+  stroke-width: 0.65;
+  stroke-dasharray: 5 3;
+}
+.guide-detail-ring {
+  fill: none;
+  stroke: #3265b8;
+  stroke-width: 0.8;
+}
+.drawing-guide-section figcaption {
+  font-size: 10px;
+  color: #8997ab;
+}
+.drawing-guide-example {
+  border-left: 2px solid #c7d5e8;
+  padding: 2px 0 2px 15px;
+}
+.drawing-guide-example > p {
+  margin: 0 0 6px;
+  font-size: 11px;
+  color: #8997ab;
+}
+.drawing-guide-example blockquote {
+  margin: 0;
+  line-height: 1.85;
+  color: #42536b;
+}
+.drawing-guide-book button:focus-visible,
+.drawing-guide-entry > button:focus-visible,
+.drawing-guide-section:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+@media (max-width: 700px) {
+  .drawing-guide-header {
+    padding: 16px 18px;
+  }
+  .drawing-guide-reader {
+    display: block;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .drawing-guide-contents,
+  .drawing-guide-pages {
+    overflow: visible;
+    padding: 22px 18px;
+  }
+  .drawing-guide-contents {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .drawing-guide-contents h2 {
+    margin-bottom: 12px;
+  }
+  .drawing-guide-contents ul {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

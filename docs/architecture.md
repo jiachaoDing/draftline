@@ -33,6 +33,12 @@ Source tool parameter declarations are generated from the universal Zod input sc
 
 `configSchema` accepts optional `reasoningEffort`; saved settings default to `auto`. `model-reasoning.ts` resolves automatic GPT-5/GPT-6 and o1/o3/o4 IDs to `high`, including namespaced IDs, and leaves unknown IDs to the provider. Explicit levels take precedence; `provider` omits the parameter. The API sends the resolved `reasoning_effort` in both connection tests and drawing requests. Model configuration stays at the request boundary, separate from credential-free drawing context and project records. The transport uses Chat Completions; gateways serving GPT-6 reasoning with tools must expose that compatible interface.
 
+## Drawing handbook
+
+`DrawingGuide` owns a read-only handbook and its transient open state, with its entry above the input controls. The existing Headless UI Dialog supplies modal focus management and dismissal. Desktop contents and continuous pages scroll within a bounded book; mobile uses a single scrolling column. Each opening mounts the pages at the beginning. Static content and React SVG illustrations are separate focused modules, with shared dimension primitives and translated text/diagram labels. Example measurements describe the illustrations. Reading uses the local frontend independently of the project request lifecycle.
+
+The handbook entry stores its first-open acknowledgement in the `draftline-drawing-guide-seen` local-storage preference. An in-memory acknowledgement keeps the badge cleared across project remounts when storage is unavailable. The component owns the modal and badge rendering; browser persistence gives all projects the same read status.
+
 ## Production routing
 
 `wrangler.jsonc` publishes `server/worker.ts` as the Cloudflare API entry and uploads `dist/client` as Static Assets. `/api/*` invokes Hono first; frontend files are served directly by the asset service. `scripts/build-server.mjs` writes `_headers` from `PAGE_CSP`, preserving sandbox policy, privacy headers and immutable caching for fingerprinted assets. It also builds the embedded-assets Node/Worker module used by `npm start` and Sites packaging. The custom domain is `draftline.anxinsm.com`; projects and model settings remain in each browser's origin-scoped storage.

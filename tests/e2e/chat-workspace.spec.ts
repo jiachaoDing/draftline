@@ -439,6 +439,45 @@ test("floating objects panel toggles, resizes, scrolls and follows canvas select
   expect(await page.evaluate(() => [scrollX, scrollY])).toEqual([0, 0]);
 });
 
+test("drawing handbook preserves an active streamed generation and its commit", async ({
+  page,
+}) => {
+  await open(page);
+  await page.getByLabel("Drawing instructions").fill("background A");
+  await page.getByRole("button", { name: "Send drawing instruction" }).click();
+  await expect(
+    page.getByText("Background A finished.", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Drawing examples", exact: true })
+    .click();
+  const book = page.getByRole("dialog", {
+    name: "Drawing examples",
+    exact: true,
+  });
+  await expect(book).toBeVisible();
+  await book
+    .getByRole("button", { name: "Hole center spacing", exact: true })
+    .click();
+  await expect(
+    book.getByRole("heading", { name: "Hole center spacing", exact: true }),
+  ).toBeInViewport();
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("button", { name: "Stop generation" }),
+  ).toBeVisible();
+  expect(requests).toHaveLength(1);
+  release();
+  await expect(
+    page.getByRole("button", { name: "Send drawing instruction" }),
+  ).toBeVisible();
+  await expect(
+    page
+      .frameLocator('iframe[title="Technical drawing preview"]')
+      .locator("#hole-top-left"),
+  ).toHaveAttribute("r", "9");
+});
+
 test("manual chat scrolling stays in place when a streamed reply completes", async ({
   page,
 }) => {
